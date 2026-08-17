@@ -288,7 +288,44 @@ sees a reversal as an ordinary pair of movements in the opposite direction.
 
 ---
 
-## 6. Invariants
+## 6. Hold
+
+A reservation against an account's available balance. A hold moves no money: it makes part of the
+booked balance unavailable until it is captured into a transfer, released, or expires.
+
+Holds exist at **strata 3 and 4 only**. The 1995 core has no such concept, which is why `ACCTREC`
+stores `availableBalance` as a figure computed by the online system rather than deriving it - the
+mainframe has nothing to derive it from.
+
+### Fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `holdRef` | string(20) | yes | `HL` + `CCYYMMDD` + sequence. |
+| `accountRef` | string(16) | yes | The account whose available balance is reduced. |
+| `amount` | Money | yes | Strictly positive. Currency equals the account's. |
+| `status` | enum | yes | `PLACED`, `CAPTURED`, `RELEASED`, `EXPIRED` |
+| `placedAt` | timestamp | yes | |
+| `expiresAt` | timestamp | no | Absent means the hold does not expire on its own. |
+| `capturedByTransferRef` | string(20) | no | Present only when `status` is `CAPTURED`. |
+| `reference` | string(35) | no | **No personal data.** |
+
+### Status transitions
+
+```
+PLACED -> CAPTURED
+       -> RELEASED
+       -> EXPIRED
+```
+
+Every transition out of `PLACED` is terminal. A hold is never re-opened; a new hold is placed instead.
+
+`availableBalance` = `bookedBalance` less the sum of every `PLACED` hold on the account. Capture posts
+a transfer and clears the hold in one transaction, so available balance never double-counts.
+
+---
+
+## 7. Invariants
 
 These hold across the whole estate. Each becomes a test in the package that owns the behaviour.
 
@@ -303,10 +340,12 @@ These hold across the whole estate. Each becomes a test in the package that owns
 7. **Idempotency.** The same `idempotencyKey` with the same request returns the original result. The
    same key with a different request is a conflict, not a new transfer.
 8. **Scale.** `amountMinor` is interpreted only through `currency` and the ISO 4217 table above.
+9. **Holds reserve, they do not move.** A hold changes `availableBalance` only. `bookedBalance`
+   changes when the hold is captured into a transfer, never when it is placed.
 
 ---
 
-## 7. Cross-era representation
+## 8. Cross-era representation
 
 The table WP-03, WP-08, WP-10 and WP-11 check themselves against. Every canonical field, in all four
 eras. `-` means the field does not exist in that era, deliberately.
@@ -364,6 +403,22 @@ parts, because a fixed-width file has no room for a redundant field.
 | `reversesTransferRef` | - | `TransferRefType`, optional | `string`, nullable | `string` |
 | `correlationId` | - | `CorrelationIdType` | `X-Correlation-Id` header | `string`, `format: uuid` |
 
+### Hold
+
+| Canonical | COBOL-85 | XSD | OpenAPI 3.1 | AsyncAPI 3.0 |
+|---|---|---|---|---|
+| `holdRef` | - | - | `string`, 20, pattern | - |
+| `accountRef` | - | - | `string`, 16, pattern | - |
+| `amount` | - | - | `Money` | - |
+| `status` | - | - | `string`, enum | - |
+| `placedAt` | - | - | `string`, `format: date-time` | - |
+| `expiresAt` | - | - | `string`, `format: date-time` | - |
+| `capturedByTransferRef` | - | - | `string`, 20, pattern | - |
+| `reference` | - | - | `string`, `maxLength: 35` | - |
+
+`Hold` is REST-only. It never reaches stratum 0, and the SOAP tier has no use for it, so a whole
+column of dashes is the correct answer rather than a gap to be filled.
+
 Stratum 0 has no `Transfer` record at all. The mainframe receives movements, and the transfer is
 reconstructed from the two legs sharing a `transferRef`. That asymmetry is the point: the 1995 core
 was never given the concept.
@@ -397,7 +452,7 @@ can be re-presented to the next batch run without re-encoding it.
 
 ---
 
-## 8. Data protection
+## 9. Data protection
 
 | Field | Classification | Rule |
 |---|---|---|
@@ -411,7 +466,7 @@ under GDPR. It appears here because it is the minimum the ledger genuinely needs
 
 ---
 
-## 9. Changing this document
+## 10. Changing this document
 
 A change here is a change to every contract derived from it, so it is architecturally significant by
 definition.
@@ -430,6 +485,6 @@ definition.
 | REQ-INT-006 Business concepts are defined once and shared across eras | This document |
 | REQ-LED-001 Money is minor units plus an ISO 4217 code, never floating point | Section 2 |
 | REQ-LED-002 Currency scale is resolved from ISO 4217, per currency | Section 2, scale table |
-| REQ-LED-003 Double-entry postings are balanced and immutable | Section 6, invariants 1, 2 and 5 |
+| REQ-LED-003 Double-entry postings are balanced and immutable | Section 7, invariants 1, 2 and 5 |
 | REQ-MF-001 Packed-decimal amounts are byte-identical across tiers | Section 2, COMP-3 |
-| REQ-DP-002 The ledger holds no customer identity | Sections 3 and 8 |
+| REQ-DP-002 The ledger holds no customer identity | Sections 3 and 9 |

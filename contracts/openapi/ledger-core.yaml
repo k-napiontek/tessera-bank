@@ -1,0 +1,691 @@
+# ledger-core - the REST API of the double-entry ledger.
+#
+# Derived from docs/architecture/canonical-data-model.md. Every schema below traces to a concept
+# defined there; nothing is invented here. A contract test in services/ledger-core fails the build
+# if the implementation drifts from this document.
+openapi: 3.1.0
+
+info:
+  title: Tessera Bank ledger-core
+  version: 1.0.0
+  summary: Double-entry ledger - accounts, balances, transfers, holds and reversals.
+  description: |
+    The production-grade component of the estate. Every money-moving operation is idempotent,
+    every posting is balanced and immutable, and money is always minor units plus an ISO 4217
+    currency code - never a decimal string and never a float.
+
+    ## Idempotency
+
+    `Idempotency-Key` is **required** on every money-moving operation. Replaying a key with the
+    same request body returns the original response. Replaying it with a different body is a
+    conflict, not a new transfer.
+
+    ## Errors
+
+    Every error is an RFC 9457 Problem Details document, served as `application/problem+json`.
+    The `type` URI is the stable, machine-readable identifier; `title` and `detail` are for humans
+    and may be reworded without a contract change.
+
+    ## Data protection
+
+    No response carries personal data. Accounts are identified by reference; the join to a person
+    happens in `customer-master`, deliberately.
+  license:
+    name: MIT
+    url: https://github.com/k-napiontek/tessera-bank/blob/main/LICENSE
+  contact:
+    name: Tessera Bank engineering
+    url: https://github.com/k-napiontek/tessera-bank
+
+servers:
+  - url: https://ledger-core.tesserabank.internal/v1
+    description: Reached through edge/api-gateway, never directly by a customer.
+
+# Every operation requires a token minted by edge/api-gateway, which is the only component that
+# authenticates a customer. ledger-core is never reachable directly, but it states what it expects
+# rather than trusting the network - a contract that omits its security requirement is incomplete.
+security:
+  - bearerAuth: []
+
+tags:
+  - name: accounts
+    description: Account metadata, balances and statements. Read-only.
+  - name: transfers
+    description: Money movement. Every operation here is idempotent.
+  - name: holds
+    description: Reservations against available balance. A hold moves no money until captured.
+
+paths:
+  /accounts/{accountRef}:
+    get:
+      tags: [accounts]
+      operationId: getAccount
+      summary: Fetch account metadata
+      description: Returns the account and both balances. Safe to retry.
+      parameters:
+        - $ref: '#/components/parameters/AccountRef'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /accounts/{accountRef}/balance:
+    get:
+      tags: [accounts]
+      operationId: getBalance
+      summary: Fetch booked and available balance
+      description: |
+        `booked` is the settled position. `available` is `booked` less every hold still `PLACED`.
+      parameters:
+        - $ref: '#/components/parameters/AccountRef'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The balances, as at the moment of reading.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Balance' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /accounts/{accountRef}/statement:
+    get:
+      tags: [accounts]
+      operationId: getStatement
+      summary: List movements over a date range
+      description: |
+        Movements are returned oldest first. `from` and `to` are inclusive value dates.
+      parameters:
+        - $ref: '#/components/parameters/AccountRef'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: from
+          in: query
+          required: true
+          description: Inclusive start value date.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: Inclusive end value date.
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: The statement.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Statement' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /transfers:
+    post:
+      tags: [transfers]
+      operationId: createTransfer
+      summary: Post an internal transfer
+      description: |
+        Applies a balanced pair of postings - one debit, one credit - in a single transaction.
+
+        Requires `Idempotency-Key`. Replay with the same body returns the original transfer and
+        `200`; replay with a different body returns `409`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferRequest' }
+      responses:
+        '201':
+          description: The transfer was posted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '200':
+          description: Replay of a previously accepted idempotency key. The original result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /transfers/{transferRef}:
+    get:
+      tags: [transfers]
+      operationId: getTransfer
+      summary: Fetch a transfer
+      description: Returns the transfer and both of its movements.
+      parameters:
+        - $ref: '#/components/parameters/TransferRef'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The transfer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /transfers/{transferRef}/reversals:
+    post:
+      tags: [transfers]
+      operationId: reverseTransfer
+      summary: Reverse a posted transfer
+      description: |
+        Creates a **new** transfer in the opposite direction, naming the original in
+        `reversesTransferRef`. The original is never mutated and never deleted.
+
+        Requires `Idempotency-Key`.
+      parameters:
+        - $ref: '#/components/parameters/TransferRef'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReversalRequest' }
+      responses:
+        '201':
+          description: The reversing transfer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /accounts/{accountRef}/holds:
+    get:
+      tags: [holds]
+      operationId: listHolds
+      summary: List holds on an account
+      description: Returns holds in `PLACED` status unless `includeInactive` is set.
+      parameters:
+        - $ref: '#/components/parameters/AccountRef'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: includeInactive
+          in: query
+          required: false
+          description: Include captured, released and expired holds.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: The holds.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Hold' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [holds]
+      operationId: placeHold
+      summary: Place a hold
+      description: |
+        Reduces available balance without moving money. Booked balance is unchanged.
+
+        Requires `Idempotency-Key`.
+      parameters:
+        - $ref: '#/components/parameters/AccountRef'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HoldRequest' }
+      responses:
+        '201':
+          description: The hold was placed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Hold' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /holds/{holdRef}/capture:
+    post:
+      tags: [holds]
+      operationId: captureHold
+      summary: Capture a hold into a transfer
+      description: |
+        Posts the transfer and clears the hold in one transaction, so available balance is never
+        reduced twice. Requires `Idempotency-Key`.
+      parameters:
+        - $ref: '#/components/parameters/HoldRef'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaptureRequest' }
+      responses:
+        '201':
+          description: The transfer created by the capture.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  /holds/{holdRef}/release:
+    post:
+      tags: [holds]
+      operationId: releaseHold
+      summary: Release a hold
+      description: |
+        Returns the reserved amount to available balance. No money moves.
+        Requires `Idempotency-Key`.
+      parameters:
+        - $ref: '#/components/parameters/HoldRef'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: The released hold.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Hold' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer token issued by `edge/api-gateway` after it has authenticated the customer. The
+        ledger validates the token and reads the account references it authorises; it never sees a
+        credential and never holds customer identity.
+
+  parameters:
+    AccountRef:
+      name: accountRef
+      in: path
+      required: true
+      description: Estate-wide account reference.
+      schema: { $ref: '#/components/schemas/AccountRef' }
+    TransferRef:
+      name: transferRef
+      in: path
+      required: true
+      description: Estate-wide transfer reference.
+      schema: { $ref: '#/components/schemas/TransferRef' }
+    HoldRef:
+      name: holdRef
+      in: path
+      required: true
+      description: Hold reference.
+      schema: { $ref: '#/components/schemas/HoldRef' }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Client-supplied, opaque, unique per logical operation. Required on every money-moving
+        operation. The same key with a different request body is a conflict.
+      schema: { type: string, minLength: 16, maxLength: 64 }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: |
+        Traces one request across every tier of the estate. Generated by the gateway when absent.
+      schema: { type: string, format: uuid }
+
+  schemas:
+
+    AccountRef:
+      type: string
+      description: Estate-wide account key. Immutable.
+      minLength: 16
+      maxLength: 16
+      pattern: '^TB[0-9A-Z]{14}$'
+      examples: ['TB00000000000001']
+
+    CustomerRef:
+      type: string
+      description: |
+        Pseudonymous link to `customer-master`. Pseudonymised data is still personal data under
+        GDPR; this is the minimum the ledger genuinely needs.
+      minLength: 12
+      maxLength: 12
+      pattern: '^CU[0-9]{10}$'
+      examples: ['CU0000000001']
+
+    TransferRef:
+      type: string
+      description: '`TB`, then `CCYYMMDD`, then a ten-digit sequence.'
+      minLength: 20
+      maxLength: 20
+      pattern: '^TB[0-9]{18}$'
+      examples: ['TB202608170000000042']
+
+    HoldRef:
+      type: string
+      description: '`HL`, then `CCYYMMDD`, then a ten-digit sequence.'
+      minLength: 20
+      maxLength: 20
+      pattern: '^HL[0-9]{18}$'
+      examples: ['HL202608170000000007']
+
+    Reference:
+      type: string
+      description: Remittance information, 35 characters as in the SEPA field. No personal data.
+      maxLength: 35
+      examples: ['INVOICE 2026-08-17 SETTLEMENT']
+
+    Money:
+      type: object
+      description: |
+        An amount is meaningless without its currency, so the two are never separated. The decimal
+        position is not transmitted - it is resolved from the ISO 4217 scale table at presentation
+        time only. Two amounts are comparable only when their currencies are equal.
+      required: [amountMinor, currency]
+      additionalProperties: false
+      properties:
+        amountMinor:
+          type: integer
+          format: int64
+          description: |
+            Signed count of minor units. Never a decimal, never a float. `123456789` with currency
+            `PLN` is 1 234 567.89.
+          examples: [123456789]
+        currency:
+          type: string
+          description: ISO 4217 alpha-3, uppercase.
+          pattern: '^[A-Z]{3}$'
+          examples: ['PLN']
+
+    Account:
+      type: object
+      required:
+        [accountRef, customerRef, accountType, currency, status, bookedBalance, availableBalance, openedDate]
+      additionalProperties: false
+      properties:
+        accountRef: { $ref: '#/components/schemas/AccountRef' }
+        customerRef: { $ref: '#/components/schemas/CustomerRef' }
+        accountType:
+          type: string
+          description: |
+            A customer current account is a `LIABILITY` of the bank. Cash and reserves are `ASSET`.
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        currency:
+          type: string
+          description: An account holds exactly one currency, for life.
+          pattern: '^[A-Z]{3}$'
+        status:
+          type: string
+          enum: [OPEN, BLOCKED, CLOSED]
+        bookedBalance: { $ref: '#/components/schemas/Money' }
+        availableBalance: { $ref: '#/components/schemas/Money' }
+        openedDate: { type: string, format: date }
+        lastMovementDate:
+          type: [string, 'null']
+          format: date
+          description: Absent until the first movement posts.
+
+    Balance:
+      type: object
+      required: [accountRef, booked, available, asOf]
+      additionalProperties: false
+      properties:
+        accountRef: { $ref: '#/components/schemas/AccountRef' }
+        booked: { $ref: '#/components/schemas/Money' }
+        available:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: '`booked` less the sum of every hold still `PLACED`.'
+        asOf: { type: string, format: date-time }
+
+    Movement:
+      type: object
+      description: One leg of a double-entry posting. Immutable once written.
+      required: [movementRef, transferRef, legNo, accountRef, direction, amount, valueDate, postedAt]
+      additionalProperties: false
+      properties:
+        movementRef:
+          type: string
+          description: The transfer reference, a hyphen, then the two-digit leg number.
+          pattern: '^TB[0-9]{18}-[0-9]{2}$'
+          examples: ['TB202608170000000042-01']
+        transferRef: { $ref: '#/components/schemas/TransferRef' }
+        legNo:
+          type: integer
+          description: '`1` is the debit leg, `2` the credit leg.'
+          minimum: 1
+          maximum: 99
+        accountRef: { $ref: '#/components/schemas/AccountRef' }
+        direction:
+          type: string
+          description: Direction carries the sign. The amount itself is always positive.
+          enum: [DEBIT, CREDIT]
+        amount: { $ref: '#/components/schemas/Money' }
+        valueDate: { type: string, format: date }
+        postedAt: { type: string, format: date-time }
+        reference: { $ref: '#/components/schemas/Reference' }
+
+    Statement:
+      type: object
+      description: |
+        Movements over an inclusive value-date range, oldest first, with the balances that bracket
+        them. `openingBalance` plus every movement in the range equals `closingBalance` - a
+        statement that does not foot is a defect, not a rounding artefact.
+      required: [accountRef, from, to, openingBalance, closingBalance, movements]
+      additionalProperties: false
+      properties:
+        accountRef: { $ref: '#/components/schemas/AccountRef' }
+        from:
+          type: string
+          format: date
+          description: Inclusive start value date, echoing the request.
+        to:
+          type: string
+          format: date
+          description: Inclusive end value date, echoing the request.
+        openingBalance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Booked balance at the start of the first day in the range.
+        closingBalance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Booked balance at the end of the last day in the range.
+        movements:
+          type: array
+          description: Oldest first. Empty when nothing posted in the range.
+          items: { $ref: '#/components/schemas/Movement' }
+
+    Transfer:
+      type: object
+      required: [transferRef, debitAccountRef, creditAccountRef, amount, status, requestedAt, movements]
+      additionalProperties: false
+      properties:
+        transferRef: { $ref: '#/components/schemas/TransferRef' }
+        debitAccountRef: { $ref: '#/components/schemas/AccountRef' }
+        creditAccountRef: { $ref: '#/components/schemas/AccountRef' }
+        amount: { $ref: '#/components/schemas/Money' }
+        status:
+          type: string
+          enum: [ACCEPTED, POSTED, REJECTED, REVERSED]
+        reference: { $ref: '#/components/schemas/Reference' }
+        requestedAt: { type: string, format: date-time }
+        postedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Absent until `status` is `POSTED`.
+        reversesTransferRef:
+          oneOf:
+            - { $ref: '#/components/schemas/TransferRef' }
+            - { type: 'null' }
+          description: |
+            Present only on a reversal, naming the transfer it reverses. A correction is always a
+            new transfer, never a mutation of the original.
+        movements:
+          type: array
+          description: Exactly two - one debit, one credit, of equal amount and currency.
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/Movement' }
+
+    Hold:
+      type: object
+      description: A reservation against available balance. Moves no money until captured.
+      required: [holdRef, accountRef, amount, status, placedAt]
+      additionalProperties: false
+      properties:
+        holdRef: { $ref: '#/components/schemas/HoldRef' }
+        accountRef: { $ref: '#/components/schemas/AccountRef' }
+        amount: { $ref: '#/components/schemas/Money' }
+        status:
+          type: string
+          description: Every transition out of `PLACED` is terminal.
+          enum: [PLACED, CAPTURED, RELEASED, EXPIRED]
+        placedAt: { type: string, format: date-time }
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: Absent means the hold does not expire on its own.
+        capturedByTransferRef:
+          oneOf:
+            - { $ref: '#/components/schemas/TransferRef' }
+            - { type: 'null' }
+          description: Present only when `status` is `CAPTURED`.
+        reference: { $ref: '#/components/schemas/Reference' }
+
+    TransferRequest:
+      type: object
+      required: [debitAccountRef, creditAccountRef, amount]
+      additionalProperties: false
+      properties:
+        debitAccountRef: { $ref: '#/components/schemas/AccountRef' }
+        creditAccountRef:
+          allOf: [{ $ref: '#/components/schemas/AccountRef' }]
+          description: Must differ from `debitAccountRef`.
+        amount:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Strictly positive, and in the currency of both accounts.
+        reference: { $ref: '#/components/schemas/Reference' }
+        valueDate:
+          type: string
+          format: date
+          description: Defaults to the current business date when omitted.
+
+    ReversalRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Why the transfer is being reversed. Operator-supplied. No personal data.
+          maxLength: 140
+        reference: { $ref: '#/components/schemas/Reference' }
+
+    HoldRequest:
+      type: object
+      required: [amount]
+      additionalProperties: false
+      properties:
+        amount:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Strictly positive, and in the currency of the account.
+        expiresAt: { type: string, format: date-time }
+        reference: { $ref: '#/components/schemas/Reference' }
+
+    CaptureRequest:
+      type: object
+      required: [creditAccountRef, amount]
+      additionalProperties: false
+      properties:
+        creditAccountRef: { $ref: '#/components/schemas/AccountRef' }
+        amount:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Must not exceed the held amount.
+        reference: { $ref: '#/components/schemas/Reference' }
+
+    Problem:
+      type: object
+      description: |
+        RFC 9457 Problem Details. `type` is the stable machine-readable identifier; `title` and
+        `detail` are for humans and may be reworded without a contract change. No problem document
+        ever carries personal data.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Stable identifier for the problem kind.
+          examples: ['https://problems.tesserabank.example/insufficient-funds']
+        title:
+          type: string
+          examples: ['Insufficient funds']
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          examples: [422]
+        detail:
+          type: string
+          description: Human-readable explanation. Never includes personal data.
+        instance:
+          type: string
+          format: uri-reference
+          description: The specific occurrence, normally the request path.
+        correlationId:
+          type: string
+          format: uuid
+          description: What a support engineer traces the failure with.
+        violations:
+          type: array
+          description: Present on validation failures, one entry per offending field.
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    BadRequest:
+      description: The request was malformed or a header was missing.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: The referenced account, transfer or hold does not exist.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: |
+        The idempotency key was reused with a different body, or the resource is in a state that
+        forbids the operation - a hold already captured, a transfer already reversed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    UnprocessableEntity:
+      description: |
+        Well-formed but not actionable: insufficient funds, currency mismatch, an account that is
+        not `OPEN`, or an amount that is not strictly positive.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
