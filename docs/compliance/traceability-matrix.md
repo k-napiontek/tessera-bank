@@ -222,3 +222,28 @@ a contract can, and the implementation that must also satisfy it does not exist 
 | **REQ-EVT-001** Events cannot be published without their postings committing | WP-09 | The AsyncAPI document states that the event is relayed from the transactional outbox, never from the request thread | Contract |
 | **REQ-DP-002** Personal data never reaches a log | WP-09 | No contract carries a name, address, national identifier or IBAN. What may be logged is stated explicitly in the canonical model | Contract |
 | **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Hold` is defined, and `availableBalance` is specified as booked less every hold still `PLACED` | Contract |
+
+---
+
+## WP-06 - ledger domain
+
+Ticket TB-1006. Pure Java 17, no framework on the compile classpath. 86 tests, 0.28s, no database
+and no network.
+
+### Owned by WP-06
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-LED-001** Journal entries always balance | `JournalEntry` validates at construction, so an unbalanced entry cannot exist | `JournalEntryPropertiesTest` - for any generated postings the factory returns a balanced entry or rejects them, never anything else. Demonstrated to fail when the balancing check is removed and when a one-minor-unit tolerance is introduced | Met |
+| **REQ-LED-002** Postings are immutable; corrections are reversals | `Posting` and `JournalEntry` expose no mutator; `JournalEntry.reverse` returns a new entry naming the original | `ReversalTest`, including a reflective check that no public method starts with set, add, remove, update or delete | Met |
+| **REQ-LED-003** Money is exact and currency-aware | `Money` as `long` minor units plus `CurrencyCode`; per-currency ISO 4217 scale; `Math.addExact` so overflow throws rather than wraps; mixing currencies throws | `MoneyTest` and `MoneyPropertiesTest`. Demonstrated to fail when `Math.addExact` is replaced by `+`, and when the scale is hard-coded to 2 - which turns 1000 JPY into 10.00 | Met |
+| **REQ-LED-004** Account type determines sign convention | `AccountType.signedEffect(Direction, Money)` - the rule exists in exactly one place | `AccountTypeTest`. Demonstrated to fail when `LIABILITY` is given the wrong normal balance | Met |
+
+### Contributed by WP-06, verified by the owning package
+
+| Requirement | Owner | What WP-06 contributes | Status |
+|---|---|---|---|
+| **REQ-ARC-001** Domain layer is free of framework dependencies | WP-07 | No framework is on the compile classpath at all, so a Spring import fails to compile rather than merely failing a rule. `DomainPurityTest` additionally scans every production source for forbidden imports and for `double`, `float` and `BigDecimal`. WP-07 replaces it with ArchUnit | Contract |
+| **REQ-LED-007** Postings cannot be updated or deleted | WP-07 | `JournalEntryRepository` offers `append` and no update or delete, so the schema constraints in WP-07 have a port that agrees with them | Contract |
+| **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Balance.available()` is derived from booked less every hold still `PLACED`, never stored, and reports a negative figure honestly rather than flooring at zero | Contract |
+
