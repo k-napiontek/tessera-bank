@@ -1,0 +1,62 @@
+# CODEOWNERS - segregation of duties as code
+#
+# In a bank, ownership is not a courtesy: a change to the ledger must be reviewed by the team
+# accountable for the ledger, and a change to the mainframe by the people who understand COBOL.
+# This file is how that control is expressed in a repository, and it is what makes a required-review
+# branch protection rule mean something specific rather than "someone, anyone".
+#
+# ---------------------------------------------------------------------------------------------
+# IMPORTANT: the team handles below are PLACEHOLDERS and this file has no effect until they are
+# replaced with real GitHub teams or usernames. See follow-up F-04 in docs/plan/STATUS.md.
+# The structure is retained because the ownership model is the point, and it maps one-to-one onto
+# how a real institution divides accountability for this estate.
+# ---------------------------------------------------------------------------------------------
+#
+# Ownership follows the strata, because the skills follow the strata. The team that can safely
+# review a Spring Boot 3 pull request is usually not the team that can safely review a change to a
+# COBOL match-merge.
+
+# Default - anything not matched below
+*                               @tessera-bank/platform-engineering
+
+# Stratum 0 - the mainframe core (~1995)
+# Highest-risk area in the estate: it holds the definitive account balances, and the pool of people
+# who can review it is the smallest.
+/mainframe/                     @tessera-bank/core-banking-mainframe
+/contracts/copybook/            @tessera-bank/core-banking-mainframe
+
+# Stratum 1 - the Java EE monolith (~2011)
+/legacy/                        @tessera-bank/customer-systems
+/contracts/wsdl/                @tessera-bank/customer-systems
+/contracts/xsd/                 @tessera-bank/customer-systems
+
+# Stratum 2 - integration
+# Requires literacy in every era at once, which is why it has its own owners.
+/integration/                   @tessera-bank/integration-services
+
+# Stratum 3 - the ledger. Money movement.
+# Any change here is at minimum a normal change, and touching the posting logic makes it major.
+/services/ledger-core/          @tessera-bank/ledger-engineering
+/contracts/openapi/             @tessera-bank/ledger-engineering
+/contracts/asyncapi/            @tessera-bank/ledger-engineering
+
+/services/payment-engine/       @tessera-bank/payments-engineering
+
+# Stratum 4 - the edge
+/edge/api-gateway/              @tessera-bank/platform-engineering
+/edge/web-banking/              @tessera-bank/digital-channels
+/edge/fraud-scoring/            @tessera-bank/financial-crime
+
+# Batch
+/batch/recon/                   @tessera-bank/ledger-engineering @tessera-bank/core-banking-mainframe
+/batch/reporting/               @tessera-bank/regulatory-reporting
+
+# Governance, compliance and the plan.
+# Changes here alter the rules everyone else works under, so they carry the widest review.
+/docs/ways-of-working/          @tessera-bank/engineering-governance
+/docs/compliance/               @tessera-bank/engineering-governance @tessera-bank/compliance
+/docs/governance/               @tessera-bank/engineering-governance
+/docs/plan/                     @tessera-bank/engineering-governance
+/CLAUDE.md                      @tessera-bank/engineering-governance
+/SECURITY.md                    @tessera-bank/engineering-governance @tessera-bank/security
+/.github/CODEOWNERS             @tessera-bank/engineering-governance

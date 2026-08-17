@@ -1,0 +1,59 @@
+# Build output
+target/
+build/
+bin/
+dist/
+out/
+*.class
+*.jar
+*.war
+*.ear
+
+# COBOL
+*.o
+*.so
+*.dylib
+mainframe/**/*.exe
+
+# Node
+node_modules/
+.vite/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Go
+vendor/
+
+# Gradle / Maven
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+.mvn/timing.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local environment - never commit credentials
+.env
+.env.local
+*.local.properties
+
+# Generated batch output - regenerate, never commit
+mainframe/data/out/
+batch/**/output/

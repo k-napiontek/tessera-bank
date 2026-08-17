@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git switch *)",
+      "Bash(git add *)",
+      "Bash(git show *)",
+      "Bash(git rev-parse *)",
+      "Bash(make *)",
+      "Bash(./gradlew *)",
+      "Bash(gradle *)",
+      "Bash(mvn *)",
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(go vet *)",
+      "Bash(gofmt *)",
+      "Bash(uv run *)",
+      "Bash(uv sync *)",
+      "Bash(pytest *)",
+      "Bash(ruff *)",
+      "Bash(npm ci *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npx *)",
+      "Bash(cobc *)",
+      "Bash(cobcrun *)",
+      "Bash(psql *)",
+      "Bash(jq *)",
+      "Bash(xxd *)",
+      "Bash(od *)",
+      "Bash(cmp *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "b=$(git branch --show-current 2>/dev/null || true); if [ \"$b\" = \"main\" ] || [ \"$b\" = \"master\" ]; then printf \"%s\" '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Never commit to main. Every change in this repository goes on a branch named type/TB-XXXX-slug and lands through a pull request. See docs/ways-of-working/branching-and-review.md\"}}'; fi",
+            "timeout": 10,
+            "statusMessage": "Checking branch discipline"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r \".tool_input.file_path // empty\"); case \"$f\" in */mainframe/*|*/legacy/*|*/integration/*) case \"${f##*/}\" in pom.xml|build.gradle|build.gradle.kts|gradle.properties) printf \"%s\" '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"This is a build manifest in a deliberately pinned legacy stratum (Java 8 / Spring Boot 2.7.18 / Tomcat 8.5). Those versions are load-bearing: they reproduce the version lock real banks live under, and upgrading them destroys the purpose of this repository. A version change here requires an explicit instruction from the repository owner AND an ADR - see CLAUDE.md and docs/governance/adr/0002-deliberate-legacy-strata.md. Confirm this is intended.\"}}'; esac;; esac",
+            "timeout": 10,
+            "statusMessage": "Checking legacy stratum version lock"
+          }
+        ]
+      }
+    ]
+  }
+}

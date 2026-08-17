@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+max_line_length = 100
+
+[*.{yml,yaml,json,xml,xsd,wsdl}]
+indent_size = 2
+
+[*.{js,jsx,ts,tsx,css,scss,html}]
+indent_size = 2
+
+[*.go]
+indent_style = tab
+
+[Makefile]
+indent_style = tab
+
+# COBOL-85 fixed format: columns 1-6 sequence, 7 indicator, 8-11 area A, 12-72 area B.
+# Tabs would destroy column alignment and the compiler would reject the source.
+[*.{cbl,CBL,cpy,CPY,jcl,JCL}]
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = false
+max_line_length = 80
