@@ -365,6 +365,33 @@ Stratum 0 has no `Transfer` record at all. The mainframe receives movements, and
 reconstructed from the two legs sharing a `transferRef`. That asymmetry is the point: the 1995 core
 was never given the concept.
 
+### Stratum 0 record framing
+
+The copybooks package the concepts above into three fixed-width records. The lengths below are
+authoritative: `contracts/check-copybook-offsets.py` asserts against them, and WP-03 generates data to
+match them.
+
+| Record | Length | Carries | Read by |
+|---|---|---|---|
+| `ACCTREC` | 100 | `Account` | `mainframe/`, `batch/recon` |
+| `MOVEREC` | 120 | `Movement` | `mainframe/`, `integration/esb-adapter` |
+| `REJREC` | 200 | a rejection - `MOVEREC` verbatim, plus the reason | `mainframe/`, `legacy/backoffice` |
+
+Four framing rules, which the checker enforces:
+
+1. **Field order is the order of the tables above.** A record is read positionally; reordering it
+   silently reinterprets every byte after the change.
+2. **Every record is padded to its stated length with a trailing `FILLER`.** `ACCTREC` carries 21
+   spare bytes, `MOVEREC` 13, `REJREC` 22.
+3. **Lengths are round numbers.** 100, 120 and 200 are chosen so that a human reading a hex dump can
+   find a record boundary without arithmetic, and so that block sizes divide evenly.
+4. **A new field consumes `FILLER`, and the record length never changes.** This is the only way to
+   extend a fixed-width file that thirty years of downstream programs already read. When the slack
+   runs out, the file is versioned, not reformatted.
+
+`REJREC` embeds `MOVEREC` **byte for byte** rather than restating its fields, so a rejected movement
+can be re-presented to the next batch run without re-encoding it.
+
 ---
 
 ## 8. Data protection
