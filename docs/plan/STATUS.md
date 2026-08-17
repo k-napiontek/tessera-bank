@@ -9,8 +9,12 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-04 - `ACCTPOST.CBL`** is **in progress** on branch `feat/TB-1004-acctpost`. Its task list was
-> detailed and merged first ([#10](https://github.com/k-napiontek/tessera-bank/pull/10)).
+> **WP-05 - `EODREPT.CBL`, `EODCYCLE.JCL` and the local runner** is next: the lowest-numbered package
+> whose dependencies are all `Done`, and stratum 0 now has its compiler, its data and its match-merge.
+> Its task list still reads "To be detailed before execution".
+>
+> After WP-05 the mainframe branch of the critical path is complete and WP-16 unblocks - but WP-16 also
+> depends on WP-11, which depends on WP-09 and WP-10.
 >
 > Also unblocked: **WP-07** (needs a running Docker daemon for Testcontainers and PostgreSQL - the
 > `docker` binary is present, the daemon is not) and **WP-10** (needs JDK 8). Both undetailed.
@@ -27,7 +31,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [01](wp/WP-01-foundation.md) | Repo foundation, governance docs, plan system, Claude Code config | - | - | `Done` | n/a - pre-git | n/a |
 | [02](wp/WP-02-contracts.md) | Canonical data model and contracts - copybook, WSDL/XSD, OpenAPI, AsyncAPI | - | 01 | `Done` | [#1](https://github.com/k-napiontek/tessera-bank/pull/1) | `4044e07` |
 | [03](wp/WP-03-mainframe-data.md) | Mainframe copybooks and synthetic master/movement data | 0 | 02 | `Done` | [#8](https://github.com/k-napiontek/tessera-bank/pull/8) | `9db131d` |
-| [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `In progress` | | |
+| [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `Done` | [#11](https://github.com/k-napiontek/tessera-bank/pull/11) | `9e9e44e` |
 | [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Not started` | | |
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `e67dc3e` |
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Not started` | | |
@@ -80,6 +84,7 @@ becomes its own change when picked up.
 | F-13 | WP-06 | `openjdk@17` is keg-only on this machine, so `./gradlew` needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` unless 17 is the default JVM. `docs/consuming-this-repo.md` names JDK 17 as a prerequisite but does not mention this. Worth a line there when that document is next revised. | Open |
 | F-14 | WP-03 | WP-03's **In scope** section describes an `ACCTREC` that predates the canonical data model - account number `PIC X(10)`, status `PIC X(1)`, no customer reference or account type. The contract in `contracts/copybook/` supersedes it, as WP-03's own Constraints require, and the task list records this. The In-scope text itself was left unedited so the original intent stays visible; it should be reconciled when WP-18 does its documentation pass. | Open |
 | F-15 | WP-03 | The task list said to add the GnuCOBOL prerequisite to `docs/consuming-this-repo.md`. That document is still a stub owned by WP-18 (F-05) and already names GnuCOBOL under "Planned contents", so filling in part of it would have widened the branch into another package's work. The concrete prerequisites and build commands went into `mainframe/README.md` instead. `consuming-this-repo.md` still needs writing. | Open |
+| F-16 | WP-04 | `mainframe/data/check-records.py` gained a `--skip-coverage` flag. Its fixture-coverage assertions - that the data contains a positive, a negative and a zero amount - are a requirement on *generated* data, not on the output of a batch run, where the account holding zero may legitimately have been moved away. The flag names which of the two jobs the tool is doing. If more tools end up serving both purposes, the split is worth making explicit rather than adding more flags. | Open |
 
 ---
 
@@ -101,6 +106,8 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-17 | WP-02 gains a **canonical data model** as its first deliverable, plus conformance checks in WP-03, WP-08, WP-10 and WP-11. Without it the four era-specific contracts are written independently and drift, and the drift would not surface until WP-11 encodes COMP-3 bytes that WP-03 laid out differently. |
 | 2026-08-17 | `make status` and `make plan` print their files in full instead of a fixed line range, which had begun silently truncating `STATUS.md`. |
 | 2026-08-17 | Published to GitHub as `k-napiontek/tessera-bank`, public. The repository had been local-only, which left `PROTOCOL.md` phase 3 unrunnable - there was nowhere to open a pull request. Public was chosen because the master plan frames the repository as a portfolio piece. |
+| 2026-08-17 | Stratum 0 has no arranged-overdraft concept, because `ACCTREC` carries no limit field. `ACCTPOST` therefore rejects any debit that would take a `LIABILITY` account's booked balance below zero, and never rejects a credit on balance grounds - an account can already be negative from legacy state. The same rule WP-06 arrived at from a failing test, reached independently at this tier. |
+| 2026-08-17 | Every intermediate money field in COBOL must carry the same `V99` scale as the money it holds. `WS-EFFECT PIC S9(15)` silently truncated every amount to whole units in WP-04, so a debit of 100.01 against 100.00 computed to zero and an overdraft rejection never fired. Only a test caught it; the run output looked plausible. |
 | 2026-08-17 | Stratum 0 compiles with `cobc -std=ibm`, not `-std=cobol85`. `COMP-3` is an IBM extension; strict ANSI COBOL-85 spells packed decimal `PACKED-DECIMAL` and rejects `COMP-3` outright, which the WP-03 compile harness discovered on its first run. Both spellings produce identical bytes, and every banking COBOL program writes `COMP-3` - so the copybooks keep `COMP-3` and the compiler is told which dialect that is. Changing the contract to satisfy a stricter flag would have made the code less like the thing it reproduces. |
 | 2026-08-17 | A currency whose ISO 4217 scale is not 2 appears in stratum 0 data **only as a movement destined for rejection**, never as an account in the master. `PIC S9(13)V99 COMP-3` hard-codes two decimals, so a JPY balance would be misstated a hundredfold. The integration tier rejects such a movement before it arrives and the mainframe validates it again - defence in depth, because a 1995 core does not trust its feeds. |
 | 2026-08-17 | Credits into an overdrawn account are never blocked, even past the overdraft limit. An account can reach that state legitimately through fees or a reduced limit, and refusing a repayment would be absurd. Only an effect that worsens the position is subject to the policy. Driven out by a failing test in WP-06. |
