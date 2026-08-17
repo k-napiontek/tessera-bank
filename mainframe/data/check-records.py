@@ -19,6 +19,7 @@ negative number has not checked the sign nibble.
 Run: python3 mainframe/data/check-records.py
 """
 
+import argparse
 import pathlib
 import re
 import sys
@@ -119,6 +120,18 @@ def check_file(path: pathlib.Path, layout: dict, record_name: str) -> tuple:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Check generated records against the contract.")
+    parser.add_argument(
+        "--skip-coverage",
+        action="store_true",
+        help=(
+            "Skip the fixture-coverage assertions. They require the data to contain a positive, a "
+            "negative and a zero amount, which is a requirement on generated fixtures - not on the "
+            "output of a batch run, where a zero balance may legitimately have been moved away."
+        ),
+    )
+    args = parser.parse_args()
+
     if not OUT.exists():
         print(f"No generated data. Run: python3 mainframe/data/generate.py --seed 42")
         return 1
@@ -137,9 +150,14 @@ def main() -> int:
         signs |= seen
 
     print()
-    for required, label in ((POSITIVE, "a positive amount (0x0C)"),
-                            (NEGATIVE, "a negative amount (0x0D)"),
-                            ("zero", "zero (0x0C)")):
+    coverage = () if args.skip_coverage else (
+        (POSITIVE, "a positive amount (0x0C)"),
+        (NEGATIVE, "a negative amount (0x0D)"),
+        ("zero", "zero (0x0C)"),
+    )
+    if args.skip_coverage:
+        print("  ....  fixture-coverage assertions skipped")
+    for required, label in coverage:
         present = required in signs
         print(f"  {'OK  ' if present else 'MISS'}  the data covers {label}")
         if not present:
