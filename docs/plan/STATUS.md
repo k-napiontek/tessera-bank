@@ -9,12 +9,16 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-06 - Ledger domain** is **in progress** on branch `feat/TB-1006-ledger-domain`. Its task list
-> was detailed and merged first ([#4](https://github.com/k-napiontek/tessera-bank/pull/4)), so
-> execution follows a reviewed plan rather than one invented while coding.
+> **WP-07 - Ledger persistence** is the next package on the critical path: its dependency WP-06 is
+> now `Done`, and stratum 3 already has a working Gradle build and JDK 17.
 >
-> WP-03 and WP-10 are also unblocked but remain undetailed, and WP-03 additionally needs GnuCOBOL,
-> which is not installed. See F-02 and F-10.
+> **It cannot start yet.** Its `## Tasks` section still reads "To be detailed before execution", and
+> `/work-package` halts on any package that has not been refined. WP-07 additionally needs
+> **PostgreSQL and Docker** for its Testcontainers integration tests, neither of which has been
+> checked on this machine.
+>
+> Also unblocked: WP-03 (needs GnuCOBOL, not installed) and WP-10 (needs JDK 8, not installed).
+> Both are undetailed. See F-02 and F-10.
 
 ---
 
@@ -29,7 +33,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [03](wp/WP-03-mainframe-data.md) | Mainframe copybooks and synthetic master/movement data | 0 | 02 | `Not started` | | |
 | [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `Not started` | | |
 | [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Not started` | | |
-| [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `In progress` | | |
+| [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `c4be0d5` |
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Not started` | | |
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Not started` | | |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Not started` | | |
@@ -76,6 +80,8 @@ becomes its own change when picked up.
 | F-09 | WP-02 | The stratum 0 scale-2 constraint - `PIC S9(13)V99 COMP-3` cannot represent JPY or BHD, so the integration tier must reject them before they reach the mainframe - is architecturally significant and arguably warrants an ADR. It is fully documented in `canonical-data-model.md` section 2, but the Definition of Done's ADR box cannot be honestly ticked without one. | Open |
 | F-10 | WP-06 | The development machine had no JDK and no GnuCOBOL. JDK 17 (`openjdk@17`) and Gradle 9.7 were installed for WP-06; **GnuCOBOL is still missing**, so WP-03, WP-04 and WP-05 cannot be executed or verified, and **JDK 8 is still missing**, so WP-10 and WP-11 cannot either. `openjdk@17` is keg-only, so `JAVA_HOME` must point at `/opt/homebrew/opt/openjdk@17` when invoking Gradle. | Open |
 | F-11 | WP-02 | The requirement ids in the traceability matrix collided with the catalogue the work packages already defined - 14 genuine collisions, introduced by WP-02 task 8. Fixed in [#3](https://github.com/k-napiontek/tessera-bank/pull/3), which also added a catalogue index of all 60 ids so the mistake cannot repeat. | **Closed** - 2026-08-17 |
+| F-12 | WP-06 | The Definition of Done's ADR box was left unticked. Two decisions in WP-06 are arguably architecturally significant - `Account` stores no balance, and `Money` arithmetic throws on overflow rather than wrapping - and both are recorded in [#5](https://github.com/k-napiontek/tessera-bank/pull/5) and `services/ledger-core/README.md` but not as ADRs. Together with F-09 there are now two candidate ADRs outstanding. | Open |
+| F-13 | WP-06 | `openjdk@17` is keg-only on this machine, so `./gradlew` needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` unless 17 is the default JVM. `docs/consuming-this-repo.md` names JDK 17 as a prerequisite but does not mention this. Worth a line there when that document is next revised. | Open |
 
 ---
 
@@ -97,6 +103,8 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-17 | WP-02 gains a **canonical data model** as its first deliverable, plus conformance checks in WP-03, WP-08, WP-10 and WP-11. Without it the four era-specific contracts are written independently and drift, and the drift would not surface until WP-11 encodes COMP-3 bytes that WP-03 laid out differently. |
 | 2026-08-17 | `make status` and `make plan` print their files in full instead of a fixed line range, which had begun silently truncating `STATUS.md`. |
 | 2026-08-17 | Published to GitHub as `k-napiontek/tessera-bank`, public. The repository had been local-only, which left `PROTOCOL.md` phase 3 unrunnable - there was nowhere to open a pull request. Public was chosen because the master plan frames the repository as a portfolio piece. |
+| 2026-08-17 | Credits into an overdrawn account are never blocked, even past the overdraft limit. An account can reach that state legitimately through fees or a reduced limit, and refusing a repayment would be absurd. Only an effect that worsens the position is subject to the policy. Driven out by a failing test in WP-06. |
+| 2026-08-17 | `Account` stores no balance. A balance is derived from postings; storing one would create a second source of truth on day one - the exact drift `batch/recon` exists to detect. See F-12. |
 | 2026-08-17 | `JournalEntry` rejects mixed-currency entries outright. WP-06's invariant 3 allowed "no mixed-currency entry without an explicit FX leg" while the canonical model states single currency with no conversion anywhere. Rejecting outright satisfies both: if no mixed-currency entry can exist, none exists without an FX leg. FX belongs to `payment-engine`, out of initial scope. |
 | 2026-08-17 | The OpenAPI contract declares a bearer security scheme. Redocly's `security-defined` rule failed the lint with 11 errors otherwise, and the alternative - adding a config file to switch the rule off - would weaken a validator to hide a real gap. The contract states what it expects; `edge/api-gateway` remains the only component that authenticates. |
 | 2026-08-17 | Stratum 0 carries scale-2 currencies only. `PIC S9(13)V99 COMP-3` hard-codes two decimals, so JPY (scale 0) and BHD (scale 3) cannot be represented. Rather than change the picture clause, the constraint is documented and WP-11 rejects such movements before they reach the mainframe - a real limitation of a 1995 domestic core, and the kind of thing this repository exists to reproduce. See F-09. |
