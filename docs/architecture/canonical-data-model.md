@@ -272,6 +272,7 @@ concept; movements are its accounting consequence.
 | `reference` | string(35) | no | Copied onto both movements. **No personal data.** |
 | `requestedAt` | timestamp | yes | When the client submitted it. |
 | `postedAt` | timestamp | no | Absent until `status` is `POSTED`. |
+| `reversesTransferRef` | string(20) | no | Present only on a reversal, naming the transfer it reverses. |
 | `correlationId` | string(36) | yes | Traces the request across every tier. Strata 2-4 only. |
 
 ### Status transitions
@@ -281,8 +282,9 @@ ACCEPTED -> POSTED   -> REVERSED
          -> REJECTED
 ```
 
-`POSTED` is terminal for the original transfer; a reversal is a **new** transfer that references it,
-never a mutation of it.
+`POSTED` is terminal for the original transfer; a reversal is a **new** transfer that names the
+original in `reversesTransferRef`, never a mutation of it. Stratum 0 has no such field: the mainframe
+sees a reversal as an ordinary pair of movements in the opposite direction.
 
 ---
 
@@ -359,7 +361,8 @@ parts, because a fixed-width file has no room for a redundant field.
 | `reference` | `MOV-REFERENCE PIC X(35)` | `ReferenceType` | `string` | `string` |
 | `requestedAt` | - | `xs:dateTime` | `string`, `format: date-time` | `string`, `format: date-time` |
 | `postedAt` | `MOV-POSTED-TS PIC 9(14)` | `xs:dateTime` | `string`, `format: date-time` | `string`, `format: date-time` |
-| `correlationId` | - | `xs:string` | `X-Correlation-Id` header | `string`, `format: uuid` |
+| `reversesTransferRef` | - | `TransferRefType`, optional | `string`, nullable | `string` |
+| `correlationId` | - | `CorrelationIdType` | `X-Correlation-Id` header | `string`, `format: uuid` |
 
 Stratum 0 has no `Transfer` record at all. The mainframe receives movements, and the transfer is
 reconstructed from the two legs sharing a `transferRef`. That asymmetry is the point: the 1995 core
