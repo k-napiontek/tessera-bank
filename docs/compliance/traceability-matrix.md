@@ -247,3 +247,25 @@ and no network.
 | **REQ-LED-007** Postings cannot be updated or deleted | WP-07 | `JournalEntryRepository` offers `append` and no update or delete, so the schema constraints in WP-07 have a port that agrees with them | Contract |
 | **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Balance.available()` is derived from booked less every hold still `PLACED`, never stored, and reports a negative figure honestly rather than flooring at zero | Contract |
 
+---
+
+## WP-03 - mainframe copybooks and synthetic data
+
+Ticket TB-1003. The first package to turn the TB-1002 contracts into bytes on disk.
+
+### Owned by WP-03
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-MF-001** Record layouts are defined once and shared | `mainframe/copybook/` holds the files `cobc` compiles against; `contracts/copybook/` is the source | `check-identity.py` asserts byte-identity in both directions. Demonstrated to fail on a single changed character | Met |
+| **REQ-MF-002** Money on the mainframe is packed decimal, not binary or text | `comp3.py` - two digits per byte, sign in the final nibble, `0x0C` positive, `0x0D` negative, zero always positive | `test_comp3.py` asserts the canonical model's worked examples as **literal bytes**, not recomputed. Demonstrated to fail when the sign nibbles are swapped and when zero is written negative. Sign nibbles also read out of a real `xxd` dump | Met |
+| **REQ-DP-001** All test data is synthetic | `generate.py` emits account and customer *references* from the canonical patterns and nothing else. There are no names, addresses or identifiers of any kind - nothing in these files relates to a person because there is nothing about people in them | `check-records.py` validates every field; the record layouts have no field that could hold personal data | Met |
+
+### Contributed by WP-03, verified by the owning package
+
+| Requirement | Owner | What WP-03 contributes | Status |
+|---|---|---|---|
+| **REQ-MF-004** Invalid movements are rejected with a reason, never silently dropped | WP-04 | Two reject fixtures in the movement file: a JPY movement, whose ISO 4217 scale of 0 `PIC S9(13)V99` cannot represent, and a movement against an account that does not exist | Contract |
+| **REQ-INT-003** Modern events reach the mainframe in its own format | WP-11 | The byte-exact COMP-3 output the Java encoder must reproduce, including a positive amount, a negative amount, zero and the maximum representable value | Contract |
+| **REQ-MF-003** Movements are applied to the master in a single sequential pass | WP-04 | Both files sorted ascending by account reference, which is what makes a single-pass match-merge possible | Contract |
+
