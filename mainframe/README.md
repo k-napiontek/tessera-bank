@@ -28,3 +28,37 @@ The account master - the definitive record of what every account holds - and the
 This tier is deliberately from 1995. See [`CLAUDE.md`](../CLAUDE.md) and
 [ADR 0002](../docs/governance/adr/0002-deliberate-legacy-strata.md).
 
+## What exists now
+
+WP-03 has landed the **data layer**: the copybooks the programs will compile against, and the
+synthetic files they will read. No COBOL application program exists yet - `ACCTPOST` is WP-04 and
+`EODREPT` is WP-05.
+
+### Prerequisites
+
+GnuCOBOL 3.2 or later. On macOS:
+
+```bash
+brew install gnucobol
+```
+
+### Building and generating
+
+```bash
+sh mainframe/copybook/compile-check.sh          # cobc accepts every copybook
+python3 mainframe/copybook/check-identity.py    # copybooks match contracts/copybook byte for byte
+python3 mainframe/data/test_comp3.py            # COMP-3 against the canonical model's worked examples
+python3 mainframe/data/generate.py --seed 42    # synthetic master and movements
+python3 mainframe/data/check-records.py         # every field against the contract
+```
+
+Python 3 with the standard library only - nothing to install.
+
+### The dialect is `-std=ibm`, not `-std=cobol85`
+
+`COMP-3` is an IBM extension. Strict ANSI COBOL-85 spells packed decimal `PACKED-DECIMAL` and rejects
+`COMP-3` outright, which the compile harness discovered the first time it ran. Both spellings produce
+identical bytes, and every banking COBOL program ever written says `COMP-3` - so the copybooks keep
+`COMP-3` and the compiler is told which dialect that is. Changing the copybooks to suit a stricter
+flag would have made the code less like the thing it reproduces.
+
