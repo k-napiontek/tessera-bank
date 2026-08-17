@@ -9,9 +9,8 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-04 - `ACCTPOST.CBL`** is next: the lowest-numbered package whose dependencies are all `Done`,
-> and its toolchain (GnuCOBOL 3.2) and its input data both exist now. Its task list still reads "To be
-> detailed before execution", so it must be detailed before it can run.
+> **WP-04 - `ACCTPOST.CBL`** is **in progress** on branch `feat/TB-1004-acctpost`. Its task list was
+> detailed and merged first ([#10](https://github.com/k-napiontek/tessera-bank/pull/10)).
 >
 > Also unblocked: **WP-07** (needs a running Docker daemon for Testcontainers and PostgreSQL - the
 > `docker` binary is present, the daemon is not) and **WP-10** (needs JDK 8). Both undetailed.
@@ -28,7 +27,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [01](wp/WP-01-foundation.md) | Repo foundation, governance docs, plan system, Claude Code config | - | - | `Done` | n/a - pre-git | n/a |
 | [02](wp/WP-02-contracts.md) | Canonical data model and contracts - copybook, WSDL/XSD, OpenAPI, AsyncAPI | - | 01 | `Done` | [#1](https://github.com/k-napiontek/tessera-bank/pull/1) | `e6f968b` |
 | [03](wp/WP-03-mainframe-data.md) | Mainframe copybooks and synthetic master/movement data | 0 | 02 | `Done` | [#8](https://github.com/k-napiontek/tessera-bank/pull/8) | `854688a` |
-| [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `Not started` | | |
+| [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `In progress` | | |
 | [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Not started` | | |
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `c4be0d5` |
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Not started` | | |
