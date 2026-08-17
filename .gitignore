@@ -37,6 +37,10 @@ vendor/
 !gradle/wrapper/gradle-wrapper.jar
 .mvn/timing.properties
 
+# jqwik keeps a local record of previously falsified samples so it can rerun them
+# first. Useful locally, meaningless to anyone else.
+.jqwik-database
+
 # IDE
 .idea/
 *.iml
