@@ -124,8 +124,27 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Foundation only. No application source code has been written yet - see
-[`docs/plan/STATUS.md`](docs/plan/STATUS.md) for what is done and what comes next.
+Five of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
+authority; this is the shape of it.
+
+| Stratum | What exists |
+|---|---|
+| **Contracts** | All four families: COBOL copybooks with a column map, canonical XSD, customer-master WSDL, ledger-core OpenAPI, Kafka AsyncAPI - all derived from [`canonical-data-model.md`](docs/architecture/canonical-data-model.md) and validated by `contracts/validate.sh` |
+| **0 - `mainframe/`** | `ACCTPOST.CBL`, the balanced-line match-merge, with six rejection reasons and balancing control totals. A COMP-3 encoder and a deterministic synthetic data generator. |
+| **3 - `services/`** | The `ledger-core` domain: `Money`, `Account`, `JournalEntry`, `Balance`, `Hold` and the repository ports. Pure Java 17, no framework on the compile classpath. |
+| **1, 2, 4** | Nothing yet. `legacy/`, `integration/`, `edge/` and `batch/` hold READMEs only. |
+
+No tier is deployable: there is no persistence, no REST endpoint and no wiring between strata. What
+exists is the contracts, the mainframe batch core and the ledger domain - the parts everything else
+is built against.
+
+```bash
+make test     # every tier that has something to run
+make status   # what is done and what comes next
+```
+
+Running the Java tier needs a JDK 17; the mainframe tier needs GnuCOBOL. See
+[`CLAUDE.md`](CLAUDE.md) for the per-stratum commands.
 
 ## Licence and intent
 
