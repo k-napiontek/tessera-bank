@@ -9,14 +9,13 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-03 - Mainframe copybooks and synthetic data** is **in progress** on branch
-> `feat/TB-1003-mainframe-data`. It is the lowest-numbered unblocked package, and now the only one
-> whose toolchain is present: GnuCOBOL 3.2 is installed. Its task list was detailed and merged first
-> ([#7](https://github.com/k-napiontek/tessera-bank/pull/7)).
+> **WP-04 - `ACCTPOST.CBL`** is next: the lowest-numbered package whose dependencies are all `Done`,
+> and its toolchain (GnuCOBOL 3.2) and its input data both exist now. Its task list still reads "To be
+> detailed before execution", so it must be detailed before it can run.
 >
-> Also unblocked but not runnable: **WP-07** needs a running Docker daemon for Testcontainers (the
-> `docker` binary is present, the daemon is not) and PostgreSQL; **WP-10** needs JDK 8. Both are
-> undetailed. See F-02 and F-10.
+> Also unblocked: **WP-07** (needs a running Docker daemon for Testcontainers and PostgreSQL - the
+> `docker` binary is present, the daemon is not) and **WP-10** (needs JDK 8). Both undetailed.
+> See F-02 and F-10.
 
 ---
 
@@ -28,7 +27,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 |---|---|---|---|---|---|---|
 | [01](wp/WP-01-foundation.md) | Repo foundation, governance docs, plan system, Claude Code config | - | - | `Done` | n/a - pre-git | n/a |
 | [02](wp/WP-02-contracts.md) | Canonical data model and contracts - copybook, WSDL/XSD, OpenAPI, AsyncAPI | - | 01 | `Done` | [#1](https://github.com/k-napiontek/tessera-bank/pull/1) | `e6f968b` |
-| [03](wp/WP-03-mainframe-data.md) | Mainframe copybooks and synthetic master/movement data | 0 | 02 | `In progress` | | |
+| [03](wp/WP-03-mainframe-data.md) | Mainframe copybooks and synthetic master/movement data | 0 | 02 | `Done` | [#8](https://github.com/k-napiontek/tessera-bank/pull/8) | `854688a` |
 | [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `Not started` | | |
 | [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Not started` | | |
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `c4be0d5` |
@@ -81,6 +80,7 @@ becomes its own change when picked up.
 | F-12 | WP-06 | The Definition of Done's ADR box was left unticked. Two decisions in WP-06 are arguably architecturally significant - `Account` stores no balance, and `Money` arithmetic throws on overflow rather than wrapping - and both are recorded in [#5](https://github.com/k-napiontek/tessera-bank/pull/5) and `services/ledger-core/README.md` but not as ADRs. Together with F-09 there are now two candidate ADRs outstanding. | Open |
 | F-13 | WP-06 | `openjdk@17` is keg-only on this machine, so `./gradlew` needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` unless 17 is the default JVM. `docs/consuming-this-repo.md` names JDK 17 as a prerequisite but does not mention this. Worth a line there when that document is next revised. | Open |
 | F-14 | WP-03 | WP-03's **In scope** section describes an `ACCTREC` that predates the canonical data model - account number `PIC X(10)`, status `PIC X(1)`, no customer reference or account type. The contract in `contracts/copybook/` supersedes it, as WP-03's own Constraints require, and the task list records this. The In-scope text itself was left unedited so the original intent stays visible; it should be reconciled when WP-18 does its documentation pass. | Open |
+| F-15 | WP-03 | The task list said to add the GnuCOBOL prerequisite to `docs/consuming-this-repo.md`. That document is still a stub owned by WP-18 (F-05) and already names GnuCOBOL under "Planned contents", so filling in part of it would have widened the branch into another package's work. The concrete prerequisites and build commands went into `mainframe/README.md` instead. `consuming-this-repo.md` still needs writing. | Open |
 
 ---
 
@@ -102,6 +102,7 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-17 | WP-02 gains a **canonical data model** as its first deliverable, plus conformance checks in WP-03, WP-08, WP-10 and WP-11. Without it the four era-specific contracts are written independently and drift, and the drift would not surface until WP-11 encodes COMP-3 bytes that WP-03 laid out differently. |
 | 2026-08-17 | `make status` and `make plan` print their files in full instead of a fixed line range, which had begun silently truncating `STATUS.md`. |
 | 2026-08-17 | Published to GitHub as `k-napiontek/tessera-bank`, public. The repository had been local-only, which left `PROTOCOL.md` phase 3 unrunnable - there was nowhere to open a pull request. Public was chosen because the master plan frames the repository as a portfolio piece. |
+| 2026-08-17 | Stratum 0 compiles with `cobc -std=ibm`, not `-std=cobol85`. `COMP-3` is an IBM extension; strict ANSI COBOL-85 spells packed decimal `PACKED-DECIMAL` and rejects `COMP-3` outright, which the WP-03 compile harness discovered on its first run. Both spellings produce identical bytes, and every banking COBOL program writes `COMP-3` - so the copybooks keep `COMP-3` and the compiler is told which dialect that is. Changing the contract to satisfy a stricter flag would have made the code less like the thing it reproduces. |
 | 2026-08-17 | A currency whose ISO 4217 scale is not 2 appears in stratum 0 data **only as a movement destined for rejection**, never as an account in the master. `PIC S9(13)V99 COMP-3` hard-codes two decimals, so a JPY balance would be misstated a hundredfold. The integration tier rejects such a movement before it arrives and the mainframe validates it again - defence in depth, because a 1995 core does not trust its feeds. |
 | 2026-08-17 | Credits into an overdrawn account are never blocked, even past the overdraft limit. An account can reach that state legitimately through fees or a reduced limit, and refusing a repayment would be absurd. Only an effect that worsens the position is subject to the policy. Driven out by a failing test in WP-06. |
 | 2026-08-17 | `Account` stores no balance. A balance is derived from postings; storing one would create a second source of truth on day one - the exact drift `batch/recon` exists to detect. See F-12. |
