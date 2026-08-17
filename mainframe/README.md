@@ -30,9 +30,9 @@ This tier is deliberately from 1995. See [`CLAUDE.md`](../CLAUDE.md) and
 
 ## What exists now
 
-WP-03 has landed the **data layer**: the copybooks the programs will compile against, and the
-synthetic files they will read. No COBOL application program exists yet - `ACCTPOST` is WP-04 and
-`EODREPT` is WP-05.
+WP-03 landed the **data layer** - the copybooks and the synthetic files. WP-04 landed
+**`ACCTPOST`**, the balanced-line match-merge that applies a day of movements to the account master.
+`EODREPT` and the JCL cycle are still to come, in WP-05.
 
 ### Prerequisites
 
@@ -61,4 +61,13 @@ Python 3 with the standard library only - nothing to install.
 identical bytes, and every banking COBOL program ever written says `COMP-3` - so the copybooks keep
 `COMP-3` and the compiler is told which dialect that is. Changing the copybooks to suit a stricter
 flag would have made the code less like the thing it reproduces.
+
+### Running the match-merge
+
+```bash
+cobc -x -std=ibm -Wall -I mainframe/copybook -o /tmp/acctpost mainframe/cobol/ACCTPOST.CBL
+python3 mainframe/cobol/test-acctpost.py        # 13 scenarios
+```
+
+See [`cobol/README.md`](cobol/README.md) for the reason codes and the two bugs the tests caught.
 

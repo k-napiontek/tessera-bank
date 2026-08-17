@@ -269,3 +269,25 @@ Ticket TB-1003. The first package to turn the TB-1002 contracts into bytes on di
 | **REQ-INT-003** Modern events reach the mainframe in its own format | WP-11 | The byte-exact COMP-3 output the Java encoder must reproduce, including a positive amount, a negative amount, zero and the maximum representable value | Contract |
 | **REQ-MF-003** Movements are applied to the master in a single sequential pass | WP-04 | Both files sorted ascending by account reference, which is what makes a single-pass match-merge possible | Contract |
 
+---
+
+## WP-04 - ACCTPOST, the balanced-line match-merge
+
+Ticket TB-1004. The first COBOL application program in the estate.
+
+### Owned by WP-04
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-MF-003** Movements are applied to the master in a single sequential pass | One pass over two sorted files, the master held in one record area and written once per key. Never read into a table - match-merge exists because the master does not fit in memory | `test-acctpost.py`, 13 scenarios. The empty-movement case asserts a pass that applies nothing produces a **byte-identical** master, which caught a read-ahead defect that wrote record 1 twice | Met |
+| **REQ-MF-004** Invalid movements are rejected with a reason, never silently dropped | Six reason codes, each writing a `REJREC` carrying the movement verbatim in its first 120 bytes so it can be re-presented without re-encoding | Every code has a scenario that produces it. Demonstrated to fail on a version that counts rejections but does not write them - six scenarios go red at once | Met |
+| **REQ-MF-005** Every batch run produces balancing control totals | Records read, applied, rejected and value moved; `read = applied + rejected` checked by the program, which sets a non-zero return code when it does not hold | Asserted on a mixed run and on the full 302-movement file | Met |
+
+### Contributed by WP-04, verified by the owning package
+
+| Requirement | Owner | What WP-04 contributes | Status |
+|---|---|---|---|
+| **REQ-LED-004** Account type determines sign convention | WP-06 | The same normal-balance rule implemented independently in COBOL: an `ASSET` increases on the debit side, a `LIABILITY` on the credit side. A scenario asserts debiting cash *increases* it, which is the error that looks correct until the balance sheet is drawn | Met at this tier |
+| **REQ-INT-003** Modern events reach the mainframe in its own format | WP-11 | `R004` makes the stratum 0 scale-2 constraint executable: a movement in a currency of scale 0 or 3 is rejected on arrival, even though the integration tier should already have stopped it. Defence in depth - a 1995 core does not trust its feeds | Contract |
+| **REQ-OPS-003** Operators can see and work reconciliation breaks | WP-15 | The rejects file the back office will work, with a machine-readable code and an operator-readable text carrying no personal data | Contract |
+
