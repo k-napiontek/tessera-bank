@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  customer-master - the system of record for customers and account metadata.
+
+  WSDL-first, SOAP 1.1, document/literal wrapped, as a bank building on Java EE in 2011 would have
+  written it. The contract is authored by hand and the implementation is generated from it, never the
+  reverse: a WSDL produced by reflecting over Java classes is not a contract, it is a description of
+  whatever the code happened to be that day.
+
+  All business types are imported from ../xsd/canonical-v1.xsd. This document defines only the
+  operation wrappers and the fault, so there is exactly one definition of what an Account is.
+
+  Implemented by legacy/customer-master (WP-10). Consumed by integration/esb-adapter (WP-11).
+-->
+<wsdl:definitions name="CustomerMaster"
+                  targetNamespace="http://services.tesserabank.example/customer-master/v1"
+                  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+                  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+                  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                  xmlns:tns="http://services.tesserabank.example/customer-master/v1"
+                  xmlns:tb="http://schemas.tesserabank.example/canonical/v1">
+
+  <wsdl:documentation>
+    Account and customer metadata for the Tessera Bank estate. Read operations are safe to retry.
+    NotifyTransferPosted is idempotent on transferRef: presenting the same transfer twice is
+    acknowledged, not double-applied, because upstream delivery is at-least-once.
+  </wsdl:documentation>
+
+  <!-- =============================================================== -->
+  <!-- Types - wrappers only. Business types come from the canonical    -->
+  <!-- schema and are never redefined here.                             -->
+  <!-- =============================================================== -->
+
+  <wsdl:types>
+    <xs:schema targetNamespace="http://services.tesserabank.example/customer-master/v1"
+               elementFormDefault="qualified">
+
+      <xs:import namespace="http://schemas.tesserabank.example/canonical/v1"
+                 schemaLocation="../xsd/canonical-v1.xsd"/>
+
+      <xs:element name="GetAccount">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="accountRef" type="tb:AccountRefType"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="GetAccountResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="account" type="tb:Account"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="GetAccountsByCustomer">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="customerRef" type="tb:CustomerRefType"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="GetAccountsByCustomerResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="account" type="tb:Account" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="NotifyTransferPosted">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="transfer" type="tb:Transfer"/>
+            <xs:element name="movement" type="tb:Movement" minOccurs="2" maxOccurs="2"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="NotifyTransferPostedResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="transferRef" type="tb:TransferRefType"/>
+            <xs:element name="alreadyApplied" type="xs:boolean">
+              <xs:annotation>
+                <xs:documentation>
+                  True when this transfer had already been applied. The caller treats it as success:
+                  at-least-once delivery makes a duplicate an expected event, not an error.
+                </xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="ServiceFault">
+        <xs:annotation>
+          <xs:documentation>
+            Business faults only. Fault messages must never carry personal data - an error path is
+            the second most common place personal data escapes a system.
+          </xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="faultCode" type="xs:string"/>
+            <xs:element name="faultMessage" type="xs:string"/>
+            <xs:element name="correlationId" type="tb:CorrelationIdType" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:schema>
+  </wsdl:types>
+
+  <!-- =============================================================== -->
+  <!-- Messages - one part each, named parameters, as document/literal -->
+  <!-- wrapped requires.                                                -->
+  <!-- =============================================================== -->
+
+  <wsdl:message name="GetAccountRequest">
+    <wsdl:part name="parameters" element="tns:GetAccount"/>
+  </wsdl:message>
+  <wsdl:message name="GetAccountResponse">
+    <wsdl:part name="parameters" element="tns:GetAccountResponse"/>
+  </wsdl:message>
+
+  <wsdl:message name="GetAccountsByCustomerRequest">
+    <wsdl:part name="parameters" element="tns:GetAccountsByCustomer"/>
+  </wsdl:message>
+  <wsdl:message name="GetAccountsByCustomerResponse">
+    <wsdl:part name="parameters" element="tns:GetAccountsByCustomerResponse"/>
+  </wsdl:message>
+
+  <wsdl:message name="NotifyTransferPostedRequest">
+    <wsdl:part name="parameters" element="tns:NotifyTransferPosted"/>
+  </wsdl:message>
+  <wsdl:message name="NotifyTransferPostedResponse">
+    <wsdl:part name="parameters" element="tns:NotifyTransferPostedResponse"/>
+  </wsdl:message>
+
+  <wsdl:message name="ServiceFaultMessage">
+    <wsdl:part name="fault" element="tns:ServiceFault"/>
+  </wsdl:message>
+
+  <!-- =============================================================== -->
+  <!-- Port type                                                       -->
+  <!-- =============================================================== -->
+
+  <wsdl:portType name="CustomerMasterPortType">
+
+    <wsdl:operation name="GetAccount">
+      <wsdl:documentation>Account metadata by reference. Faults with ACCT_NOT_FOUND if unknown.</wsdl:documentation>
+      <wsdl:input message="tns:GetAccountRequest"/>
+      <wsdl:output message="tns:GetAccountResponse"/>
+      <wsdl:fault name="ServiceFault" message="tns:ServiceFaultMessage"/>
+    </wsdl:operation>
+
+    <wsdl:operation name="GetAccountsByCustomer">
+      <wsdl:documentation>Every account held by one customer. An empty list is a valid answer, not a fault.</wsdl:documentation>
+      <wsdl:input message="tns:GetAccountsByCustomerRequest"/>
+      <wsdl:output message="tns:GetAccountsByCustomerResponse"/>
+      <wsdl:fault name="ServiceFault" message="tns:ServiceFaultMessage"/>
+    </wsdl:operation>
+
+    <wsdl:operation name="NotifyTransferPosted">
+      <wsdl:documentation>
+        Tells the system of record that the ledger posted a transfer. Idempotent on transferRef.
+      </wsdl:documentation>
+      <wsdl:input message="tns:NotifyTransferPostedRequest"/>
+      <wsdl:output message="tns:NotifyTransferPostedResponse"/>
+      <wsdl:fault name="ServiceFault" message="tns:ServiceFaultMessage"/>
+    </wsdl:operation>
+
+  </wsdl:portType>
+
+  <!-- =============================================================== -->
+  <!-- Binding - SOAP 1.1 over HTTP, document/literal                  -->
+  <!-- =============================================================== -->
+
+  <wsdl:binding name="CustomerMasterSoapBinding" type="tns:CustomerMasterPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+
+    <wsdl:operation name="GetAccount">
+      <soap:operation soapAction="http://services.tesserabank.example/customer-master/v1/GetAccount"
+                      style="document"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+      <wsdl:fault name="ServiceFault">
+        <soap:fault name="ServiceFault" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+
+    <wsdl:operation name="GetAccountsByCustomer">
+      <soap:operation soapAction="http://services.tesserabank.example/customer-master/v1/GetAccountsByCustomer"
+                      style="document"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+      <wsdl:fault name="ServiceFault">
+        <soap:fault name="ServiceFault" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+
+    <wsdl:operation name="NotifyTransferPosted">
+      <soap:operation soapAction="http://services.tesserabank.example/customer-master/v1/NotifyTransferPosted"
+                      style="document"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+      <wsdl:fault name="ServiceFault">
+        <soap:fault name="ServiceFault" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+
+  </wsdl:binding>
+
+  <!-- =============================================================== -->
+  <!-- Service                                                         -->
+  <!-- =============================================================== -->
+
+  <wsdl:service name="CustomerMasterService">
+    <wsdl:documentation>
+      Deployed as a WAR on Tomcat 8.5. The address below is the local development endpoint; real
+      endpoints are supplied per environment by the platform repositories, not by this contract.
+    </wsdl:documentation>
+    <wsdl:port name="CustomerMasterPort" binding="tns:CustomerMasterSoapBinding">
+      <soap:address location="http://localhost:8080/customer-master/services/CustomerMasterService"/>
+    </wsdl:port>
+  </wsdl:service>
+
+</wsdl:definitions>
