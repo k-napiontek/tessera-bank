@@ -9,9 +9,12 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-02 - Canonical data model and contracts** is **in progress** on branch
-> `feat/TB-1002-contracts`. Task 1 (the canonical data model) is committed and awaiting review before
-> tasks 2 to 8 derive the four contracts from it.
+> **WP-02 - Canonical data model and contracts** is **in progress**, all eight tasks built on branch
+> `feat/TB-1002-contracts`, pull request open. **Not merged**: one of the five verification commands
+> the package specifies cannot run, because `@asyncapi/cli` is uninstallable at every published
+> version (F-07). `PROTOCOL.md` step 17 permits a merge only when every verification passed, so this
+> waits on a decision from the repository owner. Everything else is green and
+> `bash contracts/validate.sh` exits 0.
 >
 > After WP-02 merges, three packages unblock at once: WP-03, WP-06 and WP-10. Neither WP-03 nor WP-06
 > has its task list detailed yet - see F-02.
@@ -71,6 +74,9 @@ becomes its own change when picked up.
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
 | F-06 | WP-02 | The branch-protection `PreToolUse` hook in `.claude/settings.json` refuses read-only Bash commands that use a shell `for` loop, answering with the "Never commit to main" message. Plain `cat` and `git status` on the same branch pass. The `if: Bash(git commit *)` condition is not filtering compound commands, so the hook over-blocks. Protection is not weakened; ordinary work is obstructed. | Open |
+| F-07 | WP-02 | `npx @asyncapi/cli validate`, the command WP-02's Verification section names, cannot be installed at any published version: every one depends on `@asyncapi/studio-ui@0.5.0`, which is not on the npm registry (HTTP 404). The document itself is valid - `@asyncapi/parser`, the engine that CLI wraps, reports 0 errors and 0 warnings. `contracts/validate.sh` tries the CLI first and falls back to the parser, so the specified command resumes automatically once upstream is fixed. | Open |
+| F-08 | WP-02 | A WSDL reference-consistency check was written and run during WP-02 verification - it confirms every message part resolves, the document/literal wrapped naming rule holds, and every `tb:` type the WSDL uses exists in the canonical XSD. It is **not** in `validate.sh`, because WP-02 names only two validation artefacts and widening the branch was the wrong call. `xmllint --noout` alone proves well-formedness, not that the references resolve. | Open |
+| F-09 | WP-02 | The stratum 0 scale-2 constraint - `PIC S9(13)V99 COMP-3` cannot represent JPY or BHD, so the integration tier must reject them before they reach the mainframe - is architecturally significant and arguably warrants an ADR. It is fully documented in `canonical-data-model.md` section 2, but the Definition of Done's ADR box cannot be honestly ticked without one. | Open |
 
 ---
 
@@ -92,4 +98,6 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-17 | WP-02 gains a **canonical data model** as its first deliverable, plus conformance checks in WP-03, WP-08, WP-10 and WP-11. Without it the four era-specific contracts are written independently and drift, and the drift would not surface until WP-11 encodes COMP-3 bytes that WP-03 laid out differently. |
 | 2026-08-17 | `make status` and `make plan` print their files in full instead of a fixed line range, which had begun silently truncating `STATUS.md`. |
 | 2026-08-17 | Published to GitHub as `k-napiontek/tessera-bank`, public. The repository had been local-only, which left `PROTOCOL.md` phase 3 unrunnable - there was nowhere to open a pull request. Public was chosen because the master plan frames the repository as a portfolio piece. |
+| 2026-08-17 | The OpenAPI contract declares a bearer security scheme. Redocly's `security-defined` rule failed the lint with 11 errors otherwise, and the alternative - adding a config file to switch the rule off - would weaken a validator to hide a real gap. The contract states what it expects; `edge/api-gateway` remains the only component that authenticates. |
+| 2026-08-17 | Stratum 0 carries scale-2 currencies only. `PIC S9(13)V99 COMP-3` hard-codes two decimals, so JPY (scale 0) and BHD (scale 3) cannot be represented. Rather than change the picture clause, the constraint is documented and WP-11 rejects such movements before they reach the mainframe - a real limitation of a 1995 domestic core, and the kind of thing this repository exists to reproduce. See F-09. |
 | 2026-08-17 | Work packages merge with a merge commit, not a squash. `PROTOCOL.md` sizes commits deliberately at 3-10 per package; squashing would erase the history that rule exists to produce. |
