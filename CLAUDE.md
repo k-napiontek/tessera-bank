@@ -40,6 +40,53 @@ Check before writing a line. The pinned stack differs per directory and mixing t
 | `edge/` | 4 | ~2025 | Go 1.22+, Python 3.12 (uv), TypeScript + React + Vite |
 | `batch/` | - | mixed | Python 3.12 for reporting; reconciliation spans strata 0 and 3 |
 
+## Building and verifying
+
+```bash
+make test      # every tier that has something to run
+make build
+make lint
+make help      # per-tier targets
+```
+
+Per stratum, when you need one tier only:
+
+| Stratum | Command | Needs |
+|---|---|---|
+| Contracts | `bash contracts/validate.sh` | `xmllint`, `node`, network on first run |
+| 0 `mainframe/` | `make test-mainframe` | GnuCOBOL (`brew install gnucobol`) |
+| 3 `services/` | `make test-services` | JDK 17 (`brew install openjdk@17`) |
+
+`make jdk17` reports which JDK the Java tier will use, or tells you how to install one. Everything
+else is Python 3 standard library - nothing to install.
+
+## Traps that have already been caught here
+
+Not a tips list. Every entry below is a mistake that was actually made in this repository, and each
+one produced a **confident wrong answer** rather than an obvious failure.
+
+- **`cobc -std=ibm`, never `-std=cobol85`.** `COMP-3` is an IBM extension; strict ANSI COBOL-85 spells
+  packed decimal `PACKED-DECIMAL` and rejects `COMP-3` outright. Both produce identical bytes and
+  every banking COBOL program writes `COMP-3`. If the compiler rejects a copybook, **fix the flag,
+  never the copybook** - the copybooks are contracts, and four packages depend on them. (WP-03)
+
+- **Every intermediate money field in COBOL carries the same `V99` scale as the money it holds.**
+  `PIC S9(15)` against a `PIC S9(13)V99` amount silently truncates to whole units, so a debit of
+  100.01 against a balance of 100.00 computes to exactly zero and a rejection never fires. The run
+  output looks entirely plausible. Only a test caught it. (WP-04)
+
+- **`ORGANIZATION IS SEQUENTIAL`, never `LINE SEQUENTIAL`.** A COMP-3 amount can contain `0x0A` or
+  `0x0D`. Line sequential corrupts every packed field, and the file still opens and reads. (WP-04)
+
+- **Never invent a `REQ-*` id.** The catalogue in
+  [`docs/compliance/traceability-matrix.md`](docs/compliance/traceability-matrix.md) is the
+  authority - all 60, each owned by exactly one work package. Ids assigned without checking it
+  produced fourteen collisions that had to be unpicked afterwards. (WP-02)
+
+- **Never read the account master into a table.** Match-merge exists because the master does not fit
+  in memory. A version that loads it passes every test in the repository and destroys the point of
+  the tier. (WP-04)
+
 ## Language
 
 Everything that lands in this repository is English: code, identifiers, comments, docstrings, tests,
@@ -76,6 +123,7 @@ no Claude or Anthropic credit in commits, PR bodies, issues or comments.
 - **Test-driven.** Failing test first, then implementation, then refactor. This is not optional.
 - **Contracts are the source of truth.** The artefacts in `contracts/` define every interface.
   Implementation follows the contract; a contract test enforces it. Never let them drift.
+- **Requirement ids come from the catalogue**, never from invention. See the traps section above.
 - **Definition of Done** applies to every change: see
   [`docs/ways-of-working/definition-of-done.md`](docs/ways-of-working/definition-of-done.md).
 - **Stay in scope.** Never touch files outside the declared scope of the current work package.
