@@ -60,6 +60,11 @@ Compile a throwaway COBOL program that copies each copybook, confirming the layo
 generated records with `od -c` / `xxd` and check field offsets and the packed-decimal sign nibble
 against the documented layout.
 
+**Contract conformance (WP-02).** Hex-dump a generated master record and a generated movement
+record and check every field against [`../../../contracts/copybook/column-map.md`](../../../contracts/copybook/column-map.md),
+byte for byte. The COMP-3 amounts must cover a positive value, a negative value and zero, with
+sign nibbles `0x0C`, `0x0D` and `0x0C` respectively.
+
 ## Traceability
 
 | Requirement | Satisfied by |

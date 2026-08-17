@@ -60,6 +60,11 @@ replay the request with the identical `Idempotency-Key` and confirm the response
 and the balance moved once; replay with a changed amount and confirm 409; read the statement across a
 page boundary.
 
+**Contract conformance (WP-02).** The OpenAPI contract test must trace explicitly to
+[`../../architecture/canonical-data-model.md`](../../architecture/canonical-data-model.md):
+each asserted field named against the model field it implements, so a reviewer can see that the
+API and the ledger domain mean the same thing by `Money`.
+
 ## Traceability
 
 | Requirement | Satisfied by |

@@ -23,6 +23,9 @@ explicitly rather than skipped silently).
 - [ ] If an interface changed, the contract in `contracts/` changed **first**.
 - [ ] The contract test passes, proving implementation and contract agree.
 - [ ] Breaking changes to a contract are called out explicitly in the PR, with the consumers named.
+- [ ] `bash contracts/validate.sh` exits 0, and every field the change touches traces to a concept
+      in [`../architecture/canonical-data-model.md`](../architecture/canonical-data-model.md).
+      No contract invents a concept of its own.
 
 ## Documentation
 

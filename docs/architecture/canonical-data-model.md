@@ -325,7 +325,33 @@ a transfer and clears the hold in one transaction, so available balance never do
 
 ---
 
-## 7. Invariants
+## 7. FraudDecision
+
+The outcome of scoring a posted transfer. Produced by `edge/fraud-scoring`, consumed by the ledger
+and the integration tier, so it crosses tiers and belongs here rather than inside one service.
+
+A decision **never** reverses a posting by itself. The transfer is already posted when scoring runs;
+a `BLOCK` triggers a reversal through the normal reversal path, with its own audit trail. Scoring
+that could silently unpost money would be an unauditable side channel.
+
+### Fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `transferRef` | string(20) | yes | The transfer that was scored. |
+| `decision` | enum | yes | `ALLOW`, `REVIEW`, `BLOCK` |
+| `score` | integer, 0-1000 | yes | Higher is riskier. **An integer, not a float** - the same input must always produce the same bytes, and a float makes a decision boundary irreproducible across languages. |
+| `reasonCodes` | array of string(8) | no | Why the model decided as it did. Machine-readable. |
+| `modelVersion` | string(32) | yes | Which scoring model produced this. Without it a decision cannot be explained months later, which a regulator will ask for. |
+| `decidedAt` | timestamp | yes | |
+| `correlationId` | string(36) | yes | Ties the decision back to the original request. |
+
+`FraudDecision` exists at **strata 2 to 4 only**. Neither the mainframe nor the SOAP tier has any
+concept of it.
+
+---
+
+## 8. Invariants
 
 These hold across the whole estate. Each becomes a test in the package that owns the behaviour.
 
@@ -345,7 +371,7 @@ These hold across the whole estate. Each becomes a test in the package that owns
 
 ---
 
-## 8. Cross-era representation
+## 9. Cross-era representation
 
 The table WP-03, WP-08, WP-10 and WP-11 check themselves against. Every canonical field, in all four
 eras. `-` means the field does not exist in that era, deliberately.
@@ -419,6 +445,20 @@ parts, because a fixed-width file has no room for a redundant field.
 `Hold` is REST-only. It never reaches stratum 0, and the SOAP tier has no use for it, so a whole
 column of dashes is the correct answer rather than a gap to be filled.
 
+### FraudDecision
+
+| Canonical | COBOL-85 | XSD | OpenAPI 3.1 | AsyncAPI 3.0 |
+|---|---|---|---|---|
+| `transferRef` | - | - | - | `string`, 20, pattern |
+| `decision` | - | - | - | `string`, enum |
+| `score` | - | - | - | `integer`, 0-1000 |
+| `reasonCodes` | - | - | - | `array` of `string` |
+| `modelVersion` | - | - | - | `string`, `maxLength: 32` |
+| `decidedAt` | - | - | - | `string`, `format: date-time` |
+| `correlationId` | - | - | - | `string`, `format: uuid` |
+
+`FraudDecision` is event-only: it is never fetched, only published and consumed.
+
 Stratum 0 has no `Transfer` record at all. The mainframe receives movements, and the transfer is
 reconstructed from the two legs sharing a `transferRef`. That asymmetry is the point: the 1995 core
 was never given the concept.
@@ -452,7 +492,7 @@ can be re-presented to the next batch run without re-encoding it.
 
 ---
 
-## 9. Data protection
+## 10. Data protection
 
 | Field | Classification | Rule |
 |---|---|---|
@@ -466,7 +506,7 @@ under GDPR. It appears here because it is the minimum the ledger genuinely needs
 
 ---
 
-## 10. Changing this document
+## 11. Changing this document
 
 A change here is a change to every contract derived from it, so it is architecturally significant by
 definition.
@@ -485,6 +525,6 @@ definition.
 | REQ-INT-006 Business concepts are defined once and shared across eras | This document |
 | REQ-LED-001 Money is minor units plus an ISO 4217 code, never floating point | Section 2 |
 | REQ-LED-002 Currency scale is resolved from ISO 4217, per currency | Section 2, scale table |
-| REQ-LED-003 Double-entry postings are balanced and immutable | Section 7, invariants 1, 2 and 5 |
+| REQ-LED-003 Double-entry postings are balanced and immutable | Section 8, invariants 1, 2 and 5 |
 | REQ-MF-001 Packed-decimal amounts are byte-identical across tiers | Section 2, COMP-3 |
-| REQ-DP-002 The ledger holds no customer identity | Sections 3 and 9 |
+| REQ-DP-002 The ledger holds no customer identity | Sections 3 and 10 |

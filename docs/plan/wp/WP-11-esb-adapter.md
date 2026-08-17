@@ -63,6 +63,10 @@ End-to-end: publish a transfer event, confirm the SOAP call reaches `customer-ma
 movement file gains a record, then run the WP-05 EOD cycle and confirm the COBOL master balance
 changes by the expected amount. Redeliver the same event and confirm the file is unchanged.
 
+**Contract conformance (WP-02).** Compare the COMP-3 encoder's output byte for byte against the
+WP-03 fixtures, including a negative amount and zero. Also assert that a currency whose ISO 4217
+scale is not 2 is rejected before it reaches stratum 0 - the copybook cannot represent it.
+
 ## Traceability
 
 | Requirement | Satisfied by |

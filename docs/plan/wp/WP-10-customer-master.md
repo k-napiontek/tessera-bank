@@ -57,6 +57,10 @@ Build with JDK 8, deploy to Tomcat 8.5, and call the endpoint with a WSDL-genera
 the response validates against the schema. Run a lint check asserting the source level is 8 and no
 newer construct is present.
 
+**Contract conformance (WP-02).** Every SOAP response must validate against
+[`../../../contracts/xsd/canonical-v1.xsd`](../../../contracts/xsd/canonical-v1.xsd), asserted in
+the test suite rather than checked by hand.
+
 ## Traceability
 
 | Requirement | Satisfied by |
