@@ -10,7 +10,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help build test lint plan status eod \
         build-mainframe build-services test-contracts test-mainframe test-services \
-        lint-contracts jdk17
+        lint-contracts jdk17 docker
 
 # ---------------------------------------------------------------------------------------------
 # Stratum 3 needs a JDK 17 and will not accept a substitute - see the pinned-stack rule in
@@ -31,6 +31,20 @@ JAVA17 := $(firstword $(foreach d,$(JAVA17_CANDIDATES),\
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# ---------------------------------------------------------------------------------------------
+# The ledger's persistence tests run against real PostgreSQL through Testcontainers, and that is not
+# negotiable: an in-memory database takes no SELECT ... FOR UPDATE row locks, so the concurrency test
+# would pass against one while proving nothing. Without a daemon, Testcontainers fails deep in a stack
+# trace that reads like a broken build rather than a stopped Docker.
+# ---------------------------------------------------------------------------------------------
+docker: ## Report whether the Docker daemon the persistence tests need is running
+	@docker info >/dev/null 2>&1 \
+		&& echo "Docker: $$(docker version --format '{{.Server.Version}}')" \
+		|| (echo "Docker daemon is not running. The ledger persistence tests need it -"; \
+		    echo "they run against real PostgreSQL via Testcontainers. Start Docker Desktop:"; \
+		    echo "  open -a Docker"; \
+		    exit 1)
 
 jdk17: ## Report which JDK 17 the Java tier will use
 ifeq ($(JAVA17),)
@@ -55,7 +69,8 @@ build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 	@echo "OK    ACCTPOST and EODREPT compiled"
 
 build-services: jdk17 ## Build the Java 17 tier
-	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet :services:ledger-core:build
+	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
+		:services:ledger-core:build :services:ledger-persistence:build
 
 # --- test -------------------------------------------------------------------------------------
 
@@ -77,8 +92,9 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 	@python3 mainframe/jcl/test-sortrec.py 2>&1 >/dev/null | tail -3
 	@python3 mainframe/jcl/test-eod-cycle.py
 
-test-services: jdk17 ## Ledger domain unit and property tests
-	@JAVA_HOME="$(JAVA17)" ./gradlew :services:ledger-core:test
+test-services: jdk17 docker ## Ledger domain tests, plus persistence against real PostgreSQL
+	@JAVA_HOME="$(JAVA17)" ./gradlew \
+		:services:ledger-core:test :services:ledger-persistence:test
 
 # --- lint -------------------------------------------------------------------------------------
 

@@ -305,3 +305,28 @@ Ticket TB-1005. The mainframe tier completed: the report, the job graph and the 
 | **REQ-OPS-003** Operators can see and work reconciliation breaks | WP-15 | The reject recap an operator reads first: counts by reason code with the text taken from the reject record, so the back office sees the shape of a night's failures before opening the file | Contract |
 | **REQ-REC-001** Old and new cores are reconciled every cycle | WP-16 | `ACCTNEW.DAT` in a known-good state after a reproducible cycle, plus the per-currency totals the reconciliation compares against. The produced master is validated against `contracts/copybook/column-map.md` with the same checker the generator is held to | Contract |
 
+---
+
+## WP-07 - Ledger persistence
+
+Ticket TB-1007. The ledger's ports, implemented against real PostgreSQL.
+
+### Owned by WP-07
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-LED-005** Concurrent transfers cannot lose an update or deadlock | `SELECT ... FOR UPDATE` on the account rows, acquired through `AccountLocks.lockInOrder`, which sorts by account reference. Every transaction takes the same accounts in the same order, so one waits and then proceeds instead of the pair blocking each other. The order is arbitrary; that it is the same order every time is the mechanism. The port takes one reference at a time, so the rule lives in the adapter rather than widening a WP-06 interface to suit infrastructure | `AccountLocksConcurrencyTest`: six threads move money around a ring of five accounts, in both directions over the same pairs, asserting **total value across the ring is unchanged**. Demonstrated to fail with the ordering removed - PostgreSQL reports `deadlock detected` (SQLState 40P01) five times and the run aborts. The lock order is also asserted directly, because a property that only shows up as a flaky failure under load is one no test can be trusted to hold | Met |
+| **REQ-LED-006** Materialised balances are verifiable, not assumed | Two independent derivations. `balanceOf` reads the materialised `balance` row - the fast path an API call takes - while `BalanceReconciliation` sums the postings in SQL and compares. The reconciliation reimplements the sign convention that `AccountType.signedEffect` holds in Java; the duplication is deliberate, because a check written against the same code it checks proves nothing | `BalanceReconciliationTest`: zero drift over a generated ledger spanning all five account types, and **a deliberately corrupted balance row detected**, down to a single minor unit. Demonstrated to fail on four mutations - inverted sign convention, inner join dropping accounts with no postings, a one-unit tolerance, and reporting nothing at all | Met |
+| **REQ-LED-007** Postings cannot be updated or deleted | `JournalEntryRepository` offers `append` and nothing else, so the Java side cannot express a mutation. For everything that is not the Java side, a trigger raises on `UPDATE` or `DELETE` against `posting`. A correction is a reversing entry | `SchemaConstraintTest` watches both an `UPDATE` and a `DELETE` raise. `HexagonalBoundariesTest` additionally fails the build if any source in the module contains such SQL - the trigger catches it at runtime, the scan catches SQL that was never run | Met |
+| **REQ-ARC-001** Domain layer is free of framework dependencies | The domain is a **separate module with no framework on its compile classpath**, so a Spring import fails to compile rather than failing a rule. ArchUnit polices the direction of the dependency from the persistence module, which has both sides on its classpath and can therefore see a violation | `HexagonalBoundariesTest`: the domain and its ports depend on no Spring, Jakarta, Flyway, JDBC or Jackson package, and never on `..adapter..`. The import is asserted non-empty first, because a rule over an empty set of classes passes vacuously. Demonstrated to fail when a port imports `java.sql.Connection`. `DomainPurityTest` in `ledger-core` is retained alongside it | Met |
+
+### Contributed by WP-07, verified by the owning package
+
+| Requirement | Owner | What WP-07 contributes | Status |
+|---|---|---|---|
+| **REQ-LED-001** Journal entries always balance | WP-06 | The invariant enforced a second time in the schema, by a deferrable constraint trigger checked at commit. The domain rejects an unbalanced entry; so now does the database, for callers that never go through the domain | Met at this tier |
+| **REQ-LED-004** Account type determines sign convention | WP-06 | A third independent implementation of the normal-balance rule, in the reconciliation SQL, asserted to agree with the Java one across all five account types. COBOL has the fourth, in `ACCTPOST` | Met at this tier |
+| **REQ-REC-001** Old and new cores are reconciled every cycle | WP-16 | The pattern reconciliation will follow between tiers, proven within one: derive the same figure two independent ways and compare, report drift as data rather than logging it, and never auto-correct - overwriting a balance from the postings destroys the evidence of how it drifted | Contract |
+| **REQ-LED-002** Postings are immutable; corrections are reversals | WP-06 | The immutability the domain states, made physical: the trigger on `posting` refuses `UPDATE` and `DELETE` outright, so a correction has to be a reversing entry even for a caller that never touches the Java | Met at this tier |
+| **REQ-LED-003** Money is exact and currency-aware | WP-06 | `bigint` minor units and a `char(3)` code, never `numeric` and never a float. Two composite foreign keys make currency agreement structural: a posting must be in its entry's currency and in its account's, so no conversion can occur by accident | Met at this tier |
+
