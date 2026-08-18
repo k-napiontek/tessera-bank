@@ -99,9 +99,9 @@ def scenario_full_cycle_completes_from_a_clean_state(binary_work):
     master, movements = fixture(work)
     rc, output, run_dir = run_cycle(work, master, movements)
 
-    check(rc == 0, f"return code {rc}, expected 0\\n{output}")
+    check(rc == 0, f"return code {rc}, expected 0\n{output}")
     for name in ["MOVEMENT.DAT", "ACCTNEW.DAT", "REJECTS.DAT", "ACCTRPT.DAT", "EODREPT.TXT"]:
-        check((run_dir / name).exists(), f"{name} was not produced\\n{output}")
+        check((run_dir / name).exists(), f"{name} was not produced\n{output}")
 
     new_master = (run_dir / "ACCTNEW.DAT").read_bytes()
     # 100.00 credited 30.00 = 130.00. Written out, not recomputed.
@@ -116,8 +116,8 @@ def scenario_the_four_steps_run_in_order(binary_work):
     _, output, _ = run_cycle(work, master, movements)
 
     positions = [output.find(step) for step in ["STEP010", "STEP020", "STEP030", "STEP040"]]
-    check(all(position >= 0 for position in positions), f"a step never ran:\\n{output}")
-    check(positions == sorted(positions), f"the steps ran out of order:\\n{output}")
+    check(all(position >= 0 for position in positions), f"a step never ran:\n{output}")
+    check(positions == sorted(positions), f"the steps ran out of order:\n{output}")
     shutil.rmtree(work)
 
 
@@ -129,9 +129,9 @@ def scenario_two_runs_produce_identical_outputs(binary_work):
     rc_one, output_one, run_dir = run_cycle(work, master, movements)
     first = {name: (run_dir / name).read_bytes()
              for name in ["ACCTNEW.DAT", "REJECTS.DAT", "EODREPT.TXT"]}
-    rc_two, output_two, _ = run_cycle(work, master, movements)
+    rc_two, output_two, _ = run_cycle(work, master, movements, "--rerun")
 
-    check(rc_one == 0 and rc_two == 0, f"a run failed: {rc_one}, {rc_two}\\n{output_two}")
+    check(rc_one == 0 and rc_two == 0, f"a run failed: {rc_one}, {rc_two}\n{output_two}")
     for name, before in first.items():
         after = (run_dir / name).read_bytes()
         check(before == after, f"{name} differs between two runs of the same inputs")
@@ -147,7 +147,7 @@ def scenario_unsorted_movements_are_sorted_before_posting(binary_work):
     master, movements = fixture(work, movements=list(reversed(ordered)))
     rc, output, run_dir = run_cycle(work, master, movements)
 
-    check(rc == 0, f"return code {rc}\\n{output}")
+    check(rc == 0, f"return code {rc}\n{output}")
     new_master = (run_dir / "ACCTNEW.DAT").read_bytes()
     # 100.00 + 10.00 + 5.00 = 115.00, whatever order the movements arrived in.
     check(booked_of(new_master, 0) == 115_00,
@@ -163,8 +163,8 @@ def scenario_a_failing_step_aborts_the_cycle(binary_work):
 
     rc, output, run_dir = run_cycle(work, master, movements)
 
-    check(rc != 0, f"a ragged movement file returned {rc}, expected non-zero\\n{output}")
-    check("STEP010" in output and "ABEND" in output, f"the abend names no step:\\n{output}")
+    check(rc != 0, f"a ragged movement file returned {rc}, expected non-zero\n{output}")
+    check("STEP010" in output and "ABEND" in output, f"the abend names no step:\n{output}")
     check(not (run_dir / "EODREPT.TXT").exists(),
           "the cycle carried on and produced a report after a failed step")
     shutil.rmtree(work)
@@ -177,7 +177,7 @@ def scenario_a_missing_input_is_refused_before_any_step(binary_work):
     rc, output, _ = run_cycle(work, work / "ABSENT.DAT", movements)
 
     check(rc != 0, f"a missing master returned {rc}, expected non-zero")
-    check("ABSENT.DAT" in output, f"the message does not name the missing file:\\n{output}")
+    check("ABSENT.DAT" in output, f"the message does not name the missing file:\n{output}")
     shutil.rmtree(work)
 
 
@@ -189,11 +189,68 @@ def scenario_the_report_reconciles_against_acctpost(binary_work):
 
     report = (run_dir / "EODREPT.TXT").read_text()
     check("*** IN BALANCE" in report,
-          f"the report did not reconcile against ACCTPOST\\n{output}")
+          f"the report did not reconcile against ACCTPOST\n{output}")
     total = [line for line in report.splitlines() if "TOTAL REJECTED" in line][0]
     check(total.strip().endswith("2"), f"reject total is {total!r}, expected 2")
     check(rc == 0, f"return code {rc}")
     shutil.rmtree(work)
+
+
+def scenario_the_same_movement_file_is_refused_twice(binary_work):
+    """Applying a day twice doubles every posting in the bank. It must be refused, not detected."""
+    work = pathlib.Path(tempfile.mkdtemp())
+    master, movements = fixture(work)
+
+    rc_one, _, run_dir = run_cycle(work, master, movements)
+    check(rc_one == 0, f"the first run failed with {rc_one}")
+    before = (run_dir / "ACCTNEW.DAT").read_bytes()
+
+    rc_two, output, _ = run_cycle(work, master, movements)
+
+    check(rc_two == 8, f"the second run returned {rc_two}, expected 8")
+    check("already applied" in output, f"the refusal explains nothing:\n{output}")
+    check((run_dir / "ACCTNEW.DAT").read_bytes() == before,
+          "the refused run still changed the master")
+    shutil.rmtree(work)
+
+
+def scenario_rerun_applies_it_again_deliberately(binary_work):
+    """The guard is a control, not a wall. An operator who means it can say so."""
+    work = pathlib.Path(tempfile.mkdtemp())
+    master, movements = fixture(work)
+
+    run_cycle(work, master, movements)
+    rc, output, run_dir = run_cycle(work, master, movements, "--rerun")
+
+    check(rc == 0, f"--rerun returned {rc}, expected 0\n{output}")
+    check((run_dir / "EODREPT.TXT").exists(), "--rerun produced no report")
+    shutil.rmtree(work)
+
+
+def scenario_a_different_movement_file_is_allowed_the_same_day(binary_work):
+    """A corrected file re-presented on the same business date is normal operations."""
+    work = pathlib.Path(tempfile.mkdtemp())
+    master, movements = fixture(work)
+    run_cycle(work, master, movements)
+
+    movements.write_bytes(b"".join([moverec("TB00000000000001", "C", 1_00)]))
+    rc, output, _ = run_cycle(work, master, movements)
+
+    check(rc == 0, f"a different movement file returned {rc}, expected 0\n{output}")
+    shutil.rmtree(work)
+
+
+def scenario_the_marker_records_what_was_applied(binary_work):
+    """An operator at 03:00 needs to see which file was posted, not just that one was."""
+    work = pathlib.Path(tempfile.mkdtemp())
+    master, movements = fixture(work)
+    _, _, run_dir = run_cycle(work, master, movements)
+
+    marker = (run_dir / "MOVEMENT.APPLIED").read_text()
+    expected = subprocess.run(["shasum", "-a", "256", str(movements)],
+                              capture_output=True, text=True).stdout.split()[0]
+    check(expected in marker, f"the marker holds no checksum of the applied file:\n{marker}")
+    check(BUS_DATE in marker, f"the marker does not name the business date:\n{marker}")
 
 
 SCENARIOS = [value for name, value in sorted(globals().items()) if name.startswith("scenario_")]

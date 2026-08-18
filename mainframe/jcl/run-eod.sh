@@ -14,7 +14,8 @@
 #
 # Idempotent by construction: the work directory is seeded from the input master on every run, and
 # the run timestamp is derived from the business date rather than the clock, so two runs over the
-# same inputs produce byte-identical outputs.
+# same inputs produce byte-identical outputs. Applying the same movement file twice is refused
+# outright - see the marker file at the end.
 #
 #   bash mainframe/jcl/run-eod.sh --business-date 20260818
 #   bash mainframe/jcl/run-eod.sh --steps            # the job graph, one step per line
@@ -33,6 +34,7 @@ MASTER_IN="$REPO/mainframe/data/out/ACCTMAST.DAT"
 MOVEMENT_IN="$REPO/mainframe/data/out/MOVEMENT.DAT"
 WORK_ROOT="$REPO/mainframe/data/out/eod"
 RUN_TS=""
+RERUN="no"
 
 usage() {
     sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -45,6 +47,7 @@ while [ $# -gt 0 ]; do
         --movements)     MOVEMENT_IN="$2"; shift 2 ;;
         --work)          WORK_ROOT="$2"; shift 2 ;;
         --run-ts)        RUN_TS="$2"; shift 2 ;;
+        --rerun)         RERUN="yes"; shift ;;
         --steps)         printf '%s\n' $STEP_GRAPH | tr ':' ' '; exit 0 ;;
         -h|--help)       usage; exit 0 ;;
         *) echo "EOD ABEND SETUP unknown argument $1" >&2; exit 12 ;;
@@ -56,6 +59,7 @@ done
 [ -n "$RUN_TS" ] || RUN_TS="${BUSINESS_DATE}030000"
 
 WORK="$WORK_ROOT/$BUSINESS_DATE"
+MARKER="$WORK/MOVEMENT.APPLIED"
 
 abend() {
     echo "EOD ABEND $1" >&2
@@ -86,6 +90,22 @@ echo "   work       $WORK"
 [ -f "$MASTER_IN" ]   || abend "SETUP master not found: $MASTER_IN" 12
 [ -f "$MOVEMENT_IN" ] || abend "SETUP movement file not found: $MOVEMENT_IN" 12
 
+# The guard against posting a day twice. A cycle that applies the same movement file to an already
+# updated master doubles every posting in the bank, and "the operator would notice" is not a
+# control. The checksum is what identifies the file: a re-presented, corrected file for the same
+# business date is normal operations and must not be blocked, while the identical file is the one
+# thing that must never be applied again by accident.
+if [ -f "$MARKER" ] && [ "$RERUN" = "no" ]; then
+    APPLIED_SHA="$(awk '/^sha256/ {print $2}' "$MARKER")"
+    CURRENT_SHA="$(shasum -a 256 "$MOVEMENT_IN" | awk '{print $1}')"
+    if [ "$APPLIED_SHA" = "$CURRENT_SHA" ]; then
+        echo
+        cat "$MARKER"
+        abend "SETUP this movement file was already applied for $BUSINESS_DATE
+   pass --rerun only if you intend to apply it again" 8
+    fi
+fi
+
 BIN="$WORK_ROOT/bin"
 mkdir -p "$WORK" "$BIN" || abend "SETUP cannot create $WORK" 12
 
@@ -101,7 +121,7 @@ echo "   compiled   ACCTPOST, EODREPT"
 cp "$MASTER_IN"   "$WORK/ACCTMAST.DAT" || abend "SETUP cannot stage the master" 12
 cp "$MOVEMENT_IN" "$WORK/MOVEMENT.IN"  || abend "SETUP cannot stage the movements" 12
 rm -f "$WORK/MOVEMENT.DAT" "$WORK/ACCTNEW.DAT" "$WORK/REJECTS.DAT" \
-      "$WORK/ACCTRPT.DAT" "$WORK/EODREPT.TXT"
+      "$WORK/ACCTRPT.DAT" "$WORK/EODREPT.TXT" "$MARKER"
 
 cd "$WORK" || abend "SETUP cannot enter $WORK" 12
 
@@ -146,6 +166,17 @@ EODREPT_BUS_DATE="$BUSINESS_DATE" EODREPT_RUN_TS="$RUN_TS" \
 EODREPT_RC=$?
 cat EODREPT.LOG
 check_rc STEP040 $EODREPT_RC
+
+# ---------------------------------------------------------------------------------------------
+# The cycle ended clean. Record what was applied, so it cannot be applied again by accident. The
+# marker is written last: a cycle that failed halfway has applied nothing and must stay rerunnable.
+# ---------------------------------------------------------------------------------------------
+{
+    echo "sha256 $(shasum -a 256 "$WORK/MOVEMENT.IN" | awk '{print $1}')"
+    echo "business-date $BUSINESS_DATE"
+    echo "run-timestamp $RUN_TS"
+    echo "source $MOVEMENT_IN"
+} > "$MARKER"
 
 echo
 echo "EOD CYCLE COMPLETE  report $WORK/EODREPT.TXT"
