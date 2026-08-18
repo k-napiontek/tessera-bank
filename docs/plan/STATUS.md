@@ -9,14 +9,15 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-07 - Ledger persistence** is next: the lowest-numbered package whose dependencies are all
-> `Done` (WP-06). Its task list still reads "To be detailed before execution". It needs a **running
-> Docker daemon** for Testcontainers - the constraint is explicit, because an in-memory database
-> would not exercise the `SELECT ... FOR UPDATE` locking the package exists to prove. Docker Desktop
-> is installed on the development machine but has to be started.
+> **WP-08 - Ledger API** is next: the lowest-numbered package whose dependencies are all `Done`
+> (WP-07). Its task list still reads "To be detailed before execution". It needs the same running
+> Docker daemon WP-07 needs, for the contract and integration tests.
 >
-> **Stratum 0 is complete.** WP-03, WP-04 and WP-05 have all landed and the overnight cycle runs end
-> to end locally (`make eod`). WP-16 now waits only on WP-11, which waits on WP-09 and WP-10.
+> WP-08 is where the pieces WP-07 proved individually get composed into a transfer: lock the accounts
+> in order, consult `OverdraftPolicy`, append the entry. Nothing does that yet - see F-22.
+>
+> **Stratum 0 is complete** and the overnight cycle runs end to end locally (`make eod`). WP-16 waits
+> on WP-11, which waits on WP-09 and WP-10.
 >
 > Also unblocked: **WP-10** (stratum 1), still **blocked on tooling** - only `openjdk@17` and
 > `openjdk@26` are installed and it needs JDK 8. See F-02 and F-10.
@@ -35,7 +36,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `Done` | [#11](https://github.com/k-napiontek/tessera-bank/pull/11) | `d2054f9` |
 | [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Done` | [#16](https://github.com/k-napiontek/tessera-bank/pull/16) | `32318f1` |
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `c4be0d5` |
-| [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `In progress` | | |
+| [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Done` | [#19](https://github.com/k-napiontek/tessera-bank/pull/19) | `2d7bb3a` |
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Not started` | | |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Not started` | | |
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
@@ -120,6 +121,10 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-18 | **The end-of-day report prints no cross-currency total.** WP-05 asks for "a grand total"; adding 100 PLN to 100 EUR produces a figure that means nothing and that no auditor would accept. The grand total counts accounts, money figures stay per currency in the subtotals and the closing recap, and the report states on the page that no cross-currency amount is printed. Printing a summed figure would be the report equivalent of the WP-04 `V99` truncation: plausible-looking and simply wrong. |
 | 2026-08-18 | The cycle **refuses to apply the same movement file twice**. On success `run-eod.sh` writes a marker holding the file's SHA-256 and the business date; a second run with the identical file for the same date exits 8 unless `--rerun` is passed. A corrected file re-sent for the same date is allowed, because that is normal operations. Applying a day's movements twice doubles every posting in the bank, and "the operator would notice" is not a control. |
 | 2026-08-18 | Stratum 0's **subtotal accumulators are `PIC S9(15)V99`**, two digits wider than the `S9(13)V99` balances they sum, and the report's money columns are 15 digits wide so totals print under the same columns with the same picture. Not defensive: the synthetic data's PLN total is `10,000,074,741,234.88` - 14 digits - because WP-03 deliberately seeds an account at the maximum representable balance. A 13-digit accumulator would have truncated it in silence. |
+| 2026-08-18 | The ledger's persistence lives in a **separate module**, `services/ledger-persistence`, rather than beside the domain in `ledger-core`. That module carries no framework on its compile classpath, so a Spring import there fails to compile rather than failing a rule, and `DomainPurityTest` scans every source in it. Adapters in the same module would have forced that scan to be narrowed to the domain package - weakening a control that works, to make room for new code. ArchUnit still has teeth because the persistence module holds both sides on its classpath. This changed WP-07's stated verification command from `:services:ledger-core:test`. **Strongest outstanding ADR candidate; see F-09, F-12.** |
+| 2026-08-18 | A ledger balance is **derived two independent ways on purpose**. `balanceOf` reads the materialised `balance` row - the fast path an API call takes - and `BalanceReconciliation` sums the postings in SQL, reimplementing the sign convention that `AccountType.signedEffect` holds in Java. The duplication is the control: a check written against the same code it checks proves nothing, and if `balanceOf` summed the postings the reconciliation would compare a number to itself. This does not contradict WP-06's "`Account` stores no balance" - the aggregate holds none; the database materialises one and is then held to account for it. |
+| 2026-08-18 | **Locking more than one account goes through `AccountLocks.lockInOrder`, which sorts by reference.** The port locks one account at a time and widening it to suit an adapter would invert the dependency the architecture protects, so the rule lives in the persistence module. The order is arbitrary; that it is the same order every time is the whole mechanism. Proven by deleting the single `.sorted(...)` line and rerunning the ring test, which produced five `deadlock detected` errors from PostgreSQL - the rule is load-bearing, not decorative. |
+| 2026-08-18 | A PostgreSQL trigger function must address its tables through **`TG_TABLE_SCHEMA`**, never by an unqualified name. A function body resolves unqualified names against the *caller's* `search_path`, not the schema it was created in, so the balanced-entry trigger worked during migration and failed the moment it was called from a connection with a different `search_path`. |
 | 2026-08-17 | Stratum 0 has no arranged-overdraft concept, because `ACCTREC` carries no limit field. `ACCTPOST` therefore rejects any debit that would take a `LIABILITY` account's booked balance below zero, and never rejects a credit on balance grounds - an account can already be negative from legacy state. The same rule WP-06 arrived at from a failing test, reached independently at this tier. |
 | 2026-08-17 | Every intermediate money field in COBOL must carry the same `V99` scale as the money it holds. `WS-EFFECT PIC S9(15)` silently truncated every amount to whole units in WP-04, so a debit of 100.01 against 100.00 computed to zero and an overdraft rejection never fired. Only a test caught it; the run output looked plausible. |
 | 2026-08-17 | Stratum 0 compiles with `cobc -std=ibm`, not `-std=cobol85`. `COMP-3` is an IBM extension; strict ANSI COBOL-85 spells packed decimal `PACKED-DECIMAL` and rejects `COMP-3` outright, which the WP-03 compile harness discovered on its first run. Both spellings produce identical bytes, and every banking COBOL program writes `COMP-3` - so the copybooks keep `COMP-3` and the compiler is told which dialect that is. Changing the contract to satisfy a stricter flag would have made the code less like the thing it reproduces. |
