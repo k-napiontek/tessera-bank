@@ -55,6 +55,16 @@ def acctrec(ref, customer="CU0000000001", acct_type="LIABILITY", currency="PLN",
     return record
 
 
+def rejrec(movement_ref="TB00000000000009", code="R001", reason="ACCOUNT NOT FOUND IN MASTER"):
+    """REJREC as ACCTPOST writes it: the movement verbatim in the first 120 bytes, then the reason."""
+    movement = (text("TB202608180000000001", 20) + number(1, 2) + text(movement_ref, 16)
+                + text("C", 1) + text("PLN", 3) + encode_comp3(10_00) + number(20260818, 8)
+                + number(20260818090000, 14) + text("HARNESS FIXTURE", 35) + b" " * 13)
+    record = movement + text(code, 4) + text(reason, 40) + number(20260818031500, 14) + b" " * 22
+    assert len(record) == 200
+    return record
+
+
 def compile_program(binary):
     """Compiles, and treats any compiler output as a failure.
 
@@ -69,6 +79,8 @@ def compile_program(binary):
     noise = (result.stdout + result.stderr).strip()
     if noise:
         raise SystemExit(f"cobc is not silent under -Wall:\n{noise}")
+
+
 
 
 def run(binary, master, rejects=(), ctl_rejected=None):
@@ -100,6 +112,14 @@ def detail_lines(page):
 def subtotal_lines(page):
     """Currency subtotal lines announce themselves."""
     return [line for line in page if "CURRENCY TOTAL" in line]
+
+
+def line_starting(report, prefix):
+    """The one line whose content begins with prefix, or a Failure if there is not exactly one."""
+    found = [line for page in pages(report) for line in page if line.strip().startswith(prefix)]
+    if len(found) != 1:
+        raise Failure(f"{len(found)} lines start with {prefix!r}, expected 1")
+    return found[0]
 
 
 class Failure(Exception):
@@ -223,9 +243,10 @@ def scenario_each_currency_starts_a_new_page(binary):
               acctrec("TB00000000000002", currency="PLN", booked=20_00),
               acctrec("TB00000000000003", currency="USD", booked=30_00)]
     report, _, _ = run(binary, master)
-    body = pages(report)
+    # The closing recap pages carry no detail lines, so they are not currency pages.
+    body = [page for page in pages(report) if detail_lines(page)]
 
-    check(len(body) == 3, f"{len(body)} pages, expected 3 - one per currency")
+    check(len(body) == 3, f"{len(body)} pages hold accounts, expected 3 - one per currency")
     for index, currency in enumerate(["EUR", "PLN", "USD"]):
         details = detail_lines(body[index])
         check(len(details) == 1, f"page {index + 1} holds {len(details)} accounts, expected 1")
@@ -266,6 +287,91 @@ def scenario_subtotal_carries_a_negative_currency_total(binary):
     line = subtotal_lines(pages(report)[0])[0]
 
     check("1,000.00-" in line, f"subtotal reads {line!r}, expected 1,000.00-")
+
+
+def scenario_currency_recap_repeats_every_currency(binary):
+    """The subtotals are pages apart. The recap is the one page that shows them together."""
+    master = [acctrec("TB00000000000001", currency="EUR", booked=10_00),
+              acctrec("TB00000000000002", currency="PLN", booked=20_00),
+              acctrec("TB00000000000003", currency="PLN", booked=30_00),
+              acctrec("TB00000000000004", currency="USD", booked=40_00)]
+    report, _, _ = run(binary, master)
+
+    recap = [page for page in pages(report) if any("CURRENCY RECAP" in line for line in page)]
+    check(len(recap) == 1, f"{len(recap)} currency recap pages, expected 1")
+    rows = [line for line in recap[0] if line[6:9] in ("EUR", "PLN", "USD")]
+    check(len(rows) == 3, f"{len(rows)} recap rows, expected 3")
+    check(rows[1][6:9] == "PLN" and "50.00" in rows[1],
+          f"the PLN row reads {rows[1]!r}, expected 2 accounts totalling 50.00")
+
+
+def scenario_grand_total_is_a_count_and_says_so(binary):
+    """100 PLN plus 100 EUR is not 200 of anything. The report must refuse to add them."""
+    master = [acctrec("TB00000000000001", currency="EUR", booked=100_00),
+              acctrec("TB00000000000002", currency="PLN", booked=100_00)]
+    report, _, _ = run(binary, master)
+
+    grand = line_starting(report, "*** GRAND TOTAL")
+    check("2 ACCOUNTS" in grand, f"grand total reads {grand!r}, expected 2 ACCOUNTS")
+    check("200.00" not in grand, f"the grand total added two currencies together: {grand!r}")
+    check("NO CROSS-CURRENCY AMOUNT IS PRINTED" in report,
+          "the report does not say why there is no cross-currency total")
+
+
+def scenario_reject_recap_counts_by_reason_code(binary):
+    """Reason text comes from the reject record, so the report never restates WP-04's codes."""
+    master = [acctrec("TB00000000000001", booked=100_00)]
+    rejects = [rejrec(code="R001", reason="ACCOUNT NOT FOUND IN MASTER"),
+               rejrec(code="R004", reason="CURRENCY SCALE NOT SUPPORTED"),
+               rejrec(code="R001", reason="ACCOUNT NOT FOUND IN MASTER")]
+    report, _, _ = run(binary, master, rejects)
+
+    r001 = line_starting(report, "R001")
+    r004 = line_starting(report, "R004")
+    check(r001.strip().endswith("2"), f"R001 count is wrong: {r001!r}")
+    check("ACCOUNT NOT FOUND IN MASTER" in r001, f"R001 carries no reason text: {r001!r}")
+    check(r004.strip().endswith("1"), f"R004 count is wrong: {r004!r}")
+    check(line_starting(report, "TOTAL REJECTED").strip().endswith("3"),
+          "the reject total is not 3")
+
+
+def scenario_reject_count_agrees_with_acctpost(binary):
+    master = [acctrec("TB00000000000001", booked=100_00)]
+    rejects = [rejrec(), rejrec()]
+    report, _, rc = run(binary, master, rejects, ctl_rejected=2)
+
+    check("*** IN BALANCE" in report, "the report does not confirm it reconciles")
+    check(rc == 0, f"return code {rc}, expected 0")
+
+
+def scenario_reject_count_mismatch_fails_the_step(binary):
+    """A report that cannot be reconciled against its run must not pass silently."""
+    master = [acctrec("TB00000000000001", booked=100_00)]
+    rejects = [rejrec(), rejrec()]
+    report, stdout, rc = run(binary, master, rejects, ctl_rejected=9)
+
+    check("*** OUT OF BALANCE" in report, "a mismatch printed no out-of-balance line")
+    check(rc == 12, f"return code {rc}, expected 12 - the cycle must abort on this")
+    check("EODREPT CTL OUT-OF-BALANCE" in stdout, f"nothing on the job log: {stdout!r}")
+
+
+def scenario_control_total_absent_is_stated_not_assumed(binary):
+    """Never print a reconciliation that was not performed."""
+    master = [acctrec("TB00000000000001", booked=100_00)]
+    report, _, rc = run(binary, master, [rejrec()])
+
+    check("NOT SUPPLIED" in report, "an absent control total was not reported as absent")
+    check("IN BALANCE" not in report, "the report claimed a reconciliation it did not do")
+    check(rc == 0, f"return code {rc}, expected 0 - absent is not a failure")
+
+
+def scenario_empty_master_still_prints_its_recap(binary):
+    """A day with nothing to report still produces a report. Silence is not evidence."""
+    report, _, rc = run(binary, [])
+
+    check(line_starting(report, "*** GRAND TOTAL").strip().endswith("0 ACCOUNTS"),
+          "an empty master did not report zero accounts")
+    check(rc == 0, f"return code {rc}, expected 0")
 
 
 SCENARIOS = [value for name, value in sorted(globals().items()) if name.startswith("scenario_")]
