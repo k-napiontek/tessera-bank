@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1007-ledger-persistence` |
 | **Stratum** | 3 - Java 17, ~2023 |
 | **Depends on** | WP-06 |
-| **Status** | `In progress` |
+| **Status** | `Done` |
 
 ## Objective
 
