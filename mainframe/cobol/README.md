@@ -72,3 +72,80 @@ byte-identical master, and it did not.
 balance of `100.00` came out as exactly zero and the overdraft rejection never fired. Caught by the
 `R005` scenario.
 
+---
+
+## `EODREPT` - the control-break report
+
+**Built by WP-05.** One sequential pass over the master in report sequence, page-broken for a line
+printer at 132 columns.
+
+```bash
+cobc -x -std=ibm -Wall -I mainframe/copybook -o /tmp/eodrept mainframe/cobol/EODREPT.CBL
+python3 mainframe/cobol/test-eodrept.py      # 18 scenarios
+```
+
+| File | Record | Direction |
+|---|---|---|
+| `ACCTRPT.DAT` | `ACCTREC`, 100 bytes | in, ascending by currency then `ACCT-REF` |
+| `REJECTS.DAT` | `REJREC`, 200 bytes | in, for the reject recap |
+| `EODREPT.TXT` | 132-column print lines | out |
+
+The input must arrive in currency order. `STEP030` of the cycle sorts it; the report never sorts and
+never holds the master, for the same reason `ACCTPOST` does not.
+
+### What is on the page
+
+A page is 60 lines, six of them header, leaving **54 detail lines**. Each currency starts on a fresh
+page and closes with its own subtotal. Two recap pages follow: the currency recap with the grand
+total, and the reject recap with the reconciliation.
+
+```
+  *** CURRENCY TOTAL  PLN            112 ACCOUNTS          1,234,567.89          1,234,567.89
+
+  *** GRAND TOTAL             200 ACCOUNTS
+        NO CROSS-CURRENCY AMOUNT IS PRINTED.  SEE THE CURRENCY RECAP ABOVE.
+```
+
+### There is no cross-currency total, deliberately
+
+The work package asks for "a grand total". Adding 100 PLN to 100 EUR produces a number that means
+nothing and that no auditor would accept, so the grand total counts **accounts**, the money figures
+stay per currency, and the report says so in print. Printing a summed figure would be the report
+equivalent of WP-04's `V99` truncation: plausible-looking and simply wrong.
+
+### The report reconciles against the run that produced it
+
+The reject recap counts `REJECTS.DAT` by reason code and prints the count beside the figure
+`ACCTPOST` reported, which the job supplies in `EODREPT_CTL_REJECTED`:
+
+- **absent** - the line reads `NOT SUPPLIED` and the report says `*** NOT RECONCILED`. A report that
+  prints a reconciliation it did not perform is worse than one that prints none.
+- **equal** - `*** IN BALANCE`.
+- **different** - `*** OUT OF BALANCE` and the program ends `RC=12`, which stops the cycle.
+
+The reason **text** comes from the reject record itself, so the six codes stay owned by `ACCTPOST`.
+A second copy of them in this program is a second copy to drift.
+
+### Three things worth knowing before changing it
+
+**The print file is `LINE SEQUENTIAL`, and it is the only file in this tier that should be.** The
+rule that COMP-3 bytes forbid line sequential is about *data* files. A printed report holds no
+packed field, and a line printer produces lines.
+
+**At a page break the form feed replaces the newline.** `WRITE AFTER ADVANCING PAGE` emits `0x0C`
+instead of the line terminator, which is what a printer expects. Split the report on form feeds
+before measuring line lengths - stripping them first splices the last line of one page onto the
+first of the next and reports a 241-column line that does not exist.
+
+**The money columns are fifteen digits wide though a balance holds thirteen.** A currency subtotal is
+a sum of balances and needs the extra room, and it prints with the same picture under the same
+columns. A narrower total field would drop high-order digits in silence.
+
+### The bug this program had
+
+**Arithmetic inside an `IF` condition.** `IF WS-BODY-LINES + 2 > WS-BODY-LIMIT` compiles and works,
+and `cobc -Wall` warns that the precision of the result may change under `arithmetic-osvs`. It went
+unnoticed because the test harness captures the compiler's output. The harness now fails on any
+compiler output at all, which is the only way a warning stays visible in a suite that prints thirty
+lines of `PASS`.
+

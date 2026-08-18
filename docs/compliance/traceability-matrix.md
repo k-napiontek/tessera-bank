@@ -283,3 +283,25 @@ Ticket TB-1004. The first COBOL application program in the estate.
 | **REQ-INT-003** Modern events reach the mainframe in its own format | WP-11 | `R004` makes the stratum 0 scale-2 constraint executable: a movement in a currency of scale 0 or 3 is rejected on arrival, even though the integration tier should already have stopped it. Defence in depth - a 1995 core does not trust its feeds | Contract |
 | **REQ-OPS-003** Operators can see and work reconciliation breaks | WP-15 | The rejects file the back office will work, with a machine-readable code and an operator-readable text carrying no personal data | Contract |
 
+---
+
+## WP-05 - EODREPT, the cycle and its runbook
+
+Ticket TB-1005. The mainframe tier completed: the report, the job graph and the runner.
+
+### Owned by WP-05
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-MF-006** The end-of-day cycle is runnable and reproducible | `run-eod.sh` executes the four steps `EODCYCLE.JCL` declares, checking each return code the way JCL checks `COND` and stopping the cycle on the first failure. The work directory is re-seeded from the input master every run and the run timestamp comes from the business date, not the clock. A SHA-256 marker refuses a second application of the same movement file | `test-eod-cycle.py`, 14 scenarios. Two runs over the same inputs are compared **byte for byte** with `cmp` on the master, the rejects and the report. A ragged movement file aborts at `STEP010` with `RC=12` and no later step runs. A second run of the same file exits 8; `--rerun` overrides it; a different file for the same date is allowed | Met |
+| **REQ-MF-007** The cycle produces an auditable report with balancing totals | `EODREPT` control-breaks on currency with per-currency subtotals, a currency recap, and a reject recap counted from `REJECTS.DAT` by reason code. The count is printed beside the figure `ACCTPOST` reported; equal prints `*** IN BALANCE`, different prints `*** OUT OF BALANCE` and ends the step `RC=12`, absent prints `NOT SUPPLIED` rather than claiming a reconciliation that was not performed | `test-eodrept.py`, 18 scenarios. Pagination asserted at the boundary: 55 accounts put **54 detail lines on page one and one on page two**. The final currency's subtotal is asserted separately because no record follows it to trigger the break. A deliberate mismatch is asserted to produce `RC=12`. On the full run: 162 rejects counted, 162 reported, in balance | Met |
+| **REQ-OPS-001** Every scheduled process has a runbook | [`docs/runbooks/eod-cycle.md`](../runbooks/eod-cycle.md): the step graph with inputs and outputs, the three totals to check on a clean run, a failure mode per step with its diagnostic and action, restart and recovery, when `--rerun` is legitimate, where rejects land, and the escalation path | Written against the behaviour the tests assert, not against intent. Each failure-mode diagnostic is a message the code actually emits | Met |
+
+### Contributed by WP-05, verified by the owning package
+
+| Requirement | Owner | What WP-05 contributes | Status |
+|---|---|---|---|
+| **REQ-MF-005** Every batch run produces balancing control totals | WP-04 | A second, independent count of the same run. `EODREPT` counts the rejects file itself and fails the step when its total disagrees with `ACCTPOST`'s - a control total nobody re-derives is a number, not a control | Met at this tier |
+| **REQ-OPS-003** Operators can see and work reconciliation breaks | WP-15 | The reject recap an operator reads first: counts by reason code with the text taken from the reject record, so the back office sees the shape of a night's failures before opening the file | Contract |
+| **REQ-REC-001** Old and new cores are reconciled every cycle | WP-16 | `ACCTNEW.DAT` in a known-good state after a reproducible cycle, plus the per-currency totals the reconciliation compares against. The produced master is validated against `contracts/copybook/column-map.md` with the same checker the generator is held to | Contract |
+
