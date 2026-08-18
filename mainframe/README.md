@@ -10,7 +10,7 @@ The account master - the definitive record of what every account holds - and the
 |---|---|
 | `cobol/` | `ACCTPOST.CBL` (match-merge), `EODREPT.CBL` (report) |
 | `copybook/` | Fixed-width record layouts shared by every program |
-| `jcl/` | `EODCYCLE.JCL` - the job graph, plus the local shell runner |
+| `jcl/` | `EODCYCLE.JCL` - the job graph, the local shell runner, and the DFSORT stand-in |
 | `data/` | Synthetic account master and movement files |
 
 ## Constraints
@@ -30,9 +30,16 @@ This tier is deliberately from 1995. See [`CLAUDE.md`](../CLAUDE.md) and
 
 ## What exists now
 
-WP-03 landed the **data layer** - the copybooks and the synthetic files. WP-04 landed
-**`ACCTPOST`**, the balanced-line match-merge that applies a day of movements to the account master.
-`EODREPT` and the JCL cycle are still to come, in WP-05.
+The tier is complete. WP-03 landed the **data layer** - the copybooks and the synthetic files.
+WP-04 landed **`ACCTPOST`**, the balanced-line match-merge that applies a day of movements to the
+account master. WP-05 landed **`EODREPT`**, the control-break report, and the **overnight cycle**:
+`EODCYCLE.JCL` and the shell runner that executes the same four steps locally.
+
+The whole cycle runs end to end on a laptop:
+
+```bash
+make eod
+```
 
 ### Prerequisites
 
@@ -62,12 +69,37 @@ identical bytes, and every banking COBOL program ever written says `COMP-3` - so
 `COMP-3` and the compiler is told which dialect that is. Changing the copybooks to suit a stricter
 flag would have made the code less like the thing it reproduces.
 
-### Running the match-merge
+### Running the programs and the cycle
 
 ```bash
-cobc -x -std=ibm -Wall -I mainframe/copybook -o /tmp/acctpost mainframe/cobol/ACCTPOST.CBL
-python3 mainframe/cobol/test-acctpost.py        # 13 scenarios
+make build-mainframe                            # compile ACCTPOST and EODREPT
+python3 mainframe/cobol/test-acctpost.py        # 13 scenarios - the match-merge
+python3 mainframe/cobol/test-eodrept.py         # 18 scenarios - the report
+python3 mainframe/jcl/test-sortrec.py           #  9 tests     - the sort
+python3 mainframe/jcl/test-eod-cycle.py         # 14 scenarios - the cycle end to end
+make test-mainframe                             # all of the above
 ```
 
-See [`cobol/README.md`](cobol/README.md) for the reason codes and the two bugs the tests caught.
+See [`cobol/README.md`](cobol/README.md) for the reason codes, the report layout and the three bugs
+the tests caught, and [`jcl/README.md`](jcl/README.md) for the job graph and why it has two sort
+steps. The operational view is the [end-of-day runbook](../docs/runbooks/eod-cycle.md).
+
+### One overnight run, on the synthetic data
+
+200 accounts, 302 movements, seed 42:
+
+```
+ACCTPOST CTL MASTER-READ            200      EODREPT CTL ACCOUNTS            200
+ACCTPOST CTL MASTER-WRITTEN         200      EODREPT CTL CURRENCIES            3
+ACCTPOST CTL MOVE-READ              302      EODREPT CTL REJECTED            162
+ACCTPOST CTL MOVE-APPLIED           140      EODREPT CTL PAGES                 7
+ACCTPOST CTL MOVE-REJECTED          162      EODREPT CTL BALANCED
+ACCTPOST CTL VALUE-MOVED       1722315.18
+ACCTPOST CTL BALANCED
+```
+
+The report reconciles against the run that produced it: 162 rejects counted, 162 reported,
+`*** IN BALANCE`. Most of those rejects are `R003`, currency mismatch, because the generator pairs
+PLN movements with a master that holds EUR and USD accounts too - see follow-up F-18 in
+[`STATUS.md`](../docs/plan/STATUS.md).
 
