@@ -2,6 +2,8 @@ package bank.tessera.ledger.adapter.jdbc;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import java.util.HashMap;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
@@ -25,23 +27,47 @@ final class PostgresSupport {
                     .withPassword("ledger");
 
     private static DataSource dataSource;
+    private static final Map<String, DataSource> BY_SCHEMA = new HashMap<>();
 
     private PostgresSupport() {}
 
     static synchronized DataSource dataSource() {
         if (dataSource == null) {
-            CONTAINER.start();
-            HikariConfig config = new HikariConfig();
-            config.setJdbcUrl(CONTAINER.getJdbcUrl());
-            config.setUsername(CONTAINER.getUsername());
-            config.setPassword(CONTAINER.getPassword());
-            // Deliberately small. The ring-transfer test must contend for connections the way a real
-            // service does; a pool larger than the thread count would hide lock waits behind spare
-            // connections.
-            config.setMaximumPoolSize(8);
-            dataSource = new HikariDataSource(config);
+            dataSource = pool(null, 8);
         }
         return dataSource;
+    }
+
+    /**
+     * A migrated schema of its own, and a pool scoped to it.
+     *
+     * <p>Each test class gets a schema rather than a container: a container per class would add half a
+     * minute each, a schema costs milliseconds and still isolates the data. The pool sets the schema
+     * so production SQL stays unqualified - an adapter that had to name its schema could not be
+     * deployed anywhere but the test.
+     */
+    static synchronized DataSource migratedSchema(String schema) {
+        return BY_SCHEMA.computeIfAbsent(schema, name -> {
+            MigrationSupport.migrateFresh(dataSource(), name);
+            return pool(name, 8);
+        });
+    }
+
+    /** A pool of a stated size, for tests that need to contend for connections. */
+    static DataSource pool(String schema, int maximumPoolSize) {
+        CONTAINER.start();
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(CONTAINER.getJdbcUrl());
+        config.setUsername(CONTAINER.getUsername());
+        config.setPassword(CONTAINER.getPassword());
+        if (schema != null) {
+            config.setSchema(schema);
+        }
+        // Deliberately small. The ring-transfer test must contend for connections the way a real
+        // service does; a pool larger than the thread count would hide lock waits behind spare
+        // connections.
+        config.setMaximumPoolSize(maximumPoolSize);
+        return new HikariDataSource(config);
     }
 
     static String jdbcUrl() {
