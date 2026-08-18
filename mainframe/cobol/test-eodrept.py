@@ -56,10 +56,19 @@ def acctrec(ref, customer="CU0000000001", acct_type="LIABILITY", currency="PLN",
 
 
 def compile_program(binary):
-    subprocess.run(
+    """Compiles, and treats any compiler output as a failure.
+
+    The harness captures cobc's output so a clean run stays readable, which means a warning is
+    invisible unless it is checked for. One slipped through exactly that way: arithmetic inside an
+    IF condition, warned about under -Warithmetic-osvs, seen only when the compile was run by hand.
+    """
+    result = subprocess.run(
         ["cobc", "-x", "-std=ibm", "-Wall", "-I", str(COPYBOOK), "-o", str(binary), str(SOURCE)],
-        check=True, capture_output=True,
+        check=True, capture_output=True, text=True,
     )
+    noise = (result.stdout + result.stderr).strip()
+    if noise:
+        raise SystemExit(f"cobc is not silent under -Wall:\n{noise}")
 
 
 def run(binary, master, rejects=(), ctl_rejected=None):
@@ -86,6 +95,11 @@ def pages(report):
 def detail_lines(page):
     """Detail lines start with an account reference in column 3."""
     return [line for line in page if line[2:4] == "TB"]
+
+
+def subtotal_lines(page):
+    """Currency subtotal lines announce themselves."""
+    return [line for line in page if "CURRENCY TOTAL" in line]
 
 
 class Failure(Exception):
@@ -186,6 +200,72 @@ def scenario_two_runs_produce_the_same_bytes(binary):
     second, _, _ = run(binary, master)
 
     check(first == second, "two runs of the same input produced different reports")
+
+
+def scenario_currency_subtotal_sums_the_currency(binary):
+    """Three PLN accounts: 100.00 + 250.50 + 49.50 = 400.00. Written out, not calculated."""
+    master = [acctrec("TB00000000000001", currency="PLN", booked=100_00),
+              acctrec("TB00000000000002", currency="PLN", booked=250_50),
+              acctrec("TB00000000000003", currency="PLN", booked=49_50)]
+    report, _, _ = run(binary, master)
+
+    totals = [line for page in pages(report) for line in subtotal_lines(page)]
+    check(len(totals) == 1, f"{len(totals)} subtotal lines, expected 1")
+    check("PLN" in totals[0], f"subtotal names no currency: {totals[0]!r}")
+    check("3 ACCOUNTS" in totals[0], f"subtotal counts wrong: {totals[0]!r}")
+    check(totals[0].count("400.00") == 2,
+          f"expected booked and available both 400.00: {totals[0]!r}")
+
+
+def scenario_each_currency_starts_a_new_page(binary):
+    """A currency spilling onto the previous currency's page is unfileable."""
+    master = [acctrec("TB00000000000001", currency="EUR", booked=10_00),
+              acctrec("TB00000000000002", currency="PLN", booked=20_00),
+              acctrec("TB00000000000003", currency="USD", booked=30_00)]
+    report, _, _ = run(binary, master)
+    body = pages(report)
+
+    check(len(body) == 3, f"{len(body)} pages, expected 3 - one per currency")
+    for index, currency in enumerate(["EUR", "PLN", "USD"]):
+        details = detail_lines(body[index])
+        check(len(details) == 1, f"page {index + 1} holds {len(details)} accounts, expected 1")
+        check(details[0][54:57] == currency,
+              f"page {index + 1} shows {details[0][54:57]!r}, expected {currency!r}")
+        check(currency in subtotal_lines(body[index])[0],
+              f"page {index + 1} subtotal is not the {currency} one")
+
+
+def scenario_last_currency_subtotal_prints_at_end_of_file(binary):
+    """No record follows the last account to trigger its break. This is the defect this shape has."""
+    master = [acctrec("TB00000000000001", currency="EUR", booked=10_00),
+              acctrec("TB00000000000002", currency="USD", booked=77_25)]
+    report, _, _ = run(binary, master)
+
+    totals = [line for page in pages(report) for line in subtotal_lines(page)]
+    check(len(totals) == 2, f"{len(totals)} subtotals, expected 2 - the last one is missing")
+    check("USD" in totals[1] and "77.25" in totals[1],
+          f"final subtotal is {totals[1]!r}, expected USD 77.25")
+
+
+def scenario_subtotal_totals_booked_and_available_separately(binary):
+    """Two columns, two sums. Reusing one accumulator for both is a plausible-looking error."""
+    master = [acctrec("TB00000000000001", currency="PLN", booked=100_00, available=60_00),
+              acctrec("TB00000000000002", currency="PLN", booked=100_00, available=40_00)]
+    report, _, _ = run(binary, master)
+    line = subtotal_lines(pages(report)[0])[0]
+
+    check(line[57:82].strip() == "200.00", f"booked total is {line[57:82]!r}, expected 200.00")
+    check(line[82:107].strip() == "100.00", f"available total is {line[82:107]!r}, expected 100.00")
+
+
+def scenario_subtotal_carries_a_negative_currency_total(binary):
+    """-1,250.00 + 250.00 = -1,000.00, and the sign must survive the sum."""
+    master = [acctrec("TB00000000000001", currency="PLN", booked=-1_250_00),
+              acctrec("TB00000000000002", currency="PLN", booked=250_00)]
+    report, _, _ = run(binary, master)
+    line = subtotal_lines(pages(report)[0])[0]
+
+    check("1,000.00-" in line, f"subtotal reads {line!r}, expected 1,000.00-")
 
 
 SCENARIOS = [value for name, value in sorted(globals().items()) if name.startswith("scenario_")]
