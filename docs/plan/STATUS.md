@@ -32,7 +32,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [02](wp/WP-02-contracts.md) | Canonical data model and contracts - copybook, WSDL/XSD, OpenAPI, AsyncAPI | - | 01 | `Done` | [#1](https://github.com/k-napiontek/tessera-bank/pull/1) | `e6f968b` |
 | [03](wp/WP-03-mainframe-data.md) | Mainframe copybooks and synthetic master/movement data | 0 | 02 | `Done` | [#8](https://github.com/k-napiontek/tessera-bank/pull/8) | `854688a` |
 | [04](wp/WP-04-acctpost.md) | `ACCTPOST.CBL` - balanced-line match-merge | 0 | 03 | `Done` | [#11](https://github.com/k-napiontek/tessera-bank/pull/11) | `d2054f9` |
-| [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Not started` | | |
+| [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `In progress` | | |
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `c4be0d5` |
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Not started` | | |
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Not started` | | |

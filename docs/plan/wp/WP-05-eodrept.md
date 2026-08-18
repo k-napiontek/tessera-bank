@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1005-eodrept` |
 | **Stratum** | 0 - COBOL-85, ~1995 |
 | **Depends on** | WP-04 |
-| **Status** | `Not started` |
+| **Status** | `In progress` |
 
 ## Objective
 
