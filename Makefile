@@ -8,7 +8,7 @@
 # statements, and conflating them is how a session concludes the repository is empty.
 
 .DEFAULT_GOAL := help
-.PHONY: help build test lint plan status \
+.PHONY: help build test lint plan status eod \
         build-mainframe build-services test-contracts test-mainframe test-services \
         lint-contracts jdk17
 
@@ -50,7 +50,9 @@ build: build-mainframe build-services ## Build every tier with its native toolch
 build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 	@cobc -x -std=ibm -Wall -I mainframe/copybook \
 		-o $(CURDIR)/mainframe/data/out/acctpost mainframe/cobol/ACCTPOST.CBL
-	@echo "OK    ACCTPOST compiled"
+	@cobc -x -std=ibm -Wall -I mainframe/copybook \
+		-o $(CURDIR)/mainframe/data/out/eodrept mainframe/cobol/EODREPT.CBL
+	@echo "OK    ACCTPOST and EODREPT compiled"
 
 build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet :services:ledger-core:build
@@ -64,13 +66,16 @@ test: test-contracts test-mainframe test-services ## Run every tier's test suite
 test-contracts: ## Validate the contracts against the canonical data model
 	@bash contracts/validate.sh
 
-test-mainframe: ## Copybooks, COMP-3 encoding, synthetic data, and the ACCTPOST match-merge
+test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the report and the cycle
 	@sh mainframe/copybook/compile-check.sh
 	@python3 mainframe/copybook/check-identity.py
 	@python3 mainframe/data/test_comp3.py 2>&1 | tail -3
 	@python3 mainframe/data/generate.py --seed 42 >/dev/null
 	@python3 mainframe/data/check-records.py | tail -1
 	@python3 mainframe/cobol/test-acctpost.py
+	@python3 mainframe/cobol/test-eodrept.py
+	@python3 mainframe/jcl/test-sortrec.py 2>&1 >/dev/null | tail -3
+	@python3 mainframe/jcl/test-eod-cycle.py
 
 test-services: jdk17 ## Ledger domain unit and property tests
 	@JAVA_HOME="$(JAVA17)" ./gradlew :services:ledger-core:test
@@ -82,6 +87,12 @@ lint: lint-contracts ## Run every tier's linters and quality gates
 
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
 	@bash contracts/validate.sh
+
+# --- run --------------------------------------------------------------------------------------
+
+eod: ## Run the overnight cycle locally against the synthetic data
+	@python3 mainframe/data/generate.py --seed 42 >/dev/null
+	@bash mainframe/jcl/run-eod.sh --business-date 20260818 --rerun
 
 # --- plan -------------------------------------------------------------------------------------
 
