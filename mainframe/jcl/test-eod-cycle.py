@@ -21,6 +21,7 @@ sys.path.insert(0, str(REPO / "mainframe" / "data"))
 from comp3 import encode_comp3  # noqa: E402
 
 RUNNER = REPO / "mainframe" / "jcl" / "run-eod.sh"
+JCL = REPO / "mainframe" / "jcl" / "EODCYCLE.JCL"
 BUS_DATE = "20260818"
 
 
@@ -251,6 +252,63 @@ def scenario_the_marker_records_what_was_applied(binary_work):
                               capture_output=True, text=True).stdout.split()[0]
     check(expected in marker, f"the marker holds no checksum of the applied file:\n{marker}")
     check(BUS_DATE in marker, f"the marker does not name the business date:\n{marker}")
+
+
+def scenario_the_jcl_and_the_runner_describe_the_same_graph(binary_work):
+    """Two files that must agree, and are only asked to agree by a sentence, will diverge.
+
+    The JCL never executes here, so nothing else can catch it drifting from the script that does.
+    """
+    import re
+
+    declared = re.findall(r"^//(STEP\d+)\s+EXEC\s+PGM=([A-Z0-9]+)", JCL.read_text(), re.MULTILINE)
+    result = subprocess.run(["bash", str(RUNNER), "--steps"], capture_output=True, text=True)
+    executed = [tuple(line.split()) for line in result.stdout.split("\n") if line.strip()]
+
+    check(declared, "no EXEC PGM= steps were found in EODCYCLE.JCL")
+    check(declared == executed,
+          f"the JCL and the runner disagree\n  JCL    {declared}\n  runner {executed}")
+
+
+def scenario_the_jcl_declares_a_dd_for_every_file_the_cycle_touches(binary_work):
+    """A job graph with no DD statements documents nothing an operator can act on.
+
+    Datasets are checked by DD name, not by the local filename. On z/OS the program knows the DD
+    name and the JCL binds it to a catalogued DSN; the two naming worlds are supposed to differ,
+    and asserting that TESSERA.ACCT.MASTER is spelled ACCTMAST.DAT would be asserting the
+    opposite of how the tier works.
+    """
+    import re
+
+    jcl = JCL.read_text()
+    declared = set(re.findall(r"^//(\S+)\s+DD\s", jcl, re.MULTILINE))
+
+    for dd_name in ["SORTIN", "SORTOUT", "ACCTMAST", "MOVEMENT", "ACCTNEW",
+                    "REJECTS", "ACCTRPT", "EODREPT", "STEPLIB", "SYSOUT"]:
+        check(dd_name in declared, f"the JCL declares no {dd_name} DD statement")
+
+    # The record lengths are the copybooks', and a DCB that disagrees with them is a production
+    # abend at 03:00 that no test here would otherwise catch.
+    check("LRECL=100" in jcl, "no 100-byte ACCTREC dataset is declared")
+    check("LRECL=120" in jcl, "no 120-byte MOVEREC dataset is declared")
+    check("LRECL=200" in jcl, "no 200-byte REJREC dataset is declared")
+    check("RECFM=FB" in jcl, "the JCL declares no fixed-block record format")
+
+
+def scenario_the_jcl_sorts_on_the_same_fields_as_the_runner(binary_work):
+    """DFSORT counts columns from 1; sortrec.py counts bytes from 0. An off-by-one here sorts on
+    the wrong field and every downstream figure is quietly wrong."""
+    import re
+
+    jcl = JCL.read_text()
+    check("SORT FIELDS=(23,16,CH,A)" in jcl,
+          "STEP010 does not sort on MOV-ACCT-REF at column 23 for 16 - the runner uses bytes 22:38")
+    check("SORT FIELDS=(38,3,CH,A,1,16,CH,A)" in jcl,
+          "STEP030 does not sort on currency then reference - the runner uses 37:40 then 0:16")
+
+    runner = (REPO / "mainframe" / "jcl" / "run-eod.sh").read_text()
+    check("--key 22:38" in runner, "the runner no longer sorts movements on 22:38")
+    check("--key 37:40 --key 0:16" in runner, "the runner no longer sorts the master on 37:40, 0:16")
 
 
 SCENARIOS = [value for name, value in sorted(globals().items()) if name.startswith("scenario_")]
