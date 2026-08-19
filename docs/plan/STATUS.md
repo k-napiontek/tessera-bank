@@ -9,9 +9,22 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-10a is in progress.** The tooling blocker is gone: a JDK 8 is installed - Zulu 8.96.0.205
-> (arm64), which `/usr/libexec/java_home -v 1.8` finds - and Maven 3.9.16 builds against it. That was
-> the single action holding up the rest of this repository, and it has happened. See F-10.
+> **WP-10b is next.** The endpoint: `wsimport` over `customer-master-v1.wsdl`, the three operations
+> against the generated interface, XSD conformance on every response, and the WAR really deployed to
+> Tomcat 8.5 by Cargo and called over HTTP. Its dependency, 10a, is `Done`.
+>
+> **Stratum 1 now has data and business logic.** `legacy/customer-master` is a Java 8 Maven module
+> whose build refuses any other JDK, over an Oracle-dialect schema whose canonical patterns and
+> enumerations are **check constraints** rather than Java validation, with the business logic in
+> PL/SQL packages where a 2011 team put it - and **no SQL in the Java at all**. Tested against real
+> Oracle 23ai Free in a container, which is TD-005's "compatible substitute" finally named: H2's
+> Oracle mode runs no PL/SQL, so the procedures would have been Java wearing the name. The component
+> **keeps its own balances**, which the contract forces and `batch/recon` exists to find - ADR 0010.
+> Run it with `make test-legacy`; it needs Docker and pulls ~2GB the first time.
+>
+> The tooling blocker is gone: a JDK 8 is installed - Zulu 8.96.0.205 (arm64), which
+> `/usr/libexec/java_home -v 1.8` finds - and Maven 3.9.16 builds against it. That was the single
+> action holding up the rest of this repository. **F-10 is closed.**
 >
 > **WP-10 is split into two halves on one ticket**, 10a and 10b, because detailed out it spans a
 > build system, a database, a stored-procedure layer, a SOAP endpoint, a WAR and a deployment test.
@@ -20,8 +33,8 @@ Updated by the executing session at the start and end of every work package, per
 > **10b**, WP-16 on WP-11, WP-18 on WP-16.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
-> its task list and have it reviewed first. **WP-10 is now detailed**; WP-11, WP-15, WP-16 and WP-18
-> are not.
+> its task list and have it reviewed first. **WP-10 is now detailed**, both halves; WP-11, WP-15,
+> WP-16 and WP-18 are not.
 >
 > **Stratum 4 is complete.** `edge/api-gateway` (Go) authenticates a bearer token with the algorithm
 > pinned, routes only what the OpenAPI contract declares, limits each caller per route, and forwards
@@ -83,7 +96,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Done` | [#19](https://github.com/k-napiontek/tessera-bank/pull/19) | `eb538ca` |
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Done` | [#22](https://github.com/k-napiontek/tessera-bank/pull/22) | `429ce24` |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d49e0d0`, `5aabcbd` |
-| [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `In progress` | | |
+| [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `Done` | [#37](https://github.com/k-napiontek/tessera-bank/pull/37) | `58ac367` |
 | [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10b | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `020cee2` |
