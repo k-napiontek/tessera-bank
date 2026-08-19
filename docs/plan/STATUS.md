@@ -9,14 +9,22 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **Every remaining package is blocked behind WP-10, and WP-10 is blocked on tooling.** It needs a
-> JDK 8 and this machine has no Java runtime at all - `/usr/libexec/java_home` finds none, and
-> Homebrew holds only `openjdk`, `openjdk@17` and `openjdk@26`. WP-15 waits on WP-10; WP-11 waits on
-> WP-10; WP-16 waits on WP-11; WP-18 waits on WP-16. **Installing a JDK 8 is the single action that
-> unblocks the rest of this repository.** See F-10.
+> **WP-10 is next, and the tooling no longer blocks it.** A JDK 8 is installed: Zulu 8.0.504,
+> native `arm64`, in `~/Library/Java/JavaVirtualMachines`, so `/usr/libexec/java_home -v 1.8`
+> resolves and Maven runs on it. See F-10, now closed.
+>
+> **The default JVM on this machine is now Java 8**, where before there was none. The Makefile is
+> unaffected because it sets `JAVA_HOME` explicitly, but `./gradlew` invoked by hand - including the
+> `bootRun` command named below - now needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` or it fails at
+> plugin resolution. See F-13.
+>
+> WP-15 waits on WP-10; WP-11 waits on WP-10; WP-16 waits on WP-11; WP-18 waits on WP-16, so WP-10
+> still gates five of the six unfinished packages.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
-> its task list and have it reviewed first.
+> its task list and have it reviewed first. **WP-10's task list is detailed** and under review in
+> [#35](https://github.com/k-napiontek/tessera-bank/pull/35), together with ADR 0010, which names the
+> Oracle substitute TD-005 promised and never delivered. Neither is on `main` until that PR merges.
 >
 > **Stratum 4 is complete.** `edge/api-gateway` (Go) authenticates a bearer token with the algorithm
 > pinned, routes only what the OpenAPI contract declares, limits each caller per route, and forwards
@@ -119,10 +127,10 @@ becomes its own change when picked up.
 | F-07 | WP-02 | `npx @asyncapi/cli validate`, the command WP-02's Verification section names, cannot be installed at any published version: every one depends on `@asyncapi/studio-ui@0.5.0`, which is not on the npm registry (HTTP 404). The document itself is valid - `@asyncapi/parser`, the engine that CLI wraps, reports 0 errors and 0 warnings. `contracts/validate.sh` tries the CLI first and falls back to the parser, so the specified command resumes automatically once upstream is fixed. Accepted by the repository owner at merge: the document is valid, only the tool is broken. | Open |
 | F-08 | WP-02 | A WSDL reference-consistency check was written and run during WP-02 verification - it confirms every message part resolves, the document/literal wrapped naming rule holds, and every `tb:` type the WSDL uses exists in the canonical XSD. It is **not** in `validate.sh`, because WP-02 names only two validation artefacts and widening the branch was the wrong call. `xmllint --noout` alone proves well-formedness, not that the references resolve. | Open |
 | F-09 | WP-02 | The stratum 0 scale-2 constraint - `PIC S9(13)V99 COMP-3` cannot represent JPY or BHD, so the integration tier must reject them before they reach the mainframe - is architecturally significant and arguably warrants an ADR. It is fully documented in `canonical-data-model.md` section 2, but the Definition of Done's ADR box cannot be honestly ticked without one. | Open |
-| F-10 | WP-06 | The development machine had no JDK and no GnuCOBOL. JDK 17 (`openjdk@17`) and Gradle 9.7 were installed for WP-06. **GnuCOBOL 3.2.0 is now installed**, and WP-03, WP-04 and WP-05 have all been executed and verified against it. **JDK 8 is still missing**, so WP-10 and WP-11 cannot be. `openjdk@17` is keg-only, so `JAVA_HOME` must point at `/opt/homebrew/opt/openjdk@17` when invoking Gradle. | Open - JDK 8 half only, 2026-08-18 |
+| F-10 | WP-06 | The development machine had no JDK and no GnuCOBOL. JDK 17 (`openjdk@17`), Gradle 9.7 and GnuCOBOL 3.2.0 were installed as WP-03 to WP-09 needed them. **JDK 8 is now installed too**: Zulu 8.0.504 `macos-aarch64`, unpacked to `~/Library/Java/JavaVirtualMachines` rather than installed by Homebrew, because the cask runs a `.pkg` under `sudo` and no terminal was available to authenticate. The tarball is Azul's own, checksum-verified against their metadata API and signed by `Developer ID Application: Azul Systems, Inc.`. `java_home` searches the per-user directory, so `/usr/libexec/java_home -v 1.8` resolves it exactly as a system install would. Homebrew does not manage it, so upgrades are manual. | **Closed** - 2026-08-19 |
 | F-11 | WP-02 | The requirement ids in the traceability matrix collided with the catalogue the work packages already defined - 14 genuine collisions, introduced by WP-02 task 8. Fixed in [#3](https://github.com/k-napiontek/tessera-bank/pull/3), which also added a catalogue index of all 60 ids so the mistake cannot repeat. | **Closed** - 2026-08-17 |
 | F-12 | WP-06 | The Definition of Done's ADR box was left unticked. Two decisions in WP-06 are arguably architecturally significant - `Account` stores no balance, and `Money` arithmetic throws on overflow rather than wrapping - and both are recorded in [#5](https://github.com/k-napiontek/tessera-bank/pull/5) and `services/ledger-core/README.md` but not as ADRs. Together with F-09 there are now two candidate ADRs outstanding. | Open |
-| F-13 | WP-06 | `openjdk@17` is keg-only on this machine, so `./gradlew` needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` unless 17 is the default JVM. `docs/consuming-this-repo.md` names JDK 17 as a prerequisite but does not mention this. Worth a line there when that document is next revised. | Open |
+| F-13 | WP-06 | `openjdk@17` is keg-only on this machine, so `./gradlew` needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` unless 17 is the default JVM. **Installing JDK 8 for WP-10 made this materially worse**: the default JVM was previously nothing at all, and is now Zulu 8, so a bare `./gradlew` starts on Java 8 and fails with `Dependency requires at least JVM runtime version 17. This build uses a Java 8 JVM.` The Makefile is safe because every Java target sets `JAVA_HOME` explicitly, but the `./gradlew :services:ledger-api:bootRun` command this file recommends is not. `docs/consuming-this-repo.md` names JDK 17 as a prerequisite and mentions neither point. | Open - widened 2026-08-19 |
 | F-14 | WP-03 | WP-03's **In scope** section describes an `ACCTREC` that predates the canonical data model - account number `PIC X(10)`, status `PIC X(1)`, no customer reference or account type. The contract in `contracts/copybook/` supersedes it, as WP-03's own Constraints require, and the task list records this. The In-scope text itself was left unedited so the original intent stays visible; it should be reconciled when WP-18 does its documentation pass. | Open |
 | F-15 | WP-03 | The task list said to add the GnuCOBOL prerequisite to `docs/consuming-this-repo.md`. That document is still a stub owned by WP-18 (F-05) and already names GnuCOBOL under "Planned contents", so filling in part of it would have widened the branch into another package's work. The concrete prerequisites and build commands went into `mainframe/README.md` instead. `consuming-this-repo.md` still needs writing. | Open |
 | F-16 | WP-04 | `mainframe/data/check-records.py` gained a `--skip-coverage` flag. Its fixture-coverage assertions - that the data contains a positive, a negative and a zero amount - are a requirement on *generated* data, not on the output of a batch run, where the account holding zero may legitimately have been moved away. The flag names which of the two jobs the tool is doing. If more tools end up serving both purposes, the split is worth making explicit rather than adding more flags. | Open |
