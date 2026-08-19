@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1019-web-design-system` |
 | **Stratum** | 4 - TypeScript + React, ~2025 |
 | **Depends on** | WP-14 |
-| **Status** | `Done` |
+| **Status** | `Done` - merged [#41](https://github.com/k-napiontek/tessera-bank/pull/41), `a9012ce` |
 
 ## Objective
 
