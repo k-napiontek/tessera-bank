@@ -69,3 +69,4 @@ date for a real one.
 | [0005](0005-hash-chained-audit-trail.md) | Make the audit trail append-only and hash-chained | Accepted | 2026-08-19 |
 | [0006](0006-edge-rate-limit-is-per-instance.md) | Keep the edge rate limit in the process, and say so | Accepted | 2026-08-19 |
 | [0007](0007-gateway-validates-and-forwards.md) | The gateway validates the customer's token and forwards it unchanged | Accepted | 2026-08-19 |
+| [0008](0008-fraud-rules-are-pure-functions.md) | Fraud rules are pure functions, and the recorded version covers the parameters | Accepted | 2026-08-19 |
