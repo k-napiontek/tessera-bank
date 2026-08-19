@@ -161,9 +161,14 @@ class SchemaConstraintTest {
     void aCapturedHoldNamesItsEntry() {
         givenAnAccount("TB00000000000014", "PLN");
 
+        // transitioned_at is supplied so that exactly one constraint is broken. Without it the row
+        // also violates hold_transitioned_at_consistent, and which of the two PostgreSQL reports is
+        // its business rather than this test's.
         assertThatThrownBy(() -> execute("INSERT INTO " + SCHEMA + ".hold"
-                        + " (reference, account_ref, amount_minor, currency, status, placed_at)"
-                        + " VALUES ('HL202608180000000001', 'TB00000000000014', 100, 'PLN', 'CAPTURED', now())"))
+                        + " (reference, account_ref, amount_minor, currency, status, placed_at,"
+                        + " transitioned_at)"
+                        + " VALUES ('HL202608180000000001', 'TB00000000000014', 100, 'PLN', 'CAPTURED',"
+                        + " now(), now())"))
                 .hasMessageContaining("hold_captured_by_consistent");
     }
 
@@ -179,6 +184,43 @@ class SchemaConstraintTest {
                         + " VALUES ('HL202608180000000002', 'TB00000000000015', 100, 'PLN', 'PLACED', now(),"
                         + " 'TB202608180000000010')"))
                 .hasMessageContaining("hold_captured_by_consistent");
+    }
+
+    @Test
+    @DisplayName("a hold that has left PLACED must say when")
+    void aTransitionedHoldNamesItsInstant() {
+        givenAnAccount("TB00000000000017", "PLN");
+
+        assertThatThrownBy(() -> execute("INSERT INTO " + SCHEMA + ".hold"
+                        + " (reference, account_ref, amount_minor, currency, status, placed_at)"
+                        + " VALUES ('HL202608180000000004', 'TB00000000000017', 100, 'PLN', 'RELEASED', now())"))
+                .hasMessageContaining("hold_transitioned_at_consistent");
+    }
+
+    @Test
+    @DisplayName("a hold still placed must not claim to have transitioned")
+    void aPlacedHoldNamesNoTransitionInstant() {
+        givenAnAccount("TB00000000000018", "PLN");
+
+        assertThatThrownBy(() -> execute("INSERT INTO " + SCHEMA + ".hold"
+                        + " (reference, account_ref, amount_minor, currency, status, placed_at,"
+                        + " transitioned_at)"
+                        + " VALUES ('HL202608180000000005', 'TB00000000000018', 100, 'PLN', 'PLACED',"
+                        + " now(), now())"))
+                .hasMessageContaining("hold_transitioned_at_consistent");
+    }
+
+    @Test
+    @DisplayName("a hold cannot end before it began")
+    void aHoldCannotTransitionBeforeItWasPlaced() {
+        givenAnAccount("TB00000000000019", "PLN");
+
+        assertThatThrownBy(() -> execute("INSERT INTO " + SCHEMA + ".hold"
+                        + " (reference, account_ref, amount_minor, currency, status, placed_at,"
+                        + " transitioned_at)"
+                        + " VALUES ('HL202608180000000006', 'TB00000000000019', 100, 'PLN', 'RELEASED',"
+                        + " now(), now() - interval '1 hour')"))
+                .hasMessageContaining("hold_transitioned_after_placed");
     }
 
     @Test
