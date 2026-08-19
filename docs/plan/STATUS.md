@@ -9,6 +9,13 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-19 is done**, taken out of order and by explicit instruction from the repository owner,
+> which the decision log records as the mechanism for work outside the plan. It is a presentation
+> pass over `edge/web-banking` - tokens, a responsive shell, a palette in the visual language of
+> Polish retail banking - and it changed no behaviour: the gate was that all 123 tests WP-14 left
+> behind stay green, and they did, unedited. It sits off the critical path, as WP-14 does. **WP-10b remains the next package on
+> the plan proper.**
+>
 > **WP-10b is next.** The endpoint: `wsimport` over `customer-master-v1.wsdl`, the three operations
 > against the generated interface, XSD conformance on every response, and the WAR really deployed to
 > Tomcat 8.5 by Cargo and called over HTTP. Its dependency, 10a, is `Done`.
@@ -106,6 +113,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
+| [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | |
 
 ## Critical path
 
@@ -117,7 +125,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
           +-> 10a -> 10b ------------+
 ```
 
-`12`, `13`, `14`, `15` and `17` sit off the critical path and can be taken whenever their
+`12`, `13`, `14`, `15`, `17` and `19` sit off the critical path and can be taken whenever their
 dependencies are `Done`.
 
 ---
@@ -264,3 +272,4 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-19 | **customer-master applies a posting to a `CLOSED` or `BLOCKED` account, and consults status for nothing.** `NotifyTransferPosted` reports a movement the ledger has already made. Refusing it does not unmake the movement; it leaves the system of record permanently wrong about that account, and - worse - hides the disagreement from `batch/recon`, because the transfer is never recorded as applied. A status check belongs before a payment, where it can still prevent one. What the procedure does raise is an integrity failure: an unknown account, a currency mismatch, a non-positive amount, or both legs naming one account. WP-10's task list said the opposite and was corrected in place. |
 | 2026-08-19 | **A sequential idempotency test proves nothing about idempotency.** `PKG_POSTING` claims the transfer with an `INSERT` and catches `DUP_VAL_ON_INDEX`; replacing that with a `SELECT` then an `INSERT` leaves all fourteen sequential tests green and is wrong under two simultaneous deliveries, which is the only way redelivery actually arrives. Proved by mutation: the read-then-write version passes `PkgPostingTest` in full and fails `PkgPostingConcurrencyTest`. The same defect, in the same shape, as the ledger's `ON CONFLICT DO NOTHING`. |
 | 2026-08-19 | **Testcontainers in a 2011 tier is a deliberate anachronism.** The pinned stack is a constraint on what ships, not on what runs the tests, and the alternative is a stored-procedure layer nothing executes. The tests themselves are JUnit 4, which is the era's tooling. |
+| 2026-08-20 | **A presentation-only package may be taken out of order, but not off the process.** WP-19 restyles `web-banking` at the owner's request while WP-10b is the plan's next package. It introduces **no `REQ-*` id** - a redesign satisfies no new requirement, it must leave three standing - and the matrix records the evidence moving rather than the requirement changing. The regression gate is that every test WP-14 wrote passes unchanged: a redesign that has to edit a behavioural test has changed behaviour. |

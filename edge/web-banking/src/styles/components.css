@@ -1,0 +1,495 @@
+/*
+ * The pieces the four screens are built from.
+ *
+ * Two rules here are load-bearing rather than decorative, and both were WP-14's:
+ *
+ * An amount is set in tabular figures so digits line up down a column and a misread figure is
+ * harder to produce. The typeface was chosen for having the feature; see src/fonts/README.md.
+ *
+ * The available balance is given more weight than the booked one, because it is the number that
+ * answers "what can I spend". REQ-UI-003 is a statement about what a screen may not imply, so both
+ * figures are always present and always labelled - the weight tells them apart, it does not hide one.
+ */
+
+/* ---- Surfaces ----------------------------------------------------------- */
+
+.card,
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--s-5);
+}
+
+/* Cards in a row are the same height, so the link that leaves each one sits on a common line
+   rather than wherever that account's holds happened to leave it. */
+.card {
+  display: flex;
+  flex-direction: column;
+}
+
+.cards {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+}
+
+.card-title {
+  margin: 0 0 var(--s-4);
+  font-family: var(--font-mono);
+  font-size: var(--t-md);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+
+.card-links {
+  margin: var(--s-4) 0 0;
+  font-size: var(--t-md);
+}
+
+.card > .card-links {
+  margin-top: auto;
+}
+
+/* ---- Money -------------------------------------------------------------- */
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+.amount-currency {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.amount-negative .amount-figure {
+  color: var(--red-600);
+}
+
+.balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+  margin: 0;
+}
+
+.balance {
+  min-width: 7rem;
+}
+
+.balance dt {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+}
+
+.balance dd {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-lg);
+  font-weight: 500;
+}
+
+.balance-available dd {
+  font-size: var(--t-xl);
+  font-weight: 700;
+  color: var(--navy-900);
+}
+
+/* ---- Notices ------------------------------------------------------------ */
+
+.note {
+  display: flex;
+  gap: var(--s-2);
+  margin: var(--s-4) 0 0;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--amber-050);
+  color: var(--amber-800);
+  font-size: var(--t-md);
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.error {
+  margin: var(--s-3) 0;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--red-050);
+  color: var(--red-600);
+  font-size: var(--t-md);
+  font-weight: 500;
+}
+
+.badge {
+  display: inline-block;
+  /* The card is a flex column, so without this the pill stretches to the card's width. */
+  align-self: start;
+  margin: 0 0 var(--s-3);
+  padding: 0.125rem var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--red-050);
+  color: var(--red-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+/* A transfer whose outcome nobody knows yet. The stripe is the same amber as a held balance: both
+   mean "not settled", and giving them different colours would teach two things where there is one. */
+.pending {
+  border-left: 4px solid var(--amber-500);
+}
+
+/* ---- Forms -------------------------------------------------------------- */
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 34rem;
+  padding: var(--s-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+
+form h2 {
+  margin: 0;
+}
+
+form .note,
+form .error {
+  margin: 0;
+}
+
+form button {
+  margin-top: var(--s-1);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  margin: 0 0 var(--s-5);
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.range .field {
+  flex: 1 1 10rem;
+}
+
+.range label {
+  margin: 0;
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+}
+
+/* ---- Data --------------------------------------------------------------- */
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.account-ref {
+  margin: 0 0 var(--s-5);
+  font-family: var(--font-mono);
+  font-size: var(--t-md);
+  letter-spacing: 0.02em;
+}
+
+.movements {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--s-5) 0 var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.movements th,
+.movements td {
+  text-align: left;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.movements tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.movements thead th {
+  background: var(--surface-sunken);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+}
+
+.movements .numeric {
+  text-align: right;
+  font-weight: 500;
+}
+
+.confirm {
+  margin: 0 0 var(--s-5);
+}
+
+.confirm div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.confirm div:last-child {
+  border-bottom: 0;
+}
+
+.confirm dt {
+  color: var(--ink-muted);
+  font-size: var(--t-md);
+}
+
+.confirm dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 500;
+}
+
+/* ---- The balance meter -------------------------------------------------- */
+
+/*
+ * Two segments read against each other rather than against the page, which is why `--amber-500`
+ * may be used here and nowhere near a word: it clears 3:1 against `--navy-700` and reaches 2.6:1
+ * on white. contrast.test.ts holds both halves of that.
+ */
+.meter {
+  display: flex;
+  height: 0.5rem;
+  margin: var(--s-3) 0 0;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--line);
+}
+
+.meter-available {
+  background: var(--navy-700);
+  transition: width 150ms ease;
+}
+
+.meter-held {
+  flex: 1;
+  background: var(--amber-500);
+}
+
+/* ---- A card that leads with one figure ---------------------------------- */
+
+.balances-lead {
+  display: block;
+}
+
+.balances-lead .balance-available dd {
+  margin-top: 0;
+  font-size: var(--t-3xl);
+  line-height: 1.15;
+}
+
+/* The code stays beside the figure - money.ts keeps the two together for the same reason - but at
+   this size it must not compete with it. */
+.balances-lead .balance-available .amount-currency {
+  font-size: 0.42em;
+}
+
+/* Booked is quieter than available and never absent. Distinguishable, not hidden. */
+.balances-lead .balance:not(.balance-available) {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.balances-lead .balance:not(.balance-available) dt {
+  font-size: var(--t-md);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.balances-lead .balance:not(.balance-available) dd {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+/* ---- Leaving a screen --------------------------------------------------- */
+
+.back {
+  margin: 0 0 var(--s-2);
+  font-size: var(--t-md);
+}
+
+.back a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  text-decoration: none;
+}
+
+.back a::before {
+  content: '\2190';
+  font-size: 1.1em;
+}
+
+.back a:hover {
+  text-decoration: underline;
+}
+
+/* ---- The statement ------------------------------------------------------ */
+
+.statement .account-ref {
+  margin-top: calc(var(--s-3) * -1);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  border-radius: var(--r-md);
+  /* The table draws its own edge; without this the scrollbar sits inside the rounded corner. */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* A credit adds and a debit takes away, and the word beside it says which. The colour is the
+   second signal, never the only one - REQ-UI-003's habit applied to a row. */
+.movements .numeric .amount:not(.amount-negative) .amount-figure {
+  color: var(--green-700);
+}
+
+@media (max-width: 39.999rem) {
+  .movements th,
+  .movements td {
+    padding: var(--s-3) var(--s-3);
+    font-size: var(--t-md);
+    white-space: nowrap;
+  }
+}
+
+/* ---- The transfer journey ----------------------------------------------- */
+
+/*
+ * Three stages, numbered, because this is a sequence and the order carries information a customer
+ * needs: the confirmation is where the request stops changing, and somebody who does not know a
+ * second step is coming reads the first one as the last.
+ */
+.steps {
+  display: flex;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-5);
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 3px solid var(--line-strong);
+  color: var(--ink-muted);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.step[data-state='done'],
+.step[data-state='current'] {
+  border-top-color: var(--navy-700);
+  color: var(--navy-900);
+}
+
+.step-index {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+}
+
+.step[data-state='done'] .step-index,
+.step[data-state='current'] .step-index {
+  background: var(--navy-700);
+  color: var(--ink-inverse);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.actions button {
+  flex: 1 1 auto;
+}
+
+/* An outcome names itself in a heading and in a live region; the stripe is the third signal. */
+.panel-posted {
+  border-left: 4px solid var(--green-700);
+}
+
+.panel-rejected {
+  border-left: 4px solid var(--red-600);
+}
+
+.transfer .panel,
+.transfer form {
+  max-width: 34rem;
+}
+
+/* An account reference is checked character by character, and a proportional face makes that
+   harder. Same reasoning as the monospace on a card title and in the movements table. */
+.ref-input {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* ---- Signing in --------------------------------------------------------- */
+
+/*
+ * Help text, not a warning. The amber `.note` means one thing in this application - money that is
+ * committed and cannot be spent - and spending that colour on an explanation would leave a
+ * customer looking for the problem on a screen that has none.
+ */
+.help {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--t-md);
+}
+
+.sign-in {
+  max-width: 26rem;
+  margin: var(--s-6) auto;
+}

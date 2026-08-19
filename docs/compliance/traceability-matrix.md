@@ -491,3 +491,31 @@ requirements that turn on the interface are met in part here and completed there
 | **REQ-LED-004** Account type determines sign convention | WP-06 | The third independent implementation of the rule, after the ledger's Java and `web-banking`'s TypeScript, and the first in PL/SQL. `signed_effect` decides from the account type, not from the word "debit": a `LIABILITY` falls on a debit and an `ASSET` rises on one | `PkgPostingTest` asserts both directions, and the naive rule was planted - `v_debit_is_positive := FALSE` - which failed exactly `aDebitIncreasesAnAsset`, with the sign reversed. Written that way the package balances perfectly and reports half the estate's money backwards | Met at this tier |
 | **REQ-INT-004** Duplicate delivery does not duplicate a movement | WP-11 | The receiving half. `PKG_POSTING.apply_transfer` claims `applied_transfer` with an `INSERT` and catches `DUP_VAL_ON_INDEX`; the primary key is the mechanism rather than a note about one, so two simultaneous deliveries race and the loser applies nothing | `PkgPostingConcurrencyTest` runs eight deliveries at once and asserts exactly one believed it was first. Proved to have teeth by mutation: a `SELECT`-then-`INSERT` version passes all fourteen sequential tests in `PkgPostingTest` and fails this one - the same defect, in the same shape, as the ledger's `ON CONFLICT DO NOTHING` | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | The only source of a name, a date of birth or a national identifier in this repository, and it lives in **test** scope so that code manufacturing personal data is not inside a deployable artefact. Values are constructed rather than chosen: a name carries its ordinal so no bare surname can occur, and an identifier is prefixed `SYN-`, a shape no authority issues | `SyntheticDataTest` asserts both shapes over 200 generated customers, plus determinism from the seed; `SyntheticSeedTest` proves the generator and the schema agree by seeding a real Oracle and reading every balance back | Met at this tier |
+
+---
+
+## WP-19 - web-banking design system
+
+Ticket TB-1019. Stratum 4, TypeScript + React. A presentation change: **no requirement is added and
+none changes owner.** What moved is the evidence, because the markup three requirements are verified
+through was rewritten around them.
+
+The regression gate is the whole of this package's claim to have changed nothing: 123 tests stood on
+`main` before it and 123 stand after it, none edited, alongside 46 added here.
+
+### Re-verified by WP-19, still owned by WP-14
+
+| Requirement | What changed | What did not | Status |
+|---|---|---|---|
+| **REQ-UI-001** Customers can transfer between accounts | The journey gained a three-step indicator - Details, Confirm, Result - so the confirmation reads as a step rather than as the end. No focusable element was added ahead of the form, because `accessibility.test.tsx` walks the journey by counting tab stops | Every state, every transition and every message. `Transfer.test.tsx` and `accessibility.test.tsx` pass unedited | Met |
+| **REQ-UI-002** Retrying a transfer cannot move money twice | Nothing. `transferAttempt.ts` was not opened | The key is still minted at confirmation and reused by every retry. `transferAttempt.test.ts` passes unedited | Met |
+| **REQ-UI-003** Available balance is never presented as spendable when held | Available now leads the card and booked follows it, quieter and never absent, and a **balance meter** shows the held share of the booked balance as a proportion. The meter is an addition to the sentence, never a replacement: it renders nothing when the two balances agree, nothing when the account is overdrawn and there is no positive whole to take a share of, and it carries an accessible name stating the held amount, because a picture only a sighted reader can interpret would discharge the requirement for some readers and not others | Two labelled figures on every card, always; the held amount stated in words; a negative available balance printed honestly rather than floored. `Dashboard.test.tsx` passes unedited, and `BalanceMeter.test.tsx` adds six cases for the picture | Met |
+
+### Introduced by WP-19
+
+A control rather than a requirement, recorded here because it is how the presentation layer is held
+to account and there is no other register for it.
+
+| Control | What it does | Verified by |
+|---|---|---|
+| Colour contrast, computed rather than judged | `styles/contrast.test.ts` reads `styles/tokens.css`, computes WCAG 2.2 relative luminance for every declared colour, and asserts each declared pair clears 4.5:1 for text or 3:1 for a control edge. Every colour token must appear in a pair or in a list of exemptions with a stated reason, so a colour nobody thought about fails the build rather than shipping. The same shape as `money.source.test.ts`, aimed at the failure a stylesheet actually has: not a crash, but a colour a fifth of readers cannot make out, which nothing reports | Demonstrated to fail both ways - `--ink-muted` lightened to `#949494` failed three pairs, and an unpaired token failed the accounting test. It is why `--amber-500` fills the meter and carries no word: PKO's call-to-action amber reaches 2.6:1 on white |

@@ -57,7 +57,7 @@ export function Statement(): React.JSX.Element {
 
   return (
     <section className="statement">
-      <p className="card-links">
+      <p className="back">
         <Link to="/">Back to your accounts</Link>
       </p>
       <h2>Statement</h2>
@@ -91,24 +91,28 @@ function RangePicker({
 }): React.JSX.Element {
   return (
     <div className="range">
-      <label htmlFor="statement-from">From</label>
-      <input
-        id="statement-from"
-        type="date"
-        value={range.from}
-        onChange={(event) => {
-          onChange({ ...range, from: event.target.value });
-        }}
-      />
-      <label htmlFor="statement-to">To</label>
-      <input
-        id="statement-to"
-        type="date"
-        value={range.to}
-        onChange={(event) => {
-          onChange({ ...range, to: event.target.value });
-        }}
-      />
+      <div className="field">
+        <label htmlFor="statement-from">From</label>
+        <input
+          id="statement-from"
+          type="date"
+          value={range.from}
+          onChange={(event) => {
+            onChange({ ...range, from: event.target.value });
+          }}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="statement-to">To</label>
+        <input
+          id="statement-to"
+          type="date"
+          value={range.to}
+          onChange={(event) => {
+            onChange({ ...range, to: event.target.value });
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -199,33 +203,42 @@ function Movements({ account, range }: { account: Account; range: Range }): Reac
       {movements.length === 0 ? (
         <p className="muted">Nothing posted in this range.</p>
       ) : (
-        <table className="movements">
-          <caption className="visually-hidden">
-            Movements from {range.from} to {range.to}, oldest first
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Value date</th>
-              <th scope="col">Reference</th>
-              <th scope="col">Side</th>
-              <th scope="col">Effect</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movements.map((movement) => (
-              <tr key={movement.movementRef}>
-                <td>{movement.valueDate}</td>
-                <td className="mono">{movement.transferRef}</td>
-                <td>{movement.direction === 'DEBIT' ? 'Debit' : 'Credit'}</td>
-                <td className="numeric">
-                  <Amount
-                    value={signedEffect(account.accountType, movement.direction, movement.amount)}
-                  />
-                </td>
+        <div className="table-scroll" role="region" aria-label="Movements" tabIndex={0}>
+          {/*
+            Four columns and a twenty-character reference do not fit a phone, and every one
+            of them is a fact a customer may need to quote. So the table keeps its columns
+            and its semantics and is given somewhere to scroll, rather than being turned
+            into a stack of divs that no longer announces as a table. The region is
+            focusable because a keyboard user has no other way to scroll it.
+          */}
+          <table className="movements">
+            <caption className="visually-hidden">
+              Movements from {range.from} to {range.to}, oldest first
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Value date</th>
+                <th scope="col">Reference</th>
+                <th scope="col">Side</th>
+                <th scope="col">Effect</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {movements.map((movement) => (
+                <tr key={movement.movementRef}>
+                  <td>{movement.valueDate}</td>
+                  <td className="mono">{movement.transferRef}</td>
+                  <td>{movement.direction === 'DEBIT' ? 'Debit' : 'Credit'}</td>
+                  <td className="numeric">
+                    <Amount
+                      value={signedEffect(account.accountType, movement.direction, movement.amount)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {request.status === 'loading' && <p aria-live="polite">Loading…</p>}
