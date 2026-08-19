@@ -84,11 +84,14 @@ func New(settings Settings) http.Handler {
 			return
 		}
 
-		response, err := send(r, transport, settings, attempts, body)
+		response, done, err := send(r, transport, settings, attempts, body)
 		if err != nil {
 			refuse(w, r, err)
 			return
 		}
+		// The attempt's context stays alive until the body has been read: cancelling it first
+		// truncates the response, and a truncated body cannot be un-sent once the status has gone.
+		defer done()
 		defer response.Body.Close()
 
 		relay(w, r, response, settings.MaxResponseBytes)
