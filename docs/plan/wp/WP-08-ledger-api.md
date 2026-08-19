@@ -89,7 +89,7 @@ to be right for the use cases and wrong for everything else.
 
 | Module | Gains |
 |---|---|
-| `services/ledger-core` | `application/` - the use cases - plus the ports `UnitOfWork`, `IdempotencyStore`, `ReferenceGenerator` and `AccountQueries`. Pure Java, driven by fakes, no database. |
+| `services/ledger-core` | `application/` - the use cases - plus the ports `UnitOfWork`, `ReferenceGenerator`, `LedgerReadModel` and `IdempotencyStore`. Pure Java, driven by fakes, no database. |
 | `services/ledger-persistence` | `V3` and `V4` migrations, four new adapters, the keyset statement query. |
 | `services/ledger-api` (**new**) | Spring Boot 3.2, controllers, DTOs, RFC 9457 handling, the contract test. |
 
@@ -180,17 +180,39 @@ passing one.
 ### 3. The account use cases and the ports they need
 
 `bank.tessera.ledger.application` in `ledger-core`: `OpenAccount`, `GetAccount`, `GetBalance`,
-`GetTransfer` and `ListHolds`, plus the four port interfaces `UnitOfWork`, `ReferenceGenerator`,
-`IdempotencyStore` and `AccountQueries`. All pure Java - this module's dependency list does not grow.
+`GetTransfer` and `ListHolds`, plus the port interfaces `UnitOfWork`, `ReferenceGenerator` and
+`LedgerReadModel`. All pure Java - this module's dependency list does not grow.
 
-Adapters in `ledger-persistence`: `V3__ledger_references.sql` for the two sequences; `JdbcUnitOfWork`
-delegating to `Transactions` and `AccountLocks.lockInOrder`; `JdbcReferenceGenerator` producing
-`TB` + `CCYYMMDD` + ten digits and `HL` + `CCYYMMDD` + ten digits; `JdbcAccountQueries` reading
-`created_at` and `MAX(value_date)`.
+Adapters in `ledger-persistence`: `V3__ledger_references.sql`; `JdbcUnitOfWork` delegating to
+`Transactions` and `AccountLocks.lockInOrder`; `JdbcReferenceGenerator` producing
+`TB` + `CCYYMMDD` + ten digits and `HL` + `CCYYMMDD` + ten digits from a sequence;
+`JdbcLedgerReadModel` reading `opened_date`, `MAX(value_date)`, `created_at` and `reverses`.
 
 Tests: the use cases against in-memory fakes with no database at all, which is the point of keeping
 them here; the adapters on a fresh Testcontainers schema; a generated reference matches the canonical
-pattern, and two calls never collide.
+pattern, and sixteen threads allocating at once never collide.
+
+**Three corrections to this task as it was written.**
+
+The read-model port is named `LedgerReadModel`, not `AccountQueries`. It turned out to owe the API
+four derived figures rather than two - the account's opening and last-movement dates, an entry's
+posting instant, and the entry that reverses another - and a name promising only accounts would have
+been wrong the moment `GetTransfer` needed a status.
+
+`IdempotencyStore` moves to task 6, where it is implemented and tested. A port interface committed
+with no implementation and no test is a commit that cannot be verified on its own, which the
+sizing rule exists to prevent.
+
+`HoldRepository` gains `findAllFor`. The contract's `listHolds` takes `includeInactive` and WP-06's
+port answers only "what is reserved", so there was no way to serve the operation. Additive, and kept
+as a second method rather than a flag on `findActiveFor`: the available balance must never be
+computed from a list that includes released holds, and a boolean is one mistaken argument away from
+exactly that.
+
+**A gap this task found and closed.** `journal_entry` had no column for `JournalEntry.reverses()`, so
+a reversal round-tripped through the database losing the link to the entry it corrected. `V3` adds
+the column, a foreign key, a check that nothing reverses itself, and a unique index so a transfer can
+be reversed at most once. WP-07 could not have noticed - it had no reversal to store.
 
 `feat(ledger): add the account use cases and their ports [TB-1008]`
 
