@@ -70,3 +70,4 @@ date for a real one.
 | [0006](0006-edge-rate-limit-is-per-instance.md) | Keep the edge rate limit in the process, and say so | Accepted | 2026-08-19 |
 | [0007](0007-gateway-validates-and-forwards.md) | The gateway validates the customer's token and forwards it unchanged | Accepted | 2026-08-19 |
 | [0008](0008-fraud-rules-are-pure-functions.md) | Fraud rules are pure functions, and the recorded version covers the parameters | Accepted | 2026-08-19 |
+| [0009](0009-reports-are-cut-at-an-audit-position.md) | A report is cut at an audit sequence position, not at a timestamp | Accepted | 2026-08-19 |

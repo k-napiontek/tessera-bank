@@ -9,10 +9,9 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-17 - `reporting` (Python)** is the next unblocked package, and it sits off the critical path
-> as WP-13 did. **WP-14** (`web-banking`, React) is unblocked too, now that WP-12 is done. The
-> critical path itself is still stopped at **WP-10**, which is **blocked on tooling**: it needs JDK 8
-> and only `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10.
+> **WP-14 - `web-banking` (React)** is the next unblocked package. The critical path is still
+> stopped at **WP-10**, which is **blocked on tooling**: it needs JDK 8 and only `openjdk`,
+> `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
 > its task list and have it reviewed first.
@@ -33,6 +32,16 @@ Updated by the executing session at the start and end of every work package, per
 > `make test-services`, or boot it with `./gradlew :services:ledger-api:bootRun` against any
 > PostgreSQL. **Kafka is now needed too** for one test - `KafkaOutboxContractTest` starts its own
 > broker through Testcontainers, so a running Docker daemon remains the only prerequisite.
+>
+> **The ledger is now reported on.** `batch/reporting` (Python 3.12 under `uv`) reads the ledger
+> directly - read-only, repeatable read - and writes a daily position, a movement summary and a
+> fixed-width regulatory extract in `TB-REGEXT-V1`, whose layout is declared in
+> `contracts/reporting/` before the writer that satisfies it. **A report is cut at a ledger position,
+> which is an `audit_record.seq`**: the only column in the schema where sequence order is commit
+> order, because WP-09 holds an advisory lock across the whole append. A rerun at a recorded position
+> is byte-identical, and the test proving it posts a backdated entry between the runs - the one case
+> a value-date filter gets wrong. Run it with `make test-reporting`; it needs Docker, because the
+> suite applies the ledger's own Flyway migrations to a real PostgreSQL. See ADR 0009.
 >
 > **Stratum 0 is complete** and the overnight cycle runs end to end locally (`make eod`). WP-16 waits
 > on WP-11, which waits on WP-10. A customer request now reaches the ledger through the edge, and the
@@ -62,7 +71,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
-| [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Not started` | | |
+| [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `PENDING` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 
 ## Critical path
@@ -128,6 +137,10 @@ becomes its own change when picked up.
 | F-39 | WP-13 | **The rule set cannot see across transfers, and that is a stated limitation rather than a gap.** Every rule is a pure function of one event, so a single 9 990.00 payment is flagged as structuring and ten of them in an hour look exactly like one. Closing it properly needs a feature store where account-level aggregates are versioned and addressable *as of* a point in time - which keeps rules pure. Adding a dictionary to a rule instead would break REQ-FRD-003 silently. See ADR 0008. | Open |
 | F-40 | WP-13 | **The thresholds shipped are placeholders, not calibrated numbers.** 100 000.00 for a high-value transfer and a 5% structuring band under a 10 000.00 reporting threshold are plausible and untuned; the weights are coarse for the same reason. Nothing in this repository could calibrate them - that needs outcome data - so what matters is that changing them changes `modelVersion`, and it does. Worth a line in whatever document describes running this service for real. | Open |
 | F-41 | WP-13 | **The score histogram has no alert and the decision counter no baseline.** `tessera_fraud_score` will show a rule set drifting towards a threshold long before the outcomes change, which is the reason it is a histogram - but nothing watches it, and there is no recorded "normal" to compare against. The same is true of `tessera_fraud_malformed_total`, where any non-zero value is a producer sending something this consumer cannot read. Alerting rules belong to the platform repositories; the metrics are here and named. | Open |
+| F-42 | WP-17 | **An entry whose value date precedes an account's opened date makes the position report raise.** The report bounds accounts by `opened_date <= businessDate` so an account opened after the reported day does not appear with a zero balance - and that filter can exclude one leg of an entry whose value date is earlier still, at which point debits no longer equal credits and the report refuses to print. Nothing in the ledger forbids such an entry: `Transfer` accepts any `valueDate`. Failing loudly is the right side to fail on, but the cause is a ledger validation that does not exist, and the message a 02:00 operator would read names the symptom. Fixing it means a check in WP-08's use case. | Open |
+| F-43 | WP-17 | **Nothing in the schema enforces one audit row per journal entry, and reporting now depends on it.** Every report bounds postings by joining `journal_entry` to `audit_record` on `subject_ref`. The join is total today because all three money-moving use cases go through `Transfer`, which writes `TRANSFER_POSTED` in the postings' transaction - but that is a property of the Java, not of the database. A fourth write path that skipped the audit log would make its entries **invisible to every report**, silently, without breaking a single test in `services/`. Recorded in ADR 0009's consequences; the fix is a constraint or a reconciliation query, and both belong to the ledger. | Open |
+| F-44 | WP-17 | **`account.status`, `customer_ref` and `account_type` are reported as at *now*, not as at the position.** They are mutable columns with no history, and the extract carries all three. The reproducibility claim holds today only because the ledger has no way to change them - there is no `UPDATE account SET status` anywhere and no endpoint that blocks or closes an account. The day WP-15's back office adds one, a rerun at the same position starts producing different bytes, and nothing here would notice. Versioning them is a change to WP-07's schema. | Open |
+| F-45 | WP-17 | **Nothing schedules the reporting job.** It is a batch job with no cron, no timer and no trigger, because scheduling belongs to the companion platform repositories under ADR 0001. Worth stating plainly so that "reporting exists" is not read as "reporting runs" - and because the metrics it exports (`tessera_reporting_position` in particular) only mean anything if something runs it nightly to compare against. | Open |
 
 ---
 

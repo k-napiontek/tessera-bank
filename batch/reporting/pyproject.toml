@@ -1,0 +1,59 @@
+# reporting - stratum 4, Python 3.12 under uv.
+#
+# The Python floor is a range rather than a minimum, for the same reason fraud-scoring's is: ">=3.12"
+# would let a machine with 3.14 resolve a different interpreter from the one CLAUDE.md pins the tier
+# to, and the difference would only surface in whichever behaviour changed between them.
+[project]
+name = "reporting"
+version = "1.0.0"
+description = "Reproducible regulatory and management reporting from the ledger."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # psycopg 3. The reporting job reads PostgreSQL directly rather than through the ledger's HTTP
+    # API: a report is a full-table aggregate over months of postings, and paging that through a
+    # REST endpoint designed for one customer's statement would be slower, less exact and no more
+    # decoupled - both sides are inside the same trust boundary and the schema is the contract here.
+    "psycopg[binary]>=3.2,<4",
+    # The exposition format. A batch job has no endpoint to scrape, so this writes a textfile; see
+    # observability.py.
+    "prometheus-client>=0.20,<1",
+]
+
+[project.scripts]
+reporting = "reporting.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<9",
+    # Real PostgreSQL, with the ledger's own Flyway migrations applied. A reader proved against a
+    # hand-written schema is verified against a fiction.
+    "testcontainers[postgres]>=4.7,<5",
+    "ruff>=0.6,<1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reporting"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Import mode importlib keeps the tests out of the package's namespace, so a test file cannot shadow
+# a module it is testing.
+addopts = "--import-mode=importlib -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E,F are the defaults; the rest are the rules that catch the mistakes this repository cares about.
+# DTZ earns its place twice over here: a report stamped with a naive datetime is a report nobody can
+# place in time, and a business date read as a local date is a report for the wrong day.
+select = ["E", "F", "W", "I", "B", "S", "DTZ", "UP", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert; S101 forbids assert.
+"tests/*" = ["S101"]
