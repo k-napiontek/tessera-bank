@@ -38,6 +38,8 @@ dependencies {
     // Jackson does not do without this module.
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
     implementation("org.springframework:spring-jdbc")
+    // The relay logs a refused publish. slf4j only - the binding is the application's choice.
+    implementation("org.slf4j:slf4j-api")
     // Flyway 9, which Boot 3.2 manages. PostgreSQL support lives in flyway-core there; the separate
     // flyway-database-postgresql artefact only exists from Flyway 10 and is not in this BOM.
     implementation("org.flywaydb:flyway-core")

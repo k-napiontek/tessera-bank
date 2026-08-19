@@ -3,6 +3,8 @@ package bank.tessera.ledger.api.config;
 import bank.tessera.ledger.adapter.jdbc.AccountLocks;
 import bank.tessera.ledger.adapter.jdbc.JdbcAccountRepository;
 import bank.tessera.ledger.adapter.jdbc.LedgerEventJson;
+import bank.tessera.ledger.adapter.outbox.EventPublisher;
+import bank.tessera.ledger.adapter.outbox.OutboxRelay;
 import bank.tessera.ledger.adapter.jdbc.JdbcAuditLog;
 import bank.tessera.ledger.adapter.jdbc.JdbcEventOutbox;
 import bank.tessera.ledger.adapter.jdbc.JdbcHoldRepository;
@@ -13,6 +15,8 @@ import bank.tessera.ledger.adapter.jdbc.JdbcReferenceGenerator;
 import bank.tessera.ledger.adapter.jdbc.JdbcUnitOfWork;
 import bank.tessera.ledger.api.audit.HttpAuditContext;
 import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
+import bank.tessera.ledger.api.outbox.KafkaEventPublisher;
+import bank.tessera.ledger.api.outbox.OutboxRelayScheduler;
 import bank.tessera.ledger.application.AuditTrail;
 import bank.tessera.ledger.application.CaptureHold;
 import bank.tessera.ledger.application.TransferEvents;
@@ -41,9 +45,14 @@ import bank.tessera.ledger.port.ReferenceGenerator;
 import bank.tessera.ledger.port.UnitOfWork;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.time.Duration;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -63,6 +72,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * instead. The adapters take one as a constructor argument for that reason rather than building
  * their own."</em>
  */
+@EnableScheduling
 @Configuration(proxyBeanMethods = false)
 public class LedgerConfiguration {
 
@@ -135,6 +145,29 @@ public class LedgerConfiguration {
     @Bean
     TransferEvents transferEvents(EventOutbox outbox, AuditContext auditContext) {
         return new TransferEvents(outbox, auditContext);
+    }
+
+    @Bean
+    EventPublisher eventPublisher(
+            KafkaTemplate<String, String> kafka,
+            @Value("${tessera.outbox.publish-timeout-ms:10000}") long timeoutMillis) {
+        return new KafkaEventPublisher(kafka, Duration.ofMillis(timeoutMillis));
+    }
+
+    @Bean
+    OutboxRelay outboxRelay(
+            NamedParameterJdbcTemplate jdbc, TransactionTemplate transactions, EventPublisher publisher) {
+        return new OutboxRelay(jdbc, transactions, publisher);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "tessera.outbox.relay-enabled", havingValue = "true", matchIfMissing = true)
+    OutboxRelayScheduler outboxRelayScheduler(
+            OutboxRelay relay, @Value("${tessera.outbox.batch-size:100}") int batchSize) {
+        // Switchable because relaying and serving requests are separable jobs: an operator may want
+        // the relay on a subset of instances, and a test that is not about Kafka should not be
+        // hammering a broker that is not there.
+        return new OutboxRelayScheduler(relay, batchSize);
     }
 
     @Bean
