@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Ticket** | TB-1009 |
-| **Branch** | `feat/TB-1009-ledger-audit-outbox` |
+| **Branch** | `feat/TB-1009-ledger-audit-outbox`, then `feat/TB-1009-ledger-observability` |
 | **Stratum** | 3 - Java 17, ~2023 |
 | **Depends on** | WP-08 |
-| **Status** | `In progress` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -87,11 +87,22 @@ marks `correlationId` required - the outbox cannot be built without it.
 
 ## Definition of Done
 
-- [ ] Audit chain verification detects a tampered row and names it.
-- [ ] Killing the relay mid-publish loses no event and duplicates are handled idempotently.
-- [ ] A rolled-back transaction leaves neither a posting nor an outbox row.
-- [ ] No log line in any test output contains personal data.
-- [ ] `/actuator/health/liveness` and `/readiness` behave differently under a database outage.
+- [x] Audit chain verification detects a tampered row and names it - `AuditChainTest.tamperedRowIsNamed`
+      reports the `seq` and says the row was altered; a deleted row is caught at its successor with a
+      different message, because they are different incidents.
+- [x] Killing the relay mid-publish loses no event and duplicates are handled idempotently -
+      `OutboxRelayTest.republishesAfterFailureBeforeMark` rolls back the relay's transaction after a
+      successful publish, which is what a crash does to it. The event is published twice; the AsyncAPI
+      document requires consumers to de-duplicate on `transferRef`.
+- [x] A rolled-back transaction leaves neither a posting nor an outbox row -
+      `OutboxTransactionTest.rollbackLeavesNothing`, and `AuditTrailEndToEndTest` for the audit half
+      over real HTTP.
+- [x] No log line in any test output contains personal data - `LogHygieneTest` drives a real transfer
+      whose remittance reference is a synthetic marker, on the happy path and the error path, and
+      fails if the marker is logged. Demonstrated to fail with one added controller log statement.
+- [x] `/actuator/health/liveness` and `/readiness` behave differently under a database outage -
+      `HealthProbeTest` stops the container: readiness answers `503`, liveness stays `200`.
+      Demonstrated to fail with `db` removed from the readiness group.
 
 ## Verification
 
