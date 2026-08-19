@@ -44,6 +44,16 @@ dependencies {
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
+
+    // The contract test validates real exchanges against contracts/openapi/ledger-core.yaml.
+    //
+    // OpenAPI 3.1 schemas ARE JSON Schema 2020-12 - that is the headline change of 3.1 - and the
+    // document uses it: `type: [string, 'null']` is 2020-12 and is not expressible in 3.0. So the
+    // validator is a JSON Schema 2020-12 implementation rather than an OpenAPI-specific one, which
+    // would have to downgrade the document to 3.0 before it could read it. A contract test that
+    // silently validates against a downgraded copy of the contract is not a contract test.
+    testImplementation("com.networknt:json-schema-validator:1.5.1")
+    testImplementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -52,6 +62,8 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    // The contract lives at the repository root, and a test's working directory is its own module.
+    systemProperty("tessera.contracts.dir", rootProject.projectDir.resolve("contracts").absolutePath)
     testLogging {
         events("failed")
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
