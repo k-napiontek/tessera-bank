@@ -46,4 +46,16 @@ def transfer_payload(**overrides: Any) -> dict[str, Any]:
         ],
     }
     payload.update(overrides)
+
+    # The legs follow the header unless a caller replaced them outright. A fixture whose movements
+    # disagree with the transfer they belong to is not a valid event - the LEGMISM rule exists to
+    # catch exactly that - so building one by accident would have every test scoring a broken
+    # message while believing it was scoring an ordinary one.
+    if "amount" in overrides and "movements" not in overrides:
+        for leg in payload["movements"]:
+            leg["amount"] = dict(payload["amount"])
+    if "transferRef" in overrides and "movements" not in overrides:
+        for index, leg in enumerate(payload["movements"], start=1):
+            leg["transferRef"] = payload["transferRef"]
+            leg["movementRef"] = f"{payload['transferRef']}-{index:02d}"
     return payload

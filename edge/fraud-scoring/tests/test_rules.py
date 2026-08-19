@@ -26,12 +26,7 @@ def engine() -> Engine:
 
 
 def event(**overrides: Any) -> TransferPosted:
-    payload = transfer_payload(**overrides)
-    # The legs travel with the header unless a test is deliberately breaking them.
-    if "amount" in overrides and "movements" not in overrides:
-        for leg in payload["movements"]:
-            leg["amount"] = overrides["amount"]
-    return TransferPosted.from_json(json.dumps(payload))
+    return TransferPosted.from_json(json.dumps(transfer_payload(**overrides)))
 
 
 def codes(**overrides: Any) -> tuple[str, ...]:
