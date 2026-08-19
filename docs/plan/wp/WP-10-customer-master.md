@@ -144,7 +144,10 @@ Branch `feat/TB-1010-customer-master-soap`. Eight tasks.
    second call answers `alreadyApplied`.
 5. **XSD conformance.** Every SOAP response marshalled and validated against
    `contracts/xsd/canonical-v1.xsd`, which is the check WP-02 task 8 wired into this package.
-   Demonstrated to fail with a required element removed.
+   Demonstrated to fail with a required element removed. Cover the **empty**
+   `GetAccountsByCustomer` result explicitly: `minOccurs="0"` permits it, and a naive implementation
+   returns it as a single null element rather than as no elements, which validates in some parsers
+   and not others.
 6. **WAR and the Tomcat 8.5 deployment test.** Servlet 3.0 descriptor, JAX-WS RI endpoint
    declaration, and Cargo fetching Tomcat 8.5 into `target/` to deploy it. The integration test calls
    the running endpoint with the generated client, and **asserts the WSDL the container publishes

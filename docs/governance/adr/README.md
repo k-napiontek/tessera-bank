@@ -72,3 +72,4 @@ date for a real one.
 | [0008](0008-fraud-rules-are-pure-functions.md) | Fraud rules are pure functions, and the recorded version covers the parameters | Accepted | 2026-08-19 |
 | [0009](0009-reports-are-cut-at-an-audit-position.md) | A report is cut at an audit sequence position, not at a timestamp | Accepted | 2026-08-19 |
 | [0010](0010-customer-master-holds-its-own-balances.md) | The system of record holds its own balances, and that duplication is the point | Accepted | 2026-08-19 |
+| [0011](0011-oracle-substitute-for-stratum-1.md) | Stratum 1 runs real Oracle in a container, not an Oracle-compatible substitute | Accepted | 2026-08-19 |
