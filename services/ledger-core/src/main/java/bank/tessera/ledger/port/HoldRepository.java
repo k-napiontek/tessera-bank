@@ -15,4 +15,14 @@ public interface HoldRepository {
 
     /** Holds still reducing available balance on the account. */
     List<Hold> findActiveFor(AccountRef account);
+
+    /**
+     * Every hold on the account, whatever its status, oldest first.
+     *
+     * <p>Separate from {@link #findActiveFor} rather than a flag on it, because the two answer
+     * different questions. "What is reserved" drives the available balance and must never include a
+     * released hold; "what has happened to this account" is a history, and a caller that wanted the
+     * first and was handed the second would overstate what the customer cannot spend.
+     */
+    List<Hold> findAllFor(AccountRef account);
 }
