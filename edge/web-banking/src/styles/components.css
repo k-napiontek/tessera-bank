@@ -475,3 +475,21 @@ form button {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
 }
+
+/* ---- Signing in --------------------------------------------------------- */
+
+/*
+ * Help text, not a warning. The amber `.note` means one thing in this application - money that is
+ * committed and cannot be spent - and spending that colour on an explanation would leave a
+ * customer looking for the problem on a screen that has none.
+ */
+.help {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--t-md);
+}
+
+.sign-in {
+  max-width: 26rem;
+  margin: var(--s-6) auto;
+}
