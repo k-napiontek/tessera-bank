@@ -12,6 +12,7 @@ Every interface in the estate, defined before it is implemented, in the contract
 | `wsdl/` `xsd/` | ~2011 | SOAP contracts, canonical XML | `legacy/`, `integration/` |
 | `openapi/` | ~2023 | OpenAPI 3.1 | `services/`, `edge/` |
 | `asyncapi/` | ~2023 | AsyncAPI 3.0 (Kafka) | `services/`, `integration/`, `edge/` |
+| `reporting/` | ~2025 | Fixed-width outbound file formats | `batch/reporting`, and whoever receives the submission |
 
 ## The source
 
@@ -37,9 +38,11 @@ back to it, and no contract invents a concept of its own.
 bash contracts/validate.sh
 ```
 
-Runs XML well-formedness, the OpenAPI and AsyncAPI linters, and
+Runs XML well-formedness, the OpenAPI and AsyncAPI linters,
 [`check-copybook-offsets.py`](check-copybook-offsets.py), which asserts that every copybook field
-still sits where the canonical model says it does.
+still sits where the canonical model says it does, and
+[`check-extract-layout.py`](check-extract-layout.py), which asserts the same of the outbound
+regulatory extract.
 
 A green run proves each contract is well-formed. It does **not** prove the four agree with each
 other - only reading them beside the canonical model proves that.
