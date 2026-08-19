@@ -6,10 +6,11 @@
  * branch rather than held at the root with an empty token.
  */
 
-import { Route, Routes } from 'react-router';
+import { Link, Route, Routes } from 'react-router';
 import { GatewayProvider } from './api/GatewayProvider';
 import { Dashboard } from './screens/Dashboard';
 import { Statement } from './screens/Statement';
+import { Transfer } from './screens/Transfer';
 import { SignIn } from './session/SignIn';
 import { SessionProvider, useSession } from './session/session';
 
@@ -26,6 +27,10 @@ function SignedIn({
     <GatewayProvider token={token} accountRefs={accountRefs}>
       <header className="masthead">
         <h1>Tessera Bank</h1>
+        <nav>
+          <Link to="/">Accounts</Link>
+          <Link to="/transfer">Transfer</Link>
+        </nav>
         <button type="button" className="link-button" onClick={onSignOut}>
           Sign out
         </button>
@@ -34,6 +39,7 @@ function SignedIn({
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/accounts/:accountRef/statement" element={<Statement />} />
+          <Route path="/transfer" element={<Transfer />} />
         </Routes>
       </main>
     </GatewayProvider>

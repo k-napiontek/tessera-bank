@@ -295,3 +295,40 @@ a {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85em;
 }
+
+.masthead nav {
+  display: flex;
+  gap: var(--gap);
+  margin-right: auto;
+  margin-left: var(--gap);
+  font-size: 0.95rem;
+}
+
+.confirm {
+  margin: 0 0 var(--gap);
+}
+
+.confirm div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.confirm dt {
+  color: var(--ink-muted);
+}
+
+.confirm dd {
+  margin: 0;
+  text-align: right;
+}
+
+.pending {
+  border-left: 4px solid var(--held);
+}
+
+.panel h3 {
+  margin-top: 0;
+}
