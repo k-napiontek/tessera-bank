@@ -10,7 +10,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help build test lint plan status eod \
         build-mainframe build-services build-edge test-contracts test-mainframe test-services \
-        test-edge lint-contracts lint-edge jdk17 docker go
+        test-edge test-gateway test-fraud lint-contracts lint-edge jdk17 docker go uv
 
 # ---------------------------------------------------------------------------------------------
 # Stratum 3 needs a JDK 17 and will not accept a substitute - see the pinned-stack rule in
@@ -58,6 +58,19 @@ go: ## Report which Go the edge tier will use
 		    echo "  brew install go"; \
 		    exit 1)
 
+# ---------------------------------------------------------------------------------------------
+# The Python half of stratum 4 is pinned to 3.12 and managed by uv, which fetches the interpreter
+# itself. That is what "Python 3.12" means here in practice: not a python3.12 on PATH, but a version
+# uv resolves from pyproject.toml, so the tier builds the same way on a machine that has never
+# installed Python at all.
+# ---------------------------------------------------------------------------------------------
+uv: ## Report the uv that manages the Python tier
+	@command -v uv >/dev/null 2>&1 \
+		&& echo "uv: $$(uv --version)" \
+		|| (echo "No uv found. The Python edge components need it - see CLAUDE.md."; \
+		    echo "  brew install uv"; \
+		    exit 1)
+
 jdk17: ## Report which JDK 17 the Java tier will use
 ifeq ($(JAVA17),)
 	@echo "No JDK 17 found. Stratum 3 is pinned to Java 17 - see CLAUDE.md."
@@ -84,9 +97,11 @@ build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
 		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build
 
-build-edge: go ## Build the Go edge components
+build-edge: go uv ## Build the edge tier - Go and Python
 	@go -C edge/api-gateway build ./...
 	@echo "OK    api-gateway builds"
+	@cd edge/fraud-scoring && uv sync --locked --quiet
+	@echo "OK    fraud-scoring resolves against its lock file"
 
 # --- test -------------------------------------------------------------------------------------
 
@@ -112,8 +127,13 @@ test-services: jdk17 docker ## Ledger domain, persistence and API, the last two 
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
 		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test
 
-test-edge: go ## The api-gateway, under the race detector
+test-edge: test-gateway test-fraud ## Both edge components
+
+test-gateway: go ## The api-gateway, under the race detector
 	@go -C edge/api-gateway test -race ./...
+
+test-fraud: uv docker ## fraud-scoring, including one test against a real Kafka
+	@cd edge/fraud-scoring && uv run pytest
 
 # --- lint -------------------------------------------------------------------------------------
 
@@ -123,11 +143,15 @@ lint: lint-contracts lint-edge ## Run every tier's linters and quality gates
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
 	@bash contracts/validate.sh
 
-lint-edge: go ## gofmt and go vet over the Go tier
+lint-edge: go uv ## gofmt and go vet over Go, ruff over Python
 	@test -z "$$(gofmt -l edge/api-gateway)" \
 		|| (echo "gofmt would change:"; gofmt -l edge/api-gateway; exit 1)
 	@go -C edge/api-gateway vet ./...
 	@echo "OK    gofmt and go vet are clean"
+	@cd edge/fraud-scoring && uv run ruff check .
+	@cd edge/fraud-scoring && uv run ruff format --check . >/dev/null \
+		|| (echo "ruff format would change files in edge/fraud-scoring"; exit 1)
+	@echo "OK    ruff is clean"
 
 # --- run --------------------------------------------------------------------------------------
 
