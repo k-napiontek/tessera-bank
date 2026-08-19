@@ -10,8 +10,8 @@
 .DEFAULT_GOAL := help
 .PHONY: help build test lint plan status eod \
         build-mainframe build-services build-edge build-batch test-contracts test-mainframe \
-        test-services test-edge test-gateway test-fraud test-batch test-reporting lint-contracts \
-        lint-edge lint-batch jdk17 docker go uv
+        test-services test-edge test-gateway test-fraud test-web test-batch test-reporting \
+        lint-contracts lint-edge lint-batch build-web lint-web jdk17 docker go uv node
 
 # ---------------------------------------------------------------------------------------------
 # Stratum 3 needs a JDK 17 and will not accept a substitute - see the pinned-stack rule in
@@ -72,6 +72,18 @@ uv: ## Report the uv that manages the Python tier
 		    echo "  brew install uv"; \
 		    exit 1)
 
+# ---------------------------------------------------------------------------------------------
+# The TypeScript half of stratum 4 builds with whatever Node is on PATH, above the floor its
+# package.json declares. Unlike uv, npm fetches no interpreter for itself, so an absent or ancient
+# Node shows up as a syntax error inside a dependency rather than as a missing prerequisite.
+# ---------------------------------------------------------------------------------------------
+node: ## Report the Node the TypeScript tier will use
+	@command -v node >/dev/null 2>&1 \
+		&& echo "Node: $$(node --version), npm $$(npm --version)" \
+		|| (echo "No Node found. web-banking needs one - see CLAUDE.md."; \
+		    echo "  brew install node"; \
+		    exit 1)
+
 jdk17: ## Report which JDK 17 the Java tier will use
 ifeq ($(JAVA17),)
 	@echo "No JDK 17 found. Stratum 3 is pinned to Java 17 - see CLAUDE.md."
@@ -98,11 +110,20 @@ build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
 		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build
 
-build-edge: go uv ## Build the edge tier - Go and Python
+build-edge: build-web go uv ## Build the edge tier - Go, Python and TypeScript
 	@go -C edge/api-gateway build ./...
 	@echo "OK    api-gateway builds"
 	@cd edge/fraud-scoring && uv sync --locked --quiet
 	@echo "OK    fraud-scoring resolves against its lock file"
+
+# ---------------------------------------------------------------------------------------------
+# `npm run build` type-checks the whole project with tsc before Vite bundles anything. Vite strips
+# types without reading them, so a build that skipped tsc would happily ship code that does not
+# type-check - which is the entire value TypeScript is here for.
+# ---------------------------------------------------------------------------------------------
+build-web: node ## Type-check and bundle web-banking
+	@cd edge/web-banking && npm ci --silent && npm run build --silent
+	@echo "OK    web-banking type-checks and bundles"
 
 build-batch: uv ## Build the batch tier - Python
 	@cd batch/reporting && uv sync --locked --quiet
@@ -132,13 +153,21 @@ test-services: jdk17 docker ## Ledger domain, persistence and API, the last two 
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
 		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test
 
-test-edge: test-gateway test-fraud ## Both edge components
+test-edge: test-gateway test-fraud test-web ## Every edge component
 
 test-gateway: go ## The api-gateway, under the race detector
 	@go -C edge/api-gateway test -race ./...
 
 test-fraud: uv docker ## fraud-scoring, including one test against a real Kafka
 	@cd edge/fraud-scoring && uv run pytest
+
+# ---------------------------------------------------------------------------------------------
+# The web suite reaches no network. Every gateway response it sees is served by MSW at the fetch
+# boundary, so the tests assert what the app sends and how it renders what comes back - and they run
+# identically on a machine with no estate at all. The live journey is scripts/walkthrough.sh.
+# ---------------------------------------------------------------------------------------------
+test-web: node ## web-banking, against a mocked gateway - no network
+	@cd edge/web-banking && npm ci --silent && npm test --silent
 
 test-batch: test-reporting ## Every batch component
 
@@ -158,7 +187,7 @@ lint: lint-contracts lint-edge lint-batch ## Run every tier's linters and qualit
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
 	@bash contracts/validate.sh
 
-lint-edge: go uv ## gofmt and go vet over Go, ruff over Python
+lint-edge: go uv node ## gofmt and go vet over Go, ruff over Python, eslint over TypeScript
 	@test -z "$$(gofmt -l edge/api-gateway)" \
 		|| (echo "gofmt would change:"; gofmt -l edge/api-gateway; exit 1)
 	@go -C edge/api-gateway vet ./...
@@ -167,6 +196,11 @@ lint-edge: go uv ## gofmt and go vet over Go, ruff over Python
 	@cd edge/fraud-scoring && uv run ruff format --check . >/dev/null \
 		|| (echo "ruff format would change files in edge/fraud-scoring"; exit 1)
 	@echo "OK    ruff is clean"
+	@$(MAKE) --no-print-directory lint-web
+
+lint-web: node ## eslint over web-banking, with type-aware rules
+	@cd edge/web-banking && npm ci --silent && npm run lint --silent
+	@echo "OK    eslint is clean over web-banking"
 
 lint-batch: uv ## ruff over the batch tier
 	@cd batch/reporting && uv run ruff check .
