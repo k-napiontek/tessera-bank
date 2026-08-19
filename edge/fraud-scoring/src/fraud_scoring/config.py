@@ -64,8 +64,8 @@ class Settings:
             # 100 000.00 in minor units. High relative to a retail transfer, not to a corporate one;
             # it is a threshold to tune per institution rather than a fact about fraud.
             "TB_FRAUD_HIGH_AMOUNT_MINOR": 10_000_000,
-            # 10 000.00 in minor units - the EU cash reporting threshold that structuring is designed
-            # to stay under, which is why an amount just below it is worth a rule.
+            # 10 000.00 in minor units - the EU cash reporting threshold that structuring
+            # exists to stay under, which is why an amount just below it is worth a rule.
             "TB_FRAUD_REPORTING_THRESHOLD_MINOR": 1_000_000,
             "TB_FRAUD_METRICS_PORT": 9100,
             "TB_FRAUD_LOG_LEVEL": "info",
