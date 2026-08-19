@@ -141,14 +141,22 @@ enforce is what fails an audit.
 
 ## 6. Build order
 
-Eighteen work packages, one pull request each, executed strictly one at a time. The full table with
-current status lives in [`STATUS.md`](STATUS.md); the dependency column enforces the ordering, so the
-ledger cannot be built before its domain exists and the ESB adapter cannot be built before both the
-ledger and the monolith are done.
+Twenty-five work packages, one pull request each, executed strictly one at a time. The full table
+with current status lives in [`STATUS.md`](STATUS.md); the dependency column enforces the ordering,
+so the ledger cannot be built before its domain exists and the ESB adapter cannot be built before
+both the ledger and the monolith are done.
 
 Broad shape: foundation and contracts, then the mainframe tier, then the ledger in four slices, then
 the legacy and integration tiers where the eras meet, then the edge, then reconciliation, and finally
 a deliberate incident exercise that proves the process works.
+
+**A workload strand, WP-20 to WP-25, hangs off the contracts rather than off the ledger.** It builds
+what section 1 assumes and the estate does not yet have: demand. A bank's day declared as a versioned
+model, a driver that executes it at volume, a production-shaped database to execute it against, an
+SLO catalogue with a recorded baseline, and failure injection - because "schema migration under load"
+is named above as a reason this repository exists, and nothing here currently puts anything under
+load. The strand sits off the critical path and is deliberately not a prerequisite for anything on
+it, but the incident exercise is worth considerably more after it than before.
 
 ## 7. Boundaries
 
