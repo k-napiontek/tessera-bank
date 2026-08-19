@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1008-ledger-api` |
 | **Stratum** | 3 - Java 17, ~2023 |
 | **Depends on** | WP-07 |
-| **Status** | `Not started` |
+| **Status** | `In progress` |
 
 ## Objective
 

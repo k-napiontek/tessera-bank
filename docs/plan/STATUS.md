@@ -37,7 +37,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [05](wp/WP-05-eodrept.md) | `EODREPT.CBL`, `EODCYCLE.JCL`, local runner | 0 | 04 | `Done` | [#16](https://github.com/k-napiontek/tessera-bank/pull/16) | `32318f1` |
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `c4be0d5` |
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Done` | [#19](https://github.com/k-napiontek/tessera-bank/pull/19) | `2d7bb3a` |
-| [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Not started` | | |
+| [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `In progress` | | |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Not started` | | |
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
