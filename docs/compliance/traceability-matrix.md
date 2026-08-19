@@ -2,7 +2,7 @@
 
 > **Partially filled.** The requirement catalogue below is complete - all 60 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02, WP-03, WP-04 and WP-06. Every work package adds its own as part of the Definition of Done,
+> WP-02 to WP-08. Every work package adds its own as part of the Definition of Done,
 > and WP-18 verifies that none is missing.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
@@ -330,3 +330,30 @@ Ticket TB-1007. The ledger's ports, implemented against real PostgreSQL.
 | **REQ-LED-002** Postings are immutable; corrections are reversals | WP-06 | The immutability the domain states, made physical: the trigger on `posting` refuses `UPDATE` and `DELETE` outright, so a correction has to be a reversing entry even for a caller that never touches the Java | Met at this tier |
 | **REQ-LED-003** Money is exact and currency-aware | WP-06 | `bigint` minor units and a `char(3)` code, never `numeric` and never a float. Two composite foreign keys make currency agreement structural: a posting must be in its entry's currency and in its account's, so no conversion can occur by accident | Met at this tier |
 
+---
+
+## WP-08 - Ledger API
+
+Ticket TB-1008. The ledger behind HTTP, and the idempotency that separates a banking API from a CRUD
+API.
+
+### Owned by WP-08
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-API-001** Money-moving requests are idempotent | `IdempotencyFilter` claims the key, does the work and stores the response **in one transaction**, and every use case below joins it. The claim is an upsert - `INSERT ... ON CONFLICT (key) DO UPDATE` - so a retry arriving while the first request is still in flight blocks on the row lock until the first commits, then replays its answer. `DO NOTHING` would not wait, and neither would a `SELECT` followed by an `INSERT`. Only a 2xx is recorded, so a rejected transfer stays retryable under the same key; a replay answers `200` with the stored body byte for byte, never re-rendered. The fingerprint is SHA-256 over the method, the resolved path and **canonical** JSON, so a client that retries by re-serialising is not refused for reordering its fields | `JdbcIdempotencyStoreTest`: eight threads retrying one key produce **one execution and one identical answer**. Demonstrated to fail with `DO UPDATE` replaced by `DO NOTHING` - the same test reports `expected: 1 but was: 8`, which is eight executions of one payment. `TransferEndpointsTest` asserts the replay is byte-identical and the balance moved once, that a changed amount under the same key is `409` and posts nothing, and that a rejected transfer does not burn the key. `RequestFingerprintTest` fixes what counts as the same request | Met |
+| **REQ-API-002** The implementation cannot drift from its contract | `OpenApiContractTest` walks every operation the document declares and validates **both sides of every exchange** against the schema declared for it, then fails if any `operationId` was never reached - a contract test that only checks what somebody remembered to call has a hole exactly where the drift will be. Validation is by a JSON Schema 2020-12 implementation rather than an OpenAPI-specific one: OpenAPI 3.1 schemas *are* 2020-12 and this document uses `type: [string, 'null']`, which the Java OpenAPI validators lose by converting down to 3.0. Every asserted field is traced to `canonical-data-model.md` in the test's own javadoc | `OpenApiContractTest`, 11 operations covered. Demonstrated to fail in both directions: adding an undeclared field to a response (`additionalProperties: false` catches it) and rendering `amountMinor` through `Money.toPlainString()`, which produced `"0.00"` and `string found, integer expected` - money as a decimal on the wire, caught by the contract rather than by review | Met |
+| **REQ-API-003** Errors are machine-readable and leak nothing | `LedgerProblemHandler` maps the domain's whole failure vocabulary to RFC 9457 documents served as `application/problem+json`, with a stable `type` URI from one enum so a reworded title is not a contract change. It is ordered ahead of Spring's own problem-details advice, which answers `type: about:blank`. Its **last** handler is the control: a catch-all that logs the failure in full and reports a fixed sentence, so an unrecognised exception cannot carry a class name, a SQL fragment or a stack frame to a caller. `IdempotencyFilter` writes its own conflict document, because a filter sits outside Spring MVC and nothing thrown there reaches an advice | `LedgerProblemHandlerTest` asserts each mapping and, for an unrecognised failure, that the body contains no `SQLException`, no `SELECT`, no table name and no `bank.tessera` frame. The whitelabel page and stack traces are disabled in `application.yml`, and a missing `Idempotency-Key` is asserted to return `problem+json` rather than Spring's default body | Met |
+
+### Contributed by WP-08, verified by the owning package
+
+| Requirement | Owner | What WP-08 contributes | Status |
+|---|---|---|---|
+| **REQ-LED-005** Concurrent transfers cannot lose an update or deadlock | WP-07 | The composition WP-07's pieces were built for. `Transfer` locks both accounts through `UnitOfWork.inTransactionLocking` *before* reading either balance - a use case that read first and locked afterwards would pass every single-threaded test and lose money under load. `TransferConcurrencyTest` runs the ring through the use case rather than the adapter and asserts total value is conserved | Met at this tier |
+| **REQ-LED-002** Postings are immutable; corrections are reversals | WP-06 | The correction path, made reachable: `ReverseTransfer` posts a new opposite entry through `JournalEntry.reverse` - the only construction path the domain offers - and never touches the original. `V3` adds the `reverses` column the schema was missing, with a unique index so a transfer cannot be reversed twice | Met at this tier |
+| **REQ-LED-003** Money is exact and currency-aware | WP-06 | Money crosses the wire as `amountMinor` plus a currency code and never as a decimal, asserted by the contract test rather than assumed. A currency the ISO 4217 table does not carry is rejected at the boundary, not defaulted | Met at this tier |
+| **REQ-DP-002** The ledger holds no customer identity | WP-09 | No response carries a name, an address or an identifier of any kind - only account and customer references. The idempotency table stores a digest of the request rather than the request, so a client's body is never at rest here, and the conflict message names neither the key nor the fingerprint | Met at this tier |
+| **REQ-UI-002** Retrying a transfer cannot move money twice | WP-14 | The server-side half, in full. The UI's contribution is to reuse a key across a retry rather than mint a new one | Met at this tier |
+| **REQ-EDG-002** Every request is traceable end to end | WP-12 | `X-Correlation-Id` is echoed onto every Problem document when the gateway sends one, and never invented here - a correlation id minted per tier correlates nothing | Contract |
+
+---

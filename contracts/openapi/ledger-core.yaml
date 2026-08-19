@@ -1,7 +1,7 @@
 # ledger-core - the REST API of the double-entry ledger.
 #
 # Derived from docs/architecture/canonical-data-model.md. Every schema below traces to a concept
-# defined there; nothing is invented here. A contract test in services/ledger-core fails the build
+# defined there; nothing is invented here. A contract test in services/ledger-api fails the build
 # if the implementation drifts from this document.
 openapi: 3.1.0
 
