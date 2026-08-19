@@ -1,0 +1,99 @@
+/*
+ * The design tokens, and the only place a raw value is allowed to appear.
+ *
+ * The palette is read off PKO Bank Polski's own properties rather than invented, because a Polish
+ * retail customer already knows what a bank looks like and an interface that argues with that
+ * knowledge spends the customer's attention on itself. `--navy-700` is the navy iPKO puts on its
+ * primary action and its brand type; `--red-600` its red; `--amber-500` the amber pkobp.pl puts on
+ * a call to action; `--green-700` its green. Nothing of the mark, the name or the wordmark is
+ * reproduced - the palette is the reference, the identity is Tessera's.
+ *
+ * Every colour here is checked by `contrast.test.ts`, which computes the ratios from this file. A
+ * token darkened past its threshold fails the suite before it reaches a screen, and a token added
+ * without a pair or a stated reason fails it too.
+ *
+ * One palette, deliberately. WP-19 removed the dark-scheme block WP-14 carried: a second palette
+ * nobody looks at is a second palette nobody maintains, and PKO's own interface is light only.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Brand ------------------------------------------------------------ */
+
+  --navy-900: #001e4b;
+  --navy-700: #003574;
+  --navy-500: #17549b;
+  --navy-050: #e8eef6;
+
+  --red-600: #ca171d;
+  --red-050: #fdecec;
+
+  /* 2.6:1 on white. It fills a shape; it never carries a word. That is what --amber-800 is for. */
+  --amber-500: #db912c;
+  --amber-800: #8a5a12;
+  --amber-050: #fdf4e6;
+
+  --green-700: #2a7343;
+  --green-050: #edf6f0;
+
+  /* ---- Ink and ground --------------------------------------------------- */
+
+  --ink: #101010;
+  --ink-muted: #636363;
+  --ink-inverse: #ffffff;
+
+  --page: #f7f8f9;
+  --surface: #ffffff;
+  --surface-sunken: #f2f2f2;
+
+  /* Hairlines. Decorative: a card is identified by its content, not by its rule. */
+  --line: #e5e5e5;
+  --line-strong: #d5d5d5;
+
+  /* The edge of a control is the only thing that says where the control is, so it clears 3:1. */
+  --control-border: #8a8a8a;
+  --focus-ring: #003574;
+
+  /* ---- Space ------------------------------------------------------------ */
+
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: 4rem;
+
+  /* ---- Shape ------------------------------------------------------------ */
+
+  --r-sm: 6px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* ---- Type ------------------------------------------------------------- */
+
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* An account reference is checked digit by digit; a proportional face makes that harder. */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', monospace;
+
+  --t-xs: 0.75rem;
+  --t-sm: 0.8125rem;
+  --t-md: 0.875rem;
+  --t-base: 1rem;
+  --t-lg: 1.125rem;
+  --t-xl: 1.375rem;
+  --t-2xl: 1.75rem;
+  --t-3xl: 2.25rem;
+
+  /* ---- Layout ----------------------------------------------------------- */
+
+  --bar-height: 3.5rem;
+  --rail-width: 15rem;
+  --content-max: 68rem;
+
+  /* The one elevation in the system. Anything that needs a second is being asked to do too much. */
+  --shadow-bar: 0 1px 0 rgb(0 0 0 / 8%);
+}
