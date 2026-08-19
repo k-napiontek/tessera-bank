@@ -109,7 +109,12 @@ stored-procedure layer, would both have been reproduced by something else preten
 **Why accepted.** The dialect lock-in and the stored-procedure logic are the realistic parts, and
 they make a later migration exercise genuinely difficult in the way real migrations are.
 
-**Compensating controls.** The substitution is named here and in
+The choice is recorded in full, alternatives included, in
+[ADR 0011](governance/adr/0011-oracle-substitute-for-stratum-1.md) - which also states the weakness
+this substitution carries: **23ai accepts syntax 11g would reject**, so the dialect discipline is
+held by review and by a stated feature restriction, not by the database.
+
+**Compensating controls.** The substitution is named here, in ADR 0011 and in
 [`../legacy/customer-master/README.md`](../legacy/customer-master/README.md).
 [`consuming-this-repo.md`](consuming-this-repo.md) is still a stub owned by WP-18 and should repeat
 it when it is written.
