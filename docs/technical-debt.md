@@ -92,13 +92,27 @@ the repository is meant to exercise.
 | **Review** | Annually |
 
 Stratum 1 is written in Oracle dialect with business logic in stored procedures, as a 2011 bank would
-have. Oracle itself is not distributable, so local execution uses a compatible substitute.
+have. Oracle itself is not distributable, so local execution uses a substitute.
+
+**The substitute, named.** **Oracle Database 23ai Free**, run in a container from
+`gvenzl/oracle-free:23-slim-faststart` through Testcontainers. Real Oracle and real PL/SQL, not a
+compatibility mode: the packages in `legacy/customer-master/src/main/resources/db/migration/`
+genuinely compile and execute, and the tests fail when they do not. `make test-legacy` needs a
+running Docker daemon and pulls roughly 2GB on the first run.
+
+This entry said "a compatible substitute" from WP-01 until WP-10a without naming one, and the choice
+is not a detail. An H2 in Oracle-compatibility mode was the alternative and runs **no PL/SQL at
+all**, so the stored procedures would have had to become Java methods wearing the name - at which
+point the two conditions this entry exists to reproduce, the dialect lock-in and the
+stored-procedure layer, would both have been reproduced by something else pretending.
 
 **Why accepted.** The dialect lock-in and the stored-procedure logic are the realistic parts, and
 they make a later migration exercise genuinely difficult in the way real migrations are.
 
-**Compensating controls.** The substitution is documented in
-[`consuming-this-repo.md`](consuming-this-repo.md) so nobody mistakes it for the real thing.
+**Compensating controls.** The substitution is named here and in
+[`../legacy/customer-master/README.md`](../legacy/customer-master/README.md).
+[`consuming-this-repo.md`](consuming-this-repo.md) is still a stub owned by WP-18 and should repeat
+it when it is written.
 
 ---
 

@@ -124,8 +124,8 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Twelve of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
-authority; this is the shape of it.
+Twelve of eighteen work packages are `Done` and stratum 1 is under way.
+[`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the authority; this is the shape of it.
 
 | Stratum | What exists |
 |---|---|
@@ -134,23 +134,24 @@ authority; this is the shape of it.
 | **3 - `services/`** | The ledger, end to end: the `ledger-core` domain (`Money`, `Account`, `JournalEntry`, `Balance`, `Hold`, pure Java 17 with no framework on its compile classpath), PostgreSQL persistence with deterministic lock ordering, a REST API with required idempotency and RFC 9457 problems, an append-only hash-chained audit trail, a transactional outbox relayed to Kafka, and metrics, structured JSON logging and health probes. |
 | **4 - `edge/`** | `api-gateway` in Go: bearer-token authentication with the algorithm pinned, coarse authorisation by scope, a route table checked against the OpenAPI document in both directions, per-caller rate limiting, correlation ids shared with the ledger, structured JSON logs, Prometheus metrics on a second port, and a proxy whose retry is bounded and only ever replays what is safe to replay. `fraud-scoring` in Python: consumes the ledger's transfer events, scores them against an explainable rule set whose every rule is a pure function of one event, and publishes a decision - reproducible from a recorded version that covers the thresholds as well as the code. |
 | **`batch/`** | `reporting` in Python: daily position, movement summary and a fixed-width regulatory extract, generated from the ledger and **reproducible** - a rerun for a past date at the recorded position produces byte-identical output, because a report is cut at an audit sequence rather than at a timestamp. Control totals reconcile to the ledger independently. |
-| **1, 2** | Nothing yet. `legacy/` and `integration/` hold READMEs only. |
+| **1 - `legacy/`** | `customer-master`, the system of record, half-built: a Java 8 Maven module whose build refuses any other JDK, an Oracle-dialect schema, and the business logic in PL/SQL packages where a 2011 team put it - reads, and applying a posted transfer idempotently. Tested against **real Oracle 23ai Free** in a container, because a compatibility mode runs no PL/SQL and would have tested a pretence. The WSDL-first SOAP endpoint and the WAR on Tomcat 8.5 are WP-10b. |
+| **2 - `integration/`** | Nothing yet. `integration/` holds READMEs only. |
 
 The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, with the gateway in
 front of it (`go -C edge/api-gateway run ./cmd/gateway`) and `fraud-scoring` consuming what it
 publishes; `reporting` cuts the day's figures off the same database; the overnight COBOL cycle runs
 with `make eod`. The two halves still do not join: nothing carries a posting from the ledger to the
-mainframe, because the integration and legacy strata hold READMEs only. What exists is the contracts,
-the mainframe batch core, the ledger that everything else is built against, the edge in front of and
-behind it, and the reporting that reads it.
+mainframe, because that bridge is `integration/esb-adapter` and it is not built. Stratum 1 now has
+the system of record's data and its business logic, but no interface yet for the bridge to call.
 
 ```bash
 make test     # every tier that has something to run
 make status   # what is done and what comes next
 ```
 
-Running the Java tier needs a JDK 17, the mainframe tier needs GnuCOBOL, and the edge tier needs Go
-and uv. Docker is needed by the tests that use a real PostgreSQL or a real Kafka. See
+Stratum 3 needs a JDK 17 and stratum 1 a JDK 8 - `make jdk17` and `make jdk8` each name the one
+they found, or how to install it. The mainframe tier needs GnuCOBOL and the edge tier Go and uv.
+Docker is needed by the tests that use a real PostgreSQL, a real Kafka or a real Oracle. See
 [`CLAUDE.md`](CLAUDE.md) for the per-stratum commands.
 
 ## Licence and intent
