@@ -52,7 +52,7 @@ Directories are organised by era, so the strata are visible in the tree itself.
 | [`integration/`](integration/) | 2 | ~2019 | Java 8, Spring Boot 2.7.18, JMS, XSLT |
 | [`services/`](services/) | 3 | ~2023 | Java 17, Spring Boot 3.2, PostgreSQL, Kafka |
 | [`edge/`](edge/) | 4 | ~2025 | Go, Python 3.12, TypeScript + React |
-| [`batch/`](batch/) | - | - | Reconciliation and regulatory reporting |
+| [`batch/`](batch/) | - | ~2025 | Python 3.12 - regulatory reporting; reconciliation spans strata 0 and 3 |
 | [`contracts/`](contracts/) | - | all | Copybooks, WSDL/XSD, OpenAPI, AsyncAPI - one folder per era |
 
 Stratum 3 is Java 17, not the newest release. Even the modern tier of a real bank runs a few years
@@ -124,7 +124,7 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Eleven of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
+Twelve of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
 authority; this is the shape of it.
 
 | Stratum | What exists |
@@ -133,14 +133,16 @@ authority; this is the shape of it.
 | **0 - `mainframe/`** | `ACCTPOST.CBL`, the balanced-line match-merge, with six rejection reasons and balancing control totals. A COMP-3 encoder and a deterministic synthetic data generator. |
 | **3 - `services/`** | The ledger, end to end: the `ledger-core` domain (`Money`, `Account`, `JournalEntry`, `Balance`, `Hold`, pure Java 17 with no framework on its compile classpath), PostgreSQL persistence with deterministic lock ordering, a REST API with required idempotency and RFC 9457 problems, an append-only hash-chained audit trail, a transactional outbox relayed to Kafka, and metrics, structured JSON logging and health probes. |
 | **4 - `edge/`** | `api-gateway` in Go: bearer-token authentication with the algorithm pinned, coarse authorisation by scope, a route table checked against the OpenAPI document in both directions, per-caller rate limiting, correlation ids shared with the ledger, structured JSON logs, Prometheus metrics on a second port, and a proxy whose retry is bounded and only ever replays what is safe to replay. `fraud-scoring` in Python: consumes the ledger's transfer events, scores them against an explainable rule set whose every rule is a pure function of one event, and publishes a decision - reproducible from a recorded version that covers the thresholds as well as the code. |
-| **1, 2** | Nothing yet. `legacy/`, `integration/` and `batch/` hold READMEs only. |
+| **`batch/`** | `reporting` in Python: daily position, movement summary and a fixed-width regulatory extract, generated from the ledger and **reproducible** - a rerun for a past date at the recorded position produces byte-identical output, because a report is cut at an audit sequence rather than at a timestamp. Control totals reconcile to the ledger independently. |
+| **1, 2** | Nothing yet. `legacy/` and `integration/` hold READMEs only. |
 
 The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, with the gateway in
 front of it (`go -C edge/api-gateway run ./cmd/gateway`) and `fraud-scoring` consuming what it
-publishes; the overnight COBOL cycle runs with `make eod`. The two halves still do not join: nothing
-carries a posting from the ledger to the mainframe, because the integration and legacy strata hold
-READMEs only. What exists is the contracts, the mainframe batch core, the ledger that everything else
-is built against, and the edge in front of and behind it.
+publishes; `reporting` cuts the day's figures off the same database; the overnight COBOL cycle runs
+with `make eod`. The two halves still do not join: nothing carries a posting from the ledger to the
+mainframe, because the integration and legacy strata hold READMEs only. What exists is the contracts,
+the mainframe batch core, the ledger that everything else is built against, the edge in front of and
+behind it, and the reporting that reads it.
 
 ```bash
 make test     # every tier that has something to run
