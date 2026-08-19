@@ -143,14 +143,8 @@ class Ledger:
                     "currency": currency,
                 },
             )
-            self._connection.execute(
-                "UPDATE balance SET booked_minor = booked_minor - %s WHERE account_ref = %s",
-                (amount_minor, debit),
-            )
-            self._connection.execute(
-                "UPDATE balance SET booked_minor = booked_minor + %s WHERE account_ref = %s",
-                (amount_minor, credit),
-            )
+            self._apply_to_balance(debit, "DEBIT", amount_minor)
+            self._apply_to_balance(credit, "CREDIT", amount_minor)
             return self._audit(
                 action,
                 reference,
@@ -162,6 +156,25 @@ class Ledger:
                     "valueDate": value_date,
                 },
             )
+
+    def _apply_to_balance(self, account_ref: str, direction: str, amount_minor: int) -> None:
+        """Reproduces AccountType.signedEffect, which is what the ledger's adapter applies.
+
+        An ASSET or an EXPENSE rises on the debit; everything else rises on the credit. Getting this
+        wrong here would make the reconciliation test agree with a fixture rather than with the
+        ledger, which is the one thing it exists not to do.
+        """
+        row = self._connection.execute(
+            "SELECT account_type FROM account WHERE reference = %s", (account_ref,)
+        ).fetchone()
+        if row is None:
+            raise LookupError(f"no account {account_ref}")
+        rises_on = "DEBIT" if row[0] in ("ASSET", "EXPENSE") else "CREDIT"
+        delta = amount_minor if direction == rises_on else -amount_minor
+        self._connection.execute(
+            "UPDATE balance SET booked_minor = booked_minor + %s WHERE account_ref = %s",
+            (delta, account_ref),
+        )
 
     def _audit(self, action: str, subject: str, after: dict[str, str]) -> int:
         previous = self._connection.execute(
