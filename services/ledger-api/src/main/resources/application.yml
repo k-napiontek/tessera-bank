@@ -93,6 +93,21 @@ management:
     tags:
       application: ledger-api
 
+  tracing:
+    # W3C `traceparent`, which is what the Go gateway and the Python consumer speak. It is the
+    # default; it is written down because the alternative - B3 - is what an older Spring Cloud Sleuth
+    # estate emits, and a mismatch does not fail, it silently starts a new trace at every hop.
+    propagation:
+      type: w3c
+    sampling:
+      # Not 1.0. Tracing every transfer in a bank is a volume of spans nobody keeps and nobody reads,
+      # and the sampling decision propagates - so an unsampled request costs one header rather than a
+      # span at every tier. Raised per environment by the platform repositories.
+      probability: ${LEDGER_TRACE_SAMPLE:0.1}
+
+    # No exporter, and no collector endpoint. Where traces are shipped is deployment configuration
+    # (ADR 0001). What this repository owns is that the spans exist and that the context propagates.
+
 logging:
   level:
     root: INFO

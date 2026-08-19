@@ -45,6 +45,10 @@ dependencies {
     // encoder is an explicit dependency rather than a property - and its version is explicit too,
     // because the Boot 3.2 BOM does not manage it.
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    // Tracing through the OpenTelemetry bridge. The bridge and the propagation format only - there is
+    // no exporter and no collector address here, because where traces are shipped is deployment
+    // configuration and belongs to the platform repositories (ADR 0001).
+    implementation("io.micrometer:micrometer-tracing-bridge-otel")
     implementation("org.flywaydb:flyway-core")
     // The broker end of the outbox relay. The only Kafka dependency in the repository, and it is a
     // client: no topic creation and no broker configuration lives here (ADR 0001).

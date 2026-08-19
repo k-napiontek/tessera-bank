@@ -43,8 +43,16 @@ import org.springframework.http.MediaType;
  */
 class LogHygieneTest extends LedgerApiTest {
 
-    /** The only MDC keys this service may log. Anything else fails, on purpose. */
-    private static final Set<String> PERMITTED_MDC_KEYS = Set.of("correlationId");
+    /**
+     * The only MDC keys this service may log. Anything else fails, on purpose.
+     *
+     * <p>All three are internal identifiers and none can be resolved to a person: {@code
+     * correlationId} is minted at the edge, {@code traceId} and {@code spanId} by Micrometer Tracing.
+     * They are listed rather than left implicit because tracing is off in this test's context - so
+     * without them here the allowlist would silently start failing the day observability is enabled
+     * for it, and the obvious fix would be to widen the list without thinking about what was added.
+     */
+    private static final Set<String> PERMITTED_MDC_KEYS = Set.of("correlationId", "traceId", "spanId");
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
