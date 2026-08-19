@@ -1,0 +1,9 @@
+# The schema, in the order it is applied. One script per line; blanks and # comments ignored.
+#
+# An explicit index rather than a directory scan. A scan reads differently from inside a WAR than
+# from a build directory, and the failure mode of the version that works in the IDE is a script
+# silently not applied in the environment that matters. SchemaApplierTest asserts that every script
+# present on disk appears here, so adding a file and forgetting this line fails the build.
+V1__schema.sql
+V2__pkg_account.sql
+V3__pkg_posting.sql

@@ -8,7 +8,7 @@ The system of record for customers and account metadata, and the internal operat
 
 | Directory | Holds |
 |---|---|
-| `customer-master/` | Customer and account metadata, WSDL-first SOAP, WAR |
+| `customer-master/` | Customer and account metadata, WSDL-first SOAP, WAR. Data and PL/SQL built by WP-10a; the endpoint and the WAR are WP-10b |
 | `backoffice/` | JSP + jQuery operator screens for recon breaks and rejects |
 
 ## Constraints
