@@ -12,9 +12,11 @@ import type { GatewayClient } from './client';
 import { createClient } from './client';
 
 export function gatewayBaseUrl(): string {
-  // Same-origin by default: in production the app is served behind the gateway, so a relative
-  // base needs no build-time configuration and cannot point at the ledger by accident.
-  return import.meta.env.VITE_GATEWAY_URL ?? `${window.location.origin}/v1`;
+  // Same origin, and **no path prefix**. The gateway serves the contract's own paths at its root;
+  // `/v1` is the *ledger's* prefix, which the gateway adds itself from TB_GATEWAY_LEDGER_URL.
+  // Sending it `/v1/accounts/...` is a `no-route`, and the live walkthrough is what caught it -
+  // every hermetic test in this suite mocks whatever base URL it is given.
+  return import.meta.env.VITE_GATEWAY_URL ?? window.location.origin;
 }
 
 interface Gateway {

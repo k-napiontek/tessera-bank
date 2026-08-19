@@ -22,8 +22,9 @@ const DEFAULTS = {
   sub: 'CU0000000001',
   iss: 'https://issuer.tesserabank.example',
   aud: 'tessera-bank-ledger',
-  // The scopes edge/api-gateway/internal/routing understands.
-  scope: 'accounts:read accounts:write accounts:manage',
+  // The three scopes edge/api-gateway/internal/routing names. Getting these wrong is a 403 that
+  // reads exactly like a bad token, so they are copied from the route table rather than guessed.
+  scope: 'ledger:read ledger:write accounts:manage',
   ttl: '3600',
   out: '/tmp/tessera-jwt-keys.pem',
 };

@@ -76,10 +76,12 @@ Four tests hold that line.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `VITE_GATEWAY_URL` | `<origin>/v1` | Base URL of `edge/api-gateway`, including any path prefix. |
+| `VITE_GATEWAY_URL` | `<origin>` | Base URL of `edge/api-gateway`. **No `/v1`** - that is the ledger's prefix and the gateway adds it when forwarding. |
 
-Same-origin by default, because in a real deployment this application is served behind the gateway -
-which means no build-time configuration, and no way to point it at the ledger by accident.
+Same origin by default, because in a real deployment this application is served behind the gateway -
+which means no build-time configuration, and no way to point it at the ledger by accident. The
+absence of a path prefix is deliberate and was got wrong first: the gateway serves the contract's
+paths at its own root, and `/v1` belongs to the ledger behind it.
 
 ## Running it against a live estate
 
@@ -99,7 +101,7 @@ TB_GATEWAY_LISTEN=:8081 \
 go -C edge/api-gateway run ./cmd/gateway
 
 # 4. This application, pointed at the gateway.
-VITE_GATEWAY_URL=http://localhost:8081/v1 npm --prefix edge/web-banking run dev
+VITE_GATEWAY_URL=http://localhost:8081 npm --prefix edge/web-banking run dev
 ```
 
 Then sign in with the token from step 2 and the references of accounts that exist in the ledger.
