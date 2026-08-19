@@ -34,9 +34,10 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
-    // The config files are JavaScript and are not in the TypeScript project, so the rules that
-    // need a type checker cannot run over them. Left on, every one of them throws here.
-    files: ['**/*.js'],
+    // The config files and the development scripts are JavaScript, and are not in the TypeScript
+    // project, so the rules that need a type checker cannot run over them. Left on, every one of
+    // them throws rather than reporting - which is a broken lint, not a clean one.
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
   },

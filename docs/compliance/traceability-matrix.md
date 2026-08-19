@@ -213,7 +213,7 @@ a contract can, and the implementation that must also satisfy it does not exist 
 | **REQ-CM-002** The interface is contract-first SOAP | WP-10 | `customer-master-v1.wsdl`, document/literal wrapped, authored by hand and importing the canonical XSD rather than redefining it | Contract |
 | **REQ-EVT-001** Events cannot be published without their postings committing | WP-09 | The AsyncAPI document states that the event is relayed from the transactional outbox, never from the request thread | Contract |
 | **REQ-DP-002** Personal data never reaches a log | WP-09 | No contract carries a name, address, national identifier or IBAN. What may be logged is stated explicitly in the canonical model | Contract |
-| **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Hold` is defined, and `availableBalance` is specified as booked less every hold still `PLACED` | Contract |
+| **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Hold` is defined, and `availableBalance` is specified as booked less every hold still `PLACED` | Met |
 
 ---
 
@@ -237,7 +237,7 @@ and no network.
 |---|---|---|---|
 | **REQ-ARC-001** Domain layer is free of framework dependencies | WP-07 | No framework is on the compile classpath at all, so a Spring import fails to compile rather than merely failing a rule. `DomainPurityTest` additionally scans every production source for forbidden imports and for `double`, `float` and `BigDecimal`. WP-07 replaces it with ArchUnit | Contract |
 | **REQ-LED-007** Postings cannot be updated or deleted | WP-07 | `JournalEntryRepository` offers `append` and no update or delete, so the schema constraints in WP-07 have a port that agrees with them | Contract |
-| **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Balance.available()` is derived from booked less every hold still `PLACED`, never stored, and reports a negative figure honestly rather than flooring at zero | Contract |
+| **REQ-UI-003** Available balance is never presented as spendable when held | WP-14 | `Balance.available()` is derived from booked less every hold still `PLACED`, never stored, and reports a negative figure honestly rather than flooring at zero | Met |
 
 ---
 
@@ -443,3 +443,26 @@ Ticket TB-1017. Landed as [#31](https://github.com/k-napiontek/tessera-bank/pull
 | **REQ-AUD-001** The audit trail is append-only and tamper-evident | WP-09 | The first reader to depend on the chain's *ordering* rather than on its verification. Every report stamps the chain head hash beside the position, so a file re-cut against a restored database whose history diverged carries a different hash for the same sequence number and is detectable rather than merely unlikely | Met at this tier |
 | **REQ-DP-002** Personal data never reaches a log | WP-09 | The remittance `reference_text` is never selected, never rendered and dropped by the log formatter along with anything named like a credential. The extract has **no free-text field at all** - every `PIC X` field carries an identifier or an enumeration - so a name, an address or an email address cannot be represented in it, which `test_extract.py` asserts field by field against the declared pictures | Met at this tier |
 | **REQ-LED-003** Money is exact and currency-aware | WP-06 | A fourth tier that refuses floating point. `money.py` holds minor units as `int` with the scale resolved per currency, and `test_money.py` parses the module's syntax tree and fails on a true division, a `float`, a `Decimal` or a `round` - parsed rather than grepped, so the module can explain in prose what it may not do. JPY at scale 0 and BHD at scale 3 are carried so a hard-coded 2 fails rather than passes | Met at this tier |
+
+---
+
+## WP-14 - web-banking
+
+Ticket TB-1014. Stratum 4, TypeScript + React. 112 tests against a mocked gateway, no network.
+
+### Owned by WP-14
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-UI-001** Customers can transfer between accounts | A three-step journey - enter, confirm, result - where the confirmation step is the point at which the request stops changing rather than ceremony. Everything goes through `edge/api-gateway`; the application holds no address for the ledger. The typed amount is converted to minor units in the string domain (`minorUnitsFromDecimal`), never through `parseFloat` and a multiplication, and more decimals than the currency carries are **refused rather than rounded** - rounding here would move an amount the customer did not agree to move. The outcome is one of five states, each rendered as itself | `Transfer.test.tsx` drives the journey through MSW: the amount `1234.56` arrives as `"amountMinor":123456`, a third decimal on a PLN transfer is refused, zero is refused, and paying an account into itself is refused. `accessibility.test.tsx` completes the whole journey from the keyboard alone | Met |
+| **REQ-UI-002** Retrying a transfer cannot move money twice | The idempotency key belongs to the **attempt**, not to the HTTP call. It is minted once when the customer confirms, and reused by every retry of that request - after a rejection, after a timeout, after a dropped connection. Any change to the request mints a new one, because a different body under the same key is a `409` rather than a retry. The comparison is over the request that goes on the wire, so whitespace the encoder discards does not count as a change | `transferAttempt.test.ts` pins both halves: the same request keeps its key, and a change to the amount, the payee or the reference replaces it. `Transfer.test.tsx` proves it end to end - a retry after a `422` sends a byte-identical body under an identical key, and editing the details sends a different one. Only the pair proves the rule; either alone is satisfied by a constant | Met |
+| **REQ-UI-003** Available balance is never presented as spendable when held | Booked and available are two labelled figures on every card, always, and where they differ the card states how much is held in words rather than leaving the customer to subtract. A negative available balance prints honestly rather than flooring at zero, matching `Balance.available()`. Both are read as exact `bigint` minor units - `amountMinor` is an `int64` and `Number.MAX_SAFE_INTEGER` is roughly a ninth of that, so a JSON number is read from its **source text** through the reviver rather than from the rounded double | `Dashboard.test.tsx` asserts both labels and both figures are present, that the held amount is stated when they differ and absent when they agree, that `-15.00` renders as itself, and that an amount of 9 223 372 036 854 775 807 minor units displays exactly. `money.source.test.ts` parses `money.ts` and fails on a division, a fractional literal or `toFixed`, and was demonstrated to fail with a division planted | Met |
+
+### Contributed by WP-14, verified by the owning package
+
+| Requirement | Owner | What WP-14 contributes | Status |
+|---|---|---|---|
+| **REQ-LED-004** Account type determines sign convention | WP-06 | The one place outside the ledger that has to know the rule, because a statement cannot be checked against its own opening and closing balances without it. `signedEffect` mirrors `AccountType.signedEffect`, and `ledger.test.ts` was demonstrated to fail when the rule is collapsed to "credit is positive" - which leaves liabilities correct and every asset account backwards, the failure mode a customer-only test would never catch | Met at this tier |
+| **REQ-LED-003** Money is exact and currency-aware | WP-06 | A fifth tier that refuses floating point, and the hardest one: JavaScript has no exact numeric type to fall back on, so money is a `bigint` and an amount is parsed from the JSON source text rather than from `JSON.parse`'s double. The scale table carries JPY at 0 and BHD at 3 so a hard-coded 2 fails rather than passes | Met at this tier |
+| **REQ-EDG-001** Every customer request is authenticated at the edge | WP-12 | The client that carries the token, and the reason it is only ever a bearer: the token is held in memory for the life of the tab and written to neither `localStorage` nor `sessionStorage`, never logged and absent from the DOM once sign-in completes. Four tests hold that line | Met at this tier |
+| **REQ-EDG-002** Every request is traceable end to end | WP-12 | An `X-Correlation-Id` is generated per request rather than left for the gateway to mint, so the identifier a customer would be asked to quote is one this application knows. A rejected transfer shows the `correlationId` from the problem document beside the failure | Met at this tier |
