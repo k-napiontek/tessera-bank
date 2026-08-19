@@ -38,6 +38,19 @@ public final class OracleSupport {
     private OracleSupport() {
     }
 
+    /**
+     * A DataSource onto the same container, which is what the DAO takes because that is what a
+     * container hands a WAR through JNDI. Oracle's own pooling implementation, from the driver -
+     * a 2011 application did not ship a pool of its own.
+     */
+    public static javax.sql.DataSource dataSource() throws SQLException {
+        oracle.jdbc.pool.OracleDataSource dataSource = new oracle.jdbc.pool.OracleDataSource();
+        dataSource.setURL(CONTAINER.getJdbcUrl());
+        dataSource.setUser(CONTAINER.getUsername());
+        dataSource.setPassword(CONTAINER.getPassword());
+        return dataSource;
+    }
+
     public static Connection connection() throws SQLException {
         return DriverManager.getConnection(
                 CONTAINER.getJdbcUrl(), CONTAINER.getUsername(), CONTAINER.getPassword());
