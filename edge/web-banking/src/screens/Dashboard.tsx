@@ -14,6 +14,7 @@ import type { Account } from '../api/types';
 import { describeProblem } from '../api/problem';
 import { compare, subtract, toPlainString } from '../money';
 import { useRequest } from '../useRequest';
+import { statementPath } from '../routes';
 import { Amount } from './Amount';
 
 function explain(error: unknown): string {
@@ -97,7 +98,7 @@ function AccountBalances({ account }: { account: Account }): React.JSX.Element {
       )}
 
       <p className="card-links">
-        <Link to={`/accounts/${account.accountRef}/statement`}>Statement</Link>
+        <Link to={statementPath(account.accountRef)}>Statement</Link>
       </p>
     </>
   );

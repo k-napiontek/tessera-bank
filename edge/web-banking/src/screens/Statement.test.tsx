@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ACCOUNT_ONE, GATEWAY, accountDocument, renderSignedIn } from '../test/harness';
+import { ROUTES, statementPath } from '../routes';
 import { Statement } from './Statement';
 
 const server = setupServer();
@@ -48,9 +49,9 @@ const page = (overrides: Record<string, unknown> = {}): Record<string, unknown> 
 function renderStatement(): void {
   renderSignedIn(
     <Routes>
-      <Route path="/accounts/:accountRef/statement" element={<Statement />} />
+      <Route path={ROUTES.statement} element={<Statement />} />
     </Routes>,
-    { accountRefs: [ACCOUNT_ONE], route: `/accounts/${ACCOUNT_ONE}/statement` },
+    { accountRefs: [ACCOUNT_ONE], route: statementPath(ACCOUNT_ONE) },
   );
 }
 

@@ -338,3 +338,62 @@ describe('when the outcome of the transfer is not known', () => {
     expect(await screen.findByText('TB202608190000000001')).toBeInTheDocument();
   });
 });
+
+describe('a 5xx from anything between the customer and the ledger', () => {
+  it('is pending, even when it carries no problem type this application knows', async () => {
+    // The live walkthrough's finding: stopping the gateway mid-submission produced a bare 500 from
+    // the proxy in front of it, and the screen said "Not sent" about a transfer that may have
+    // posted. Nothing standing between a customer and the ledger can speak for the ledger.
+    serveAccount();
+    recordTransfers([() => HttpResponse.text('<html>502 Bad Gateway</html>', { status: 502 })]);
+    const user = userEvent.setup();
+    renderSignedIn(<Transfer />, { accountRefs: [ACCOUNT_ONE] });
+    await screen.findByRole('button', { name: /continue/i });
+
+    await fillIn(user);
+    await user.click(await screen.findByRole('button', { name: /^send$/i }));
+
+    expect(await screen.findByRole('heading', { name: /not yet known/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /not sent/i })).not.toBeInTheDocument();
+    // And it says the uncertainty rather than shrugging: there is no problem type in that body.
+    expect(screen.getByRole('alert')).toHaveTextContent(/do not know whether this went through/i);
+  });
+
+  it('is pending for a 500 from the ledger itself, which may have committed and lost the answer', async () => {
+    serveAccount();
+    recordTransfers([
+      () =>
+        HttpResponse.json(
+          { type: `${PROBLEM_NAMESPACE}internal`, title: 'Internal error', status: 500 },
+          { status: 500 },
+        ),
+    ]);
+    const user = userEvent.setup();
+    renderSignedIn(<Transfer />, { accountRefs: [ACCOUNT_ONE] });
+    await screen.findByRole('button', { name: /continue/i });
+
+    await fillIn(user);
+    await user.click(await screen.findByRole('button', { name: /^send$/i }));
+
+    expect(await screen.findByRole('heading', { name: /not yet known/i })).toBeInTheDocument();
+  });
+
+  it('still calls a 4xx not sent, because nothing moved before it', async () => {
+    serveAccount();
+    recordTransfers([
+      () =>
+        HttpResponse.json(
+          { type: `${PROBLEM_NAMESPACE}insufficient-funds`, title: 'Insufficient funds', status: 422 },
+          { status: 422 },
+        ),
+    ]);
+    const user = userEvent.setup();
+    renderSignedIn(<Transfer />, { accountRefs: [ACCOUNT_ONE] });
+    await screen.findByRole('button', { name: /continue/i });
+
+    await fillIn(user);
+    await user.click(await screen.findByRole('button', { name: /^send$/i }));
+
+    expect(await screen.findByRole('heading', { name: /not sent/i })).toBeInTheDocument();
+  });
+});

@@ -95,7 +95,8 @@ const WORDING: Readonly<Record<string, string>> = Object.freeze({
   'conflicting-state': 'That has already been done, or it can no longer be done.',
   'account-already-open': 'That account reference is already in use.',
   'not-actionable': 'We understood the request but cannot carry it out as it stands.',
-  internal: 'Something went wrong at our end. Nothing was changed.',
+  // Never "nothing was changed" - that is a claim about the ledger this application cannot make.
+  internal: 'Something went wrong at our end, and we do not yet know whether this went through.',
   // The gateway's own - F-34.
   unauthenticated: 'Your session is not valid any more. Sign in again.',
   forbidden: 'This account is not one you are allowed to see.',
@@ -119,13 +120,21 @@ export function describeProblem(problem: Problem): string {
 }
 
 /**
- * True when the outcome of the request is genuinely unknown to the client.
+ * True when the outcome of a money-moving request is genuinely unknown to the client.
  *
- * The gateway answers `upstream-timeout` when the ledger did not reply in time and
- * `upstream-unusable` when it could not be reached at all. Neither says the transfer failed - the
- * ledger may have committed it and lost the answer on the way back, which is the whole reason the
- * transfer journey has a pending state rather than a failure state.
+ * **The line is 4xx against 5xx, not a list of problem types.** A 4xx is decided before any money
+ * moves - validation, funds, a conflicting state, an expired token - so it is the only class of
+ * answer a client may present to a customer as "not sent". A 5xx is not an answer about the
+ * ledger at all: the request may have committed and lost its response on the way back, and
+ * anything standing between the customer and the ledger - a reverse proxy, a load balancer, the
+ * gateway itself - can produce one carrying no problem type this application has ever heard of.
+ *
+ * An earlier version listed `upstream-timeout` and `upstream-unusable` and nothing else. Stopping
+ * the gateway mid-submission during the live walkthrough produced a bare `500` from the proxy in
+ * front of it, and the screen said **"Not sent"** about a transfer that may well have posted -
+ * which is precisely the statement WP-14's constraints forbid, and precisely the one that gets a
+ * customer to send their money a second time.
  */
 export function isOutcomeUnknown(problem: Problem): boolean {
-  return problem.slug === 'upstream-timeout' || problem.slug === 'upstream-unusable';
+  return problem.status >= 500;
 }

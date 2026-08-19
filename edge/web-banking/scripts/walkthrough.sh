@@ -152,7 +152,11 @@ cat <<INSTRUCTIONS
 
 The estate is up. In another terminal:
 
-  VITE_GATEWAY_URL=http://localhost:$GATEWAY_PORT npm --prefix edge/web-banking run dev
+  TB_GATEWAY_ORIGIN=http://localhost:$GATEWAY_PORT npm --prefix edge/web-banking run dev
+
+TB_GATEWAY_ORIGIN makes Vite proxy the API paths, so the browser only ever talks to one origin -
+the same arrangement production has, and the only one the gateway supports: it sends no CORS headers
+and answers a preflight OPTIONS with 401.
 
 Sign in with these:
 

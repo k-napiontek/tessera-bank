@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useGateway } from '../api/GatewayProvider';
-import { ProblemError, TransportError } from '../api/client';
+import { ProblemError } from '../api/client';
 import { describeProblem, isOutcomeUnknown } from '../api/problem';
 import type { Account, TransferRequest } from '../api/types';
 import { minorUnitsFromDecimal, money, toPlainString } from '../money';
@@ -67,17 +67,21 @@ export function Transfer(): React.JSX.Element {
         setAttempt({ stage: 'rejected', draft, request, idempotencyKey, problem: error.problem });
         return;
       }
-      // Either nothing answered, or the gateway said the ledger did not answer it. Both mean the
-      // outcome is unknown, and neither means the money did not move.
+      // Either nothing answered, or what answered was a 5xx - which is not an answer about the
+      // ledger. Both mean the outcome is unknown, and neither means the money did not move.
       setAttempt({
         stage: 'pending',
         draft,
         request,
         idempotencyKey,
+        // A 5xx from infrastructure carries no problem type, and "we could not tell what" is a
+        // poor thing to read under a heading about money. Say the uncertainty instead.
         reason:
-          error instanceof TransportError
-            ? 'We could not reach the bank, so we do not know whether this went through.'
-            : 'The bank did not answer in time, so we do not know whether this went through.',
+          error instanceof ProblemError
+            ? error.problem.slug === ''
+              ? 'Something went wrong at our end, so we do not know whether this went through.'
+              : describeProblem(error.problem)
+            : 'We could not reach the bank, so we do not know whether this went through.',
       });
     }
   }

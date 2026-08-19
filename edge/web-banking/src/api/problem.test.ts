@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROBLEM_NAMESPACE, describeProblem, parseProblem } from './problem';
+import { PROBLEM_NAMESPACE, describeProblem, isOutcomeUnknown, parseProblem } from './problem';
 
 const document = {
   type: `${PROBLEM_NAMESPACE}insufficient-funds`,
@@ -90,5 +90,41 @@ describe('turning a problem into something a customer can read', () => {
   it('never shows the raw type URI to a customer', () => {
     const problem = parseProblem(document, 422);
     expect(describeProblem(problem)).not.toContain(PROBLEM_NAMESPACE);
+  });
+});
+
+describe('whether the outcome of a money-moving request is knowable', () => {
+  const problemWith = (slug: string, status: number) =>
+    parseProblem({ type: `${PROBLEM_NAMESPACE}${slug}`, title: slug, status }, status);
+
+  it('treats every 5xx as unknown, whatever the body says', () => {
+    // Found by the live walkthrough. Killing the gateway mid-submission produced a bare 500 from
+    // the reverse proxy in front of it - no problem type this application knows - and the screen
+    // said "Not sent" about a transfer that may well have posted. Anything between the customer and
+    // the ledger can answer 502, 503 or 504, and none of those answers is about the ledger.
+    for (const status of [500, 502, 503, 504]) {
+      expect(isOutcomeUnknown(problemWith('', status)), String(status)).toBe(true);
+    }
+  });
+
+  it('treats the gateway saying so explicitly as unknown', () => {
+    expect(isOutcomeUnknown(problemWith('upstream-timeout', 504))).toBe(true);
+    expect(isOutcomeUnknown(problemWith('upstream-unusable', 502))).toBe(true);
+  });
+
+  it('treats a 4xx as a definite no, because nothing happened before it', () => {
+    // A rejection is decided before any money moves: validation, funds, a conflicting state. That
+    // is the only class of answer a client may present as "not sent".
+    for (const [slug, status] of [
+      ['insufficient-funds', 422],
+      ['validation-failed', 400],
+      ['idempotency-conflict', 409],
+      ['unauthenticated', 401],
+      ['forbidden', 403],
+      ['rate-limited', 429],
+      ['not-found', 404],
+    ] as const) {
+      expect(isOutcomeUnknown(problemWith(slug, status)), slug).toBe(false);
+    }
   });
 });

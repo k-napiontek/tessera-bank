@@ -13,6 +13,7 @@ import { Statement } from './screens/Statement';
 import { Transfer } from './screens/Transfer';
 import { SignIn } from './session/SignIn';
 import { SessionProvider, useSession } from './session/session';
+import { ROUTES } from './routes';
 
 function SignedIn({
   token,
@@ -28,8 +29,8 @@ function SignedIn({
       <header className="masthead">
         <h1>Tessera Bank</h1>
         <nav>
-          <Link to="/">Accounts</Link>
-          <Link to="/transfer">Transfer</Link>
+          <Link to={ROUTES.dashboard}>Accounts</Link>
+          <Link to={ROUTES.transfer}>Transfer</Link>
         </nav>
         <button type="button" className="link-button" onClick={onSignOut}>
           Sign out
@@ -37,9 +38,9 @@ function SignedIn({
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/accounts/:accountRef/statement" element={<Statement />} />
-          <Route path="/transfer" element={<Transfer />} />
+          <Route path={ROUTES.dashboard} element={<Dashboard />} />
+          <Route path={ROUTES.statement} element={<Statement />} />
+          <Route path={ROUTES.transfer} element={<Transfer />} />
         </Routes>
       </main>
     </GatewayProvider>

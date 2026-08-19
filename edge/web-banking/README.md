@@ -67,6 +67,13 @@ sign comes from the account type, not from the direction: a customer's current a
 liability of the bank, so a `DEBIT` reduces it, and reading direction as a sign turns every customer
 statement backwards.
 
+**Its own routes stay clear of the gateway's.** The application is served on the gateway's origin,
+so a client-side route that shares a prefix with an API path is a page that returns JSON on reload
+or on a shared link - and clicking through the running app hides it entirely, because client-side
+routing never asks the server. `routes.ts` names both sets and a test asserts they do not overlap.
+The statement was at `/accounts/{ref}/statement` until the live walkthrough was opened directly at
+that URL and answered with a problem document.
+
 **The token lives in memory and nowhere else.** Not `localStorage`, not `sessionStorage`, not the
 console, not the DOM after sign-in. Storage is readable by every script the page ever loads and
 outlives the tab; React state dies with the page, which for a bearer token is the correct lifetime.
@@ -77,6 +84,7 @@ Four tests hold that line.
 | Variable | Default | Meaning |
 |---|---|---|
 | `VITE_GATEWAY_URL` | `<origin>` | Base URL of `edge/api-gateway`. **No `/v1`** - that is the ledger's prefix and the gateway adds it when forwarding. |
+| `TB_GATEWAY_ORIGIN` | unset | Development only. When set, Vite proxies `/accounts`, `/transfers` and `/holds` to that origin, keeping the browser on one origin as in production. |
 
 Same origin by default, because in a real deployment this application is served behind the gateway -
 which means no build-time configuration, and no way to point it at the ledger by accident. The
@@ -100,9 +108,14 @@ TB_GATEWAY_JWT_KEYS=/tmp/tessera-jwt-keys.pem \
 TB_GATEWAY_LISTEN=:8081 \
 go -C edge/api-gateway run ./cmd/gateway
 
-# 4. This application, pointed at the gateway.
-VITE_GATEWAY_URL=http://localhost:8081 npm --prefix edge/web-banking run dev
+# 4. This application, with Vite proxying the API paths to the gateway.
+TB_GATEWAY_ORIGIN=http://localhost:8081 npm --prefix edge/web-banking run dev
 ```
+
+`TB_GATEWAY_ORIGIN` proxies rather than pointing the client at another origin, because the gateway
+sends no `Access-Control-Allow-Origin` and answers a preflight `OPTIONS` with `401` - it
+authenticates everything, and in production this application is served behind it on one origin. The
+proxy makes development the same shape rather than a shape that needs CORS the deployment lacks.
 
 Then sign in with the token from step 2 and the references of accounts that exist in the ledger.
 `scripts/walkthrough.sh` drives steps 1 to 3 and the API side of the journey, so the manual part is
