@@ -16,7 +16,8 @@ Updated by the executing session at the start and end of every work package, per
 > behind stay green, and they did, unedited. It sits off the critical path, as WP-14 does. **WP-10b remains the next package on
 > the plan proper.**
 >
-> **A workload strand is now in the plan, WP-20 to WP-25, and none of it is built.** The estate has
+> **A workload strand is now in the plan, WP-20 to WP-25, and none of it is built**
+> ([#43](https://github.com/k-napiontek/tessera-bank/pull/43), `5af9b4a`). The estate has
 > never been under load. Every component was verified one request at a time, and the observability
 > WP-09, WP-12, WP-13 and WP-17 installed has never had anything to observe - `walkthrough.sh` makes
 > six calls against three hard-coded accounts. The strand adds a demand model as a contract (20), a
