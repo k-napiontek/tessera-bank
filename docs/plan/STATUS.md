@@ -9,12 +9,14 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-14 - `web-banking` (React)** is the next unblocked package. The critical path is still
-> stopped at **WP-10**, which is **blocked on tooling**: it needs JDK 8 and only `openjdk`,
-> `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10.
+> **WP-14 - `web-banking` (React)** is the next unblocked package, and it is the last component of
+> stratum 4. Its task list was detailed and reviewed on 2026-08-19. The critical path is still
+> stopped at **WP-10**, which is **blocked on tooling**: it needs JDK 8 and this machine has no Java
+> runtime at all - `/usr/libexec/java_home` finds none, and Homebrew holds only `openjdk`,
+> `openjdk@17` and `openjdk@26`. See F-02 and F-10.
 >
-> Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
-> its task list and have it reviewed first.
+> Every package below other than WP-14 is frame-only until detailed - F-02 - so a session picking one
+> up must fill in its task list and have it reviewed first.
 >
 > **The edge exists, on both sides of the ledger.** `edge/api-gateway` (Go) authenticates a bearer
 > token with the algorithm pinned, routes only what the OpenAPI contract declares, limits each caller
@@ -71,7 +73,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
-| [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `PENDING` |
+| [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 
 ## Critical path
