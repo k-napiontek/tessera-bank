@@ -35,6 +35,9 @@ func TestLoadAppliesTheDeclaredDefaults(t *testing.T) {
 	if cfg.ListenAddress != ":8080" {
 		t.Errorf("listen address = %q, want %q", cfg.ListenAddress, ":8080")
 	}
+	if cfg.AdminAddress != ":9090" {
+		t.Errorf("admin address = %q, want %q", cfg.AdminAddress, ":9090")
+	}
 	if cfg.DownstreamTimeout != 5*time.Second {
 		t.Errorf("downstream timeout = %v, want 5s", cfg.DownstreamTimeout)
 	}
@@ -137,6 +140,7 @@ func TestLoadRejectsARetryBudgetThatIsNotBounded(t *testing.T) {
 func TestLoadAcceptsAnOverrideForEverySetting(t *testing.T) {
 	env := complete()
 	env["TB_GATEWAY_LISTEN"] = "127.0.0.1:9443"
+	env["TB_GATEWAY_ADMIN_LISTEN"] = "127.0.0.1:9444"
 	env["TB_GATEWAY_DOWNSTREAM_TIMEOUT"] = "1500ms"
 	env["TB_GATEWAY_DOWNSTREAM_ATTEMPTS"] = "3"
 	env["TB_GATEWAY_SHUTDOWN_GRACE"] = "30s"
@@ -153,6 +157,9 @@ func TestLoadAcceptsAnOverrideForEverySetting(t *testing.T) {
 
 	if cfg.ListenAddress != "127.0.0.1:9443" {
 		t.Errorf("listen address = %q", cfg.ListenAddress)
+	}
+	if cfg.AdminAddress != "127.0.0.1:9444" {
+		t.Errorf("admin address = %q", cfg.AdminAddress)
 	}
 	if cfg.DownstreamTimeout != 1500*time.Millisecond {
 		t.Errorf("downstream timeout = %v", cfg.DownstreamTimeout)

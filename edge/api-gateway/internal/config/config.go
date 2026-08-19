@@ -27,8 +27,12 @@ import (
 
 // Config is the whole of the gateway's configuration. Nothing here is mutated after Load returns.
 type Config struct {
-	// ListenAddress is the address the gateway serves on.
+	// ListenAddress is the address the customer-facing API is served on.
 	ListenAddress string
+	// AdminAddress is the address health probes and metrics are served on. It is a second port so
+	// that the operational surface is not published with the customer one - which is the arrangement
+	// this gateway exists to stop the ledger from exposing.
+	AdminAddress string
 	// LogLevel is one of debug, info, warn, error.
 	LogLevel string
 
@@ -81,6 +85,7 @@ func (e *Error) Error() string {
 // when they set nothing.
 const (
 	defaultListenAddress      = ":8080"
+	defaultAdminAddress       = ":9090"
 	defaultLogLevel           = "info"
 	defaultDownstreamTimeout  = 5 * time.Second
 	defaultDownstreamAttempts = 2
@@ -103,6 +108,7 @@ func Load(lookup Lookup) (Config, error) {
 
 	cfg := Config{
 		ListenAddress: l.text("TB_GATEWAY_LISTEN", defaultListenAddress),
+		AdminAddress:  l.text("TB_GATEWAY_ADMIN_LISTEN", defaultAdminAddress),
 		LogLevel:      l.logLevel("TB_GATEWAY_LOG_LEVEL", defaultLogLevel),
 
 		LedgerURL: l.httpURL("TB_GATEWAY_LEDGER_URL"),
