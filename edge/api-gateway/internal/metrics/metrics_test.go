@@ -10,18 +10,19 @@ import (
 	"github.com/k-napiontek/tessera-bank/edge/api-gateway/internal/routing"
 )
 
-// record drives one request that ends in the given status, with an optional matched route.
+// record drives one request that ends in the given status. A class names the route the request is
+// to be treated as having matched; an empty one stands for a request refused before it was routed.
 func record(m *metrics.Metrics, status int, class string) {
-	handler := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if class != "" {
+			routing.Record(r.Context(), routing.Route{
+				Method: http.MethodPost, Path: "/transfers", Scope: routing.ScopeWrite, Class: class,
+			})
+		}
 		w.WriteHeader(status)
 	}))
 
-	request := httptest.NewRequest(http.MethodPost, "/transfers", nil)
-	if class != "" {
-		request = request.WithContext(routing.WithRoute(request.Context(),
-			routing.Route{Method: http.MethodPost, Path: "/transfers", Scope: routing.ScopeWrite, Class: class}))
-	}
-	handler.ServeHTTP(httptest.NewRecorder(), request)
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/transfers", nil))
 }
 
 func scrape(t *testing.T, m *metrics.Metrics) string {

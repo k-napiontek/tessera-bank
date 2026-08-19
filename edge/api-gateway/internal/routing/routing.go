@@ -61,6 +61,41 @@ func Routes() []Route {
 
 type contextKey struct{}
 
+type observationKey struct{}
+
+// Observation is where the matched route is recorded for middleware that runs *before* the match
+// happens.
+//
+// A middleware cannot read what an inner one puts on the context: the inner handler receives a
+// derived request, and the outer one is still holding the original. Metrics sit outside routing -
+// they have to count the requests that never reach it - and still need the route's class, so the
+// outer middleware places this holder and the router fills it in.
+type Observation struct {
+	class string
+}
+
+// Class is the class of the route that matched, or an empty string if none did.
+func (o *Observation) Class() string {
+	if o == nil {
+		return ""
+	}
+	return o.class
+}
+
+// WithObservation places a holder on the context and returns it. It is written once, by the routing
+// middleware, on the single goroutine serving the request.
+func WithObservation(ctx context.Context) (context.Context, *Observation) {
+	observation := &Observation{}
+	return context.WithValue(ctx, observationKey{}, observation), observation
+}
+
+// Record notes the matched route in the observation, if the caller placed one.
+func Record(ctx context.Context, route Route) {
+	if observation, ok := ctx.Value(observationKey{}).(*Observation); ok {
+		observation.class = route.Class
+	}
+}
+
 // WithRoute puts a matched route on a context.
 func WithRoute(ctx context.Context, route Route) context.Context {
 	return context.WithValue(ctx, contextKey{}, route)
@@ -95,6 +130,7 @@ func Middleware(routes []Route) func(http.Handler) http.Handler {
 					continue
 				}
 				if candidate.route.Method == r.Method {
+					Record(r.Context(), candidate.route)
 					next.ServeHTTP(w, r.WithContext(WithRoute(r.Context(), candidate.route)))
 					return
 				}

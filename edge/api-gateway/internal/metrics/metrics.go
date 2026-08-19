@@ -78,14 +78,18 @@ func (m *Metrics) Middleware(next http.Handler) http.Handler {
 		started := time.Now()
 		recorder := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
-		next.ServeHTTP(recorder, r)
+		// The holder is placed on the way in and filled by the router on the way through. Reading
+		// routing.FromContext here would always find nothing: the router hands its route to the
+		// handlers *inside* it, and this middleware is outside - it has to count the requests that
+		// never reach the router at all.
+		ctx, observed := routing.WithObservation(r.Context())
 
-		// The route is read after the chain has run, because the routing middleware is what puts it
-		// on the context. A request refused before routing is measured as "unrouted", which is
-		// exactly what it was.
-		route := "unrouted"
-		if matched, ok := routing.FromContext(r.Context()); ok {
-			route = matched.Class
+		next.ServeHTTP(recorder, r.WithContext(ctx))
+
+		// A request refused before routing is measured as "unrouted", which is exactly what it was.
+		route := observed.Class()
+		if route == "" {
+			route = "unrouted"
 		}
 
 		m.requests.WithLabelValues(route, r.Method, strconv.Itoa(recorder.status)).Inc()
