@@ -69,6 +69,33 @@ EBCDIC and the integration tier would transcode. This is a recorded deviation fr
 fidelity, taken so that byte comparisons in WP-11 and WP-16 stay legible; COMP-3 fields are unaffected
 because packed decimal is identical in both character sets.
 
+### Paging
+
+A collection an era returns in pages carries an **opaque cursor**, never an offset. Two fields, and
+they are the only paging concepts in this model:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cursor` | string, opaque, max 256 | Request field. Where to resume. Absent asks for the first page. |
+| `nextCursor` | string, opaque, max 256, nullable | Response field. Where the next page resumes. Null means this page was the last. |
+
+A cursor encodes the **sort key of the last row on the page**, so the next page is fetched with a
+`WHERE key > cursor` predicate rather than by counting rows to skip. The sort key must be a total
+order over the collection, or two rows can share a position and the boundary between pages becomes
+ambiguous.
+
+**An offset is not an acceptable substitute.** When rows are being written concurrently - which on a
+ledger is the normal case, not an edge case - an offset skips rows that shifted past it and repeats
+rows that shifted behind it. On a statement, a movement silently missing from one page and printed
+twice on another is a correctness defect, not a display artefact.
+
+The encoding is deliberately unspecified and the value is deliberately opaque: a client that parses
+a cursor has coupled itself to the server's sort key, and the sort key is free to change. Servers
+reject a cursor they did not issue rather than guessing what it meant.
+
+Paging exists at **strata 3 and 4 only**. Stratum 0 reads sequential files end to end and stratum 1's
+SOAP interface returns whole documents, so neither has a collection to page.
+
 ---
 
 ## 2. Money

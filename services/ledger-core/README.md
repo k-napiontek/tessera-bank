@@ -10,14 +10,26 @@ packages.
 
 ## What exists now
 
-WP-06 has landed the **domain only**: pure Java 17, no framework on the compile classpath at all.
-Persistence (WP-07), the REST API (WP-08) and the audit chain and outbox (WP-09) are still to come,
-so nothing here is wired to a database or an endpoint yet.
+WP-06 landed the **domain**, WP-08 the **use cases**. Both are pure Java 17 with no framework on the
+compile classpath at all - the module's dependency list has not grown, and `DomainPurityTest` scans
+every source here to keep it that way. The audit chain and outbox (WP-09) are still to come.
 
 | Package | Holds |
 |---|---|
 | `bank.tessera.ledger.domain` | `Money`, `CurrencyCode`, `Account`, `AccountType`, `Direction`, `Posting`, `JournalEntry`, `Balance`, `Hold`, and the reference types |
-| `bank.tessera.ledger.port` | Repository interfaces the domain owns. No implementations - WP-07 supplies those. |
+| `bank.tessera.ledger.port` | Interfaces the domain owns: the three repositories, `UnitOfWork`, `ReferenceGenerator`, `IdempotencyStore` and `LedgerReadModel`, plus the projections they return. `ledger-persistence` implements them. |
+| `bank.tessera.ledger.application` | One class per operation of the API contract: `OpenAccount`, `GetAccount`, `GetBalance`, `GetStatement`, `GetTransfer`, `ListHolds`, `Transfer`, `ReverseTransfer`, `PlaceHold`, `CaptureHold`, `ReleaseHold` |
+
+### Why the use cases live here
+
+Each one holds the sequencing no single aggregate can: take the transaction, lock the accounts in a
+safe order, ask the domain to decide, write the result. That sequencing is the part of a ledger most
+easily got wrong, and here it can be driven by in-memory fakes in milliseconds - rather than in a
+controller that needs a database and an HTTP request to exercise at all.
+
+Infrastructure is reached through `UnitOfWork`, which expresses the transaction boundary. The
+deterministic lock ordering stays in the adapter: the port asks for a *set* of accounts, not a
+sequence, precisely so that no caller can choose an order.
 
 ### Building
 

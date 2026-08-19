@@ -64,3 +64,4 @@ date for a real one.
 |---|---|---|---|
 | [0001](0001-source-only-repository.md) | Application source only, no deployment artefacts | Accepted | 2026-08-17 |
 | [0002](0002-deliberate-legacy-strata.md) | Pin legacy strata to end-of-life versions | Accepted | 2026-08-17 |
+| [0003](0003-cursor-paged-statements.md) | Page the statement with an opaque keyset cursor | Accepted | 2026-08-19 |

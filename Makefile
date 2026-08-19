@@ -70,7 +70,7 @@ build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 
 build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
-		:services:ledger-core:build :services:ledger-persistence:build
+		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build
 
 # --- test -------------------------------------------------------------------------------------
 
@@ -92,9 +92,9 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 	@python3 mainframe/jcl/test-sortrec.py 2>&1 >/dev/null | tail -3
 	@python3 mainframe/jcl/test-eod-cycle.py
 
-test-services: jdk17 docker ## Ledger domain tests, plus persistence against real PostgreSQL
+test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
-		:services:ledger-core:test :services:ledger-persistence:test
+		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test
 
 # --- lint -------------------------------------------------------------------------------------
 

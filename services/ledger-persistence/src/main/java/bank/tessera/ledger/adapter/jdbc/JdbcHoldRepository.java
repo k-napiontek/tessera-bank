@@ -92,6 +92,16 @@ public final class JdbcHoldRepository implements HoldRepository {
                 MAPPER);
     }
 
+    @Override
+    public List<Hold> findAllFor(AccountRef account) {
+        return jdbc.query(
+                "SELECT " + COLUMNS + " FROM hold"
+                        + " WHERE account_ref = :account"
+                        + " ORDER BY placed_at, reference",
+                Map.of("account", account.value()),
+                MAPPER);
+    }
+
     private static final RowMapper<Hold> MAPPER = JdbcHoldRepository::mapHold;
 
     /**

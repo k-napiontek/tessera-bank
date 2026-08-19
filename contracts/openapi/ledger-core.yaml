@@ -1,7 +1,7 @@
 # ledger-core - the REST API of the double-entry ledger.
 #
 # Derived from docs/architecture/canonical-data-model.md. Every schema below traces to a concept
-# defined there; nothing is invented here. A contract test in services/ledger-core fails the build
+# defined there; nothing is invented here. A contract test in services/ledger-api fails the build
 # if the implementation drifts from this document.
 openapi: 3.1.0
 
@@ -19,6 +19,12 @@ info:
     `Idempotency-Key` is **required** on every money-moving operation. Replaying a key with the
     same request body returns the original response. Replaying it with a different body is a
     conflict, not a new transfer.
+
+    ## Paging
+
+    A collection is paged with an **opaque cursor**, never an offset: while movements are being
+    written, an offset skips rows that shifted past it and repeats rows that shifted behind it.
+    Follow `nextCursor` until it is null.
 
     ## Errors
 
@@ -49,13 +55,45 @@ security:
 
 tags:
   - name: accounts
-    description: Account metadata, balances and statements. Read-only.
+    description: |
+      Opening an account, and reading its metadata, balances and statements.
   - name: transfers
     description: Money movement. Every operation here is idempotent.
   - name: holds
     description: Reservations against available balance. A hold moves no money until captured.
 
 paths:
+  /accounts:
+    post:
+      tags: [accounts]
+      operationId: openAccount
+      summary: Open an account in the ledger
+      description: |
+        Opens an account **at a reference the caller supplies**. The ledger does not allocate
+        account numbers: `customer-master` owns onboarding and the numbering series, and the
+        ledger holds no customer identity at all beyond the pseudonymous `customerRef`.
+
+        That is also why this operation carries no `Idempotency-Key`. It moves no money, and a
+        retry names the same `accountRef`, so opening a reference that already exists is a
+        `409` rather than a second account. Idempotency here is a property of the request, not
+        a header.
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpenAccountRequest' }
+      responses:
+        '201':
+          description: The account was opened.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
   /accounts/{accountRef}:
     get:
       tags: [accounts]
@@ -100,6 +138,10 @@ paths:
       summary: List movements over a date range
       description: |
         Movements are returned oldest first. `from` and `to` are inclusive value dates.
+
+        The response is one **page**. `openingBalance` and `closingBalance` bracket that page,
+        not the whole range, so every page foots on its own and the closing balance of one page
+        is the opening balance of the next. Follow `nextCursor` until it is null.
       parameters:
         - $ref: '#/components/parameters/AccountRef'
         - $ref: '#/components/parameters/CorrelationId'
@@ -113,6 +155,18 @@ paths:
           required: true
           description: Inclusive end value date.
           schema: { type: string, format: date }
+        - name: cursor
+          in: query
+          required: false
+          description: |
+            Opaque cursor taken from the previous page's `nextCursor`. Absent asks for the
+            first page. A cursor this service did not issue is rejected, never guessed at.
+          schema: { type: string, maxLength: 256 }
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of movements on one page.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
       responses:
         '200':
           description: The statement.
@@ -200,6 +254,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Transfer' }
+        '200':
+          description: Replay of a previously accepted idempotency key. The original result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -252,6 +311,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Hold' }
+        '200':
+          description: Replay of a previously accepted idempotency key. The original result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Hold' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -277,6 +341,11 @@ paths:
       responses:
         '201':
           description: The transfer created by the capture.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Transfer' }
+        '200':
+          description: Replay of a previously accepted idempotency key. The original result.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Transfer' }
@@ -488,9 +557,14 @@ components:
     Statement:
       type: object
       description: |
-        Movements over an inclusive value-date range, oldest first, with the balances that bracket
-        them. `openingBalance` plus every movement in the range equals `closingBalance` - a
-        statement that does not foot is a defect, not a rounding artefact.
+        One **page** of movements over an inclusive value-date range, oldest first, with the
+        balances that bracket the page. `openingBalance` plus every movement on the page equals
+        `closingBalance` - a page that does not foot is a defect, not a rounding artefact.
+
+        The balances are page-scoped on purpose. Scoped to the whole range they would be
+        unverifiable on any single page, and a check that only works once every page has been
+        fetched and concatenated is a check nobody runs. Page-scoped, the chain is self-proving:
+        each page foots, and one page's `closingBalance` is the next page's `openingBalance`.
       required: [accountRef, from, to, openingBalance, closingBalance, movements]
       additionalProperties: false
       properties:
@@ -505,14 +579,26 @@ components:
           description: Inclusive end value date, echoing the request.
         openingBalance:
           allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: Booked balance at the start of the first day in the range.
+          description: |
+            Booked balance immediately before the first movement on this page. On the first
+            page, the balance at the start of the first day in the range.
         closingBalance:
           allOf: [{ $ref: '#/components/schemas/Money' }]
-          description: Booked balance at the end of the last day in the range.
+          description: |
+            Booked balance immediately after the last movement on this page, and the
+            `openingBalance` of the next page. On the last page, the balance at the end of the
+            last day in the range.
         movements:
           type: array
           description: Oldest first. Empty when nothing posted in the range.
           items: { $ref: '#/components/schemas/Movement' }
+        nextCursor:
+          type: [string, 'null']
+          maxLength: 256
+          description: |
+            Pass as `cursor` to fetch the next page. **Null means this page was the last.**
+            Opaque by design - it encodes the server's sort key, and a client that parses it
+            has coupled itself to something free to change.
 
     Transfer:
       type: object
@@ -570,6 +656,39 @@ components:
             - { type: 'null' }
           description: Present only when `status` is `CAPTURED`.
         reference: { $ref: '#/components/schemas/Reference' }
+
+    OpenAccountRequest:
+      type: object
+      description: |
+        Every field traces to `Account` in the canonical data model. The ledger derives nothing
+        it was not told, and holds no customer identity beyond the pseudonymous `customerRef`.
+      required: [accountRef, customerRef, accountType, currency]
+      additionalProperties: false
+      properties:
+        accountRef:
+          allOf: [{ $ref: '#/components/schemas/AccountRef' }]
+          description: Supplied by the caller, not allocated here. Immutable once open.
+        customerRef: { $ref: '#/components/schemas/CustomerRef' }
+        accountType:
+          type: string
+          description: A customer current account is a `LIABILITY` of the bank.
+          enum: [ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE]
+        currency:
+          type: string
+          description: Fixed for the life of the account. ISO 4217 alpha-3, uppercase.
+          pattern: '^[A-Z]{3}$'
+        openedDate:
+          type: string
+          format: date
+          description: Defaults to the current business date when omitted.
+        overdraftLimit:
+          oneOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
+          description: |
+            Absent or null forbids overdraft outright, which is **not** the same as a limit of
+            zero - a zero limit is an arranged facility that happens to be exhausted. When
+            present the amount is non-negative and in the account's own currency.
 
     TransferRequest:
       type: object
@@ -678,7 +797,8 @@ components:
     Conflict:
       description: |
         The idempotency key was reused with a different body, or the resource is in a state that
-        forbids the operation - a hold already captured, a transfer already reversed.
+        forbids the operation - an account reference already open, a hold already captured, a
+        transfer already reversed.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
