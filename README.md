@@ -124,7 +124,7 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Ten of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
+Eleven of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
 authority; this is the shape of it.
 
 | Stratum | What exists |
@@ -132,22 +132,23 @@ authority; this is the shape of it.
 | **Contracts** | All four families: COBOL copybooks with a column map, canonical XSD, customer-master WSDL, ledger-core OpenAPI, Kafka AsyncAPI - all derived from [`canonical-data-model.md`](docs/architecture/canonical-data-model.md) and validated by `contracts/validate.sh` |
 | **0 - `mainframe/`** | `ACCTPOST.CBL`, the balanced-line match-merge, with six rejection reasons and balancing control totals. A COMP-3 encoder and a deterministic synthetic data generator. |
 | **3 - `services/`** | The ledger, end to end: the `ledger-core` domain (`Money`, `Account`, `JournalEntry`, `Balance`, `Hold`, pure Java 17 with no framework on its compile classpath), PostgreSQL persistence with deterministic lock ordering, a REST API with required idempotency and RFC 9457 problems, an append-only hash-chained audit trail, a transactional outbox relayed to Kafka, and metrics, structured JSON logging and health probes. |
-| **4 - `edge/`** | `api-gateway` in Go: bearer-token authentication with the algorithm pinned, coarse authorisation by scope, a route table checked against the OpenAPI document in both directions, per-caller rate limiting, correlation ids shared with the ledger, structured JSON logs, Prometheus metrics on a second port, and a proxy whose retry is bounded and only ever replays what is safe to replay. |
+| **4 - `edge/`** | `api-gateway` in Go: bearer-token authentication with the algorithm pinned, coarse authorisation by scope, a route table checked against the OpenAPI document in both directions, per-caller rate limiting, correlation ids shared with the ledger, structured JSON logs, Prometheus metrics on a second port, and a proxy whose retry is bounded and only ever replays what is safe to replay. `fraud-scoring` in Python: consumes the ledger's transfer events, scores them against an explainable rule set whose every rule is a pure function of one event, and publishes a decision - reproducible from a recorded version that covers the thresholds as well as the code. |
 | **1, 2** | Nothing yet. `legacy/`, `integration/` and `batch/` hold READMEs only. |
 
 The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, with the gateway in
-front of it (`go -C edge/api-gateway run ./cmd/gateway`), and the overnight COBOL cycle runs with
-`make eod`. The two halves still do not join: nothing carries a posting from the ledger to the
-mainframe, because the integration and legacy strata hold READMEs only. What exists is the contracts,
-the mainframe batch core, the ledger that everything else is built against, and the edge in front
-of it.
+front of it (`go -C edge/api-gateway run ./cmd/gateway`) and `fraud-scoring` consuming what it
+publishes; the overnight COBOL cycle runs with `make eod`. The two halves still do not join: nothing
+carries a posting from the ledger to the mainframe, because the integration and legacy strata hold
+READMEs only. What exists is the contracts, the mainframe batch core, the ledger that everything else
+is built against, and the edge in front of and behind it.
 
 ```bash
 make test     # every tier that has something to run
 make status   # what is done and what comes next
 ```
 
-Running the Java tier needs a JDK 17, the mainframe tier needs GnuCOBOL, and the edge tier needs Go. See
+Running the Java tier needs a JDK 17, the mainframe tier needs GnuCOBOL, and the edge tier needs Go
+and uv. Docker is needed by the tests that use a real PostgreSQL or a real Kafka. See
 [`CLAUDE.md`](CLAUDE.md) for the per-stratum commands.
 
 ## Licence and intent
