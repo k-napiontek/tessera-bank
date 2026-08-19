@@ -1,6 +1,6 @@
 # edge - the newest tier
 
-**Stratum 4** | **Vintage ~2025** | **Go, Python 3.12, TypeScript + React** | **Built by WP-12, WP-13, WP-14**
+**Stratum 4** | **Vintage ~2025** | **Go, Python 3.12, TypeScript + React** | **Built by WP-12, WP-13, WP-14, WP-19**
 
 Everything customer-facing and everything newest, written in whatever each team chose - which is why three languages appear in one tier. That is not untidiness; it is what happens when autonomous teams pick their own tools.
 
@@ -9,7 +9,7 @@ Everything customer-facing and everything newest, written in whatever each team 
 | Directory | Stack | Holds | State |
 |---|---|---|---|
 | `api-gateway/` | Go | Authentication, rate limiting, correlation id, routing | **Built** - WP-12 |
-| `web-banking/` | TypeScript + React | The customer application | **Built** - WP-14 |
+| `web-banking/` | TypeScript + React | The customer application | **Built** - WP-14, dressed by WP-19 |
 | `fraud-scoring/` | Python 3.12 | Asynchronous risk scoring off Kafka | **Built** - WP-13 |
 
 ## Building
