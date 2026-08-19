@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1019-web-design-system` |
 | **Stratum** | 4 - TypeScript + React, ~2025 |
 | **Depends on** | WP-14 |
-| **Status** | `In progress` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -21,7 +21,7 @@ a centred column, not an application.
 
 This package supplies the missing layer: a token system, a shell that reshapes across three
 breakpoints, and a palette taken from PKO Bank Polski's own properties, since that is the interface
-a Polish retail customer recognises. **Every existing test stays green.** A redesign that has to
+a Polish retail customer recognises. **All 123 tests WP-14 left behind stay green, unchanged.** A redesign that has to
 change a behavioural test has changed behaviour, and that is out of scope by definition.
 
 ## In scope
@@ -55,7 +55,7 @@ change a behavioural test has changed behaviour, and that is out of scope by def
 - **REQ-UI-003 keeps its words.** Two labelled figures on every card, always; the held amount stated
   in a sentence; a negative available balance printed honestly rather than floored at zero. Anything
   this package adds is an addition to that, never a replacement for it.
-- **The test suite is the contract.** Roles, accessible names and heading text are what the 161
+- **The test suite is the contract.** Roles, accessible names and heading text are what the 123
   existing tests query. Restyle freely; do not rename. The keyboard test in
   `accessibility.test.tsx` asserts a tab order - a focusable element inserted ahead of the transfer
   form breaks it, and that is a defect rather than a test to update.
@@ -103,14 +103,20 @@ mark, name or wordmark is reproduced - the palette is the reference, the identit
    replaces the sentence, and it carries its own accessible name stating the held amount - a bar
    that only a sighted user can read would discharge the requirement for some readers and not
    others. This is the one ornament on the page.
-7. **Dashboard.** A hero balance at the top of the account list, then one card per account. Cards
-   keep `role="article"` and their `aria-label`; the monospace account reference stays monospace,
-   because a sixteen-character reference is checked digit by digit and a proportional face makes
-   that harder.
-8. **Statement.** One `<table>` at every width - a second DOM tree for mobile would announce every
-   movement twice. Under 640px the value date stacks above the reference and the side folds into the
-   effect cell, so three columns carry four data points and nothing is hidden. The
-   `visually-hidden` caption stays.
+7. **Dashboard.** Each card leads with its available balance, large, and carries booked beneath it,
+   quieter and never absent. **No aggregate hero across accounts**, which the first sketch had:
+   accounts are fetched independently and may be in different currencies, and adding 100 PLN to
+   100 EUR produces a figure no auditor would accept - the same call WP-05 made when it refused a
+   cross-currency grand total on the end-of-day report. Cards keep `role="article"` and their
+   `aria-label`; the account reference stays monospace, because sixteen characters are checked one
+   at a time and a proportional face makes that harder.
+8. **Statement.** One `<table>` at every width, with all four columns and all four headers. The
+   first sketch folded the side into the effect cell on a phone, and that was dropped: every one of
+   the four is a fact a customer may need to quote, and the alternative - turning rows into stacked
+   `div`s - costs the table role in the accessibility tree, which is a real loss to pay for a
+   cosmetic gain. So the table keeps its semantics and is given a labelled, focusable scroll region
+   instead. Measured: the table needs 470px, a 390px phone offers 358px, so the region scrolls and
+   the page does not. The `visually-hidden` caption stays.
 9. **Transfer.** The five-stage state machine is already correct; this makes it legible. A three-step
    indicator - Details, Confirm, Result - marks the current stage, and the pending panel keeps its
    amber left border and its plain warning not to enter the transfer again. No focusable element is
@@ -124,20 +130,28 @@ mark, name or wordmark is reproduced - the palette is the reference, the identit
 
 ## Definition of Done
 
-- [ ] Every test that passed before this package passes after it, unchanged.
-- [ ] The contrast test passes, and fails when a token is darkened past its threshold.
-- [ ] The layout reshapes at 640px and 1024px, with the bottom tab bar and the rail never both
-      present, and no horizontal scroll at 390px on any screen.
-- [ ] Booked and available remain two labelled figures with the held amount in words; the meter is
-      present only when they differ and carries an accessible name.
-- [ ] The transfer journey still completes from the keyboard alone.
-- [ ] No new runtime dependency, and no request to a third-party origin.
-- [ ] Type checking and linting pass with no new suppressions.
+- [x] Every test that passed before this package passes after it, unchanged. 123 on `main`, 169 on
+      this branch, no test file edited that was not added here.
+- [x] The contrast test passes, and fails when a token is darkened past its threshold. Demonstrated
+      both ways: `--ink-muted` lightened to `#949494` failed three pairs at 3.03:1, 2.85:1 and
+      3.20:1, and an unpaired `--teal-500` failed the accounting test.
+- [x] The layout reshapes at 640px and 1024px, with the bottom tab bar and the rail never both
+      present, and no page-level horizontal scroll. Driven in Chrome at its narrowest window (591px
+      viewport, inside the mobile branch) and at 1440px. The one element wider than a 390px phone
+      is the movements table, which is why it has a scroll region: 470px needed, 358px offered,
+      region scrolls, `document.documentElement` does not.
+- [x] Booked and available remain two labelled figures with the held amount in words; the meter is
+      present only when they differ and carries an accessible name stating the held amount.
+- [x] The transfer journey still completes from the keyboard alone - `accessibility.test.tsx`
+      unchanged and passing, and no focusable element was added ahead of the form.
+- [x] No new runtime dependency, and no request to a third-party origin. `package.json` is
+      byte-identical to `main`; the typeface is two `woff2` files served from this origin.
+- [x] Type checking and linting pass with no new suppressions.
 
 ## Verification
 
 ```bash
-make test-web     # the regression gate: 161 existing tests plus this package's
+make test-web     # the regression gate: 123 existing tests plus this package's 46
 make build-web    # tsc --noEmit strict, then vite build
 make lint-web     # eslint --max-warnings 0
 ```

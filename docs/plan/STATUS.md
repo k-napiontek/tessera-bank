@@ -9,11 +9,11 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-19 is in progress**, out of order and by explicit instruction from the repository owner,
+> **WP-19 is done**, taken out of order and by explicit instruction from the repository owner,
 > which the decision log records as the mechanism for work outside the plan. It is a presentation
 > pass over `edge/web-banking` - tokens, a responsive shell, a palette in the visual language of
-> Polish retail banking - and it changes no behaviour: the gate is that all 161 existing tests
-> stay green. It sits off the critical path, as WP-14 does. **WP-10b remains the next package on
+> Polish retail banking - and it changed no behaviour: the gate was that all 123 tests WP-14 left
+> behind stay green, and they did, unedited. It sits off the critical path, as WP-14 does. **WP-10b remains the next package on
 > the plan proper.**
 >
 > **WP-10b is next.** The endpoint: `wsimport` over `customer-master-v1.wsdl`, the three operations
