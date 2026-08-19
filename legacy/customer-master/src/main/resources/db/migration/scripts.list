@@ -5,3 +5,4 @@
 # silently not applied in the environment that matters. SchemaApplierTest asserts that every script
 # present on disk appears here, so adding a file and forgetting this line fails the build.
 V1__schema.sql
+V2__pkg_account.sql

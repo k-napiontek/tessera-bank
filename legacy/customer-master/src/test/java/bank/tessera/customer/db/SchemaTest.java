@@ -155,6 +155,31 @@ public class SchemaTest {
         }
     }
 
+    /**
+     * Oracle creates a package body that does not compile. It answers "created with compilation
+     * errors", the JDBC call does not throw, and the object sits there invalid until something
+     * calls it - at which point the failure is ORA-04063 arriving from whatever test happened to be
+     * running. The same shape as the hidden compiler warning F-20 records on the mainframe tier:
+     * the build says nothing and the mistake is found by the next person.
+     */
+    @Test
+    public void leavesNoInvalidObjectBehind() throws SQLException {
+        StringBuilder invalid = new StringBuilder();
+        Statement statement = connection.createStatement();
+        try {
+            ResultSet rows = statement.executeQuery(
+                    "SELECT object_type, object_name FROM user_objects WHERE status <> 'VALID'");
+            while (rows.next()) {
+                invalid.append(rows.getString(1)).append(' ').append(rows.getString(2)).append('\n');
+            }
+            rows.close();
+        } finally {
+            statement.close();
+        }
+        assertEquals("the schema applied but left objects that do not compile:\n" + invalid,
+                "", invalid.toString());
+    }
+
     @Test
     public void bothSequencesAllocate() throws SQLException {
         assertNotNull(nextValueOf("customer_ref_seq"));
