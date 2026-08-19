@@ -9,7 +9,7 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-19 is done**, taken out of order and by explicit instruction from the repository owner,
+> **WP-19 is done and merged** ([#41](https://github.com/k-napiontek/tessera-bank/pull/41), `90c009a`), taken out of order and by explicit instruction of the repository owner,
 > which the decision log records as the mechanism for work outside the plan. It is a presentation
 > pass over `edge/web-banking` - tokens, a responsive shell, a palette in the visual language of
 > Polish retail banking - and it changed no behaviour: the gate was that all 123 tests WP-14 left
@@ -113,7 +113,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `364f7b9` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
-| [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | |
+| [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `90c009a` |
 
 ## Critical path
 
@@ -192,6 +192,7 @@ becomes its own change when picked up.
 | F-53 | WP-10a | **Nothing runs a linter over the Java 8 tier either.** `-Xlint:all -Werror` is inherited from the parent POM and `make lint` still says no linter is configured for the Java tiers. F-23 records this for stratum 3 with three modules; stratum 1 now arrives with the same gap, and the parent POM is where Checkstyle, Spotless or PMD would be wired for both Maven tiers at once - which makes it the cheapest moment to close F-03 for the JVM half. | Open |
 | F-54 | WP-10a | **Nothing lints the SQL, and the schema scripts are the one place a mistake is silent.** Oracle creates a package body that does not compile, answering "created with compilation errors" without the JDBC call throwing, so the object sits `INVALID` until something calls it. `SchemaTest.leavesNoInvalidObjectBehind` catches exactly that and was demonstrated by planting a bad column reference - but it is one test rather than a gate, and it only sees what the applier ran. The same class of gap as F-20 on the mainframe tier, where a compiler warning was hidden by a suite printing `PASS`. | Open |
 | F-55 | WP-10a | **`docs/consuming-this-repo.md` now owes three prerequisites rather than one.** It is a WP-18 stub (F-05) and already lacked GnuCOBOL (F-15) and the `openjdk@17` keg-only note (F-13); stratum 1 adds a JDK 8, and the fact that `make test-legacy` pulls a ~2GB Oracle image on first run. TD-005 and `legacy/customer-master/README.md` carry it meanwhile, so nothing is unrecorded - but the document a newcomer would actually read still says nothing. | Open |
+| F-56 | WP-19 | **Nothing in the repository serves the gateway's responses for a visual pass.** `scripts/walkthrough.sh` needs PostgreSQL, the ledger and the gateway running, and the Vitest suite answers through MSW inside the test process - neither puts a screen in front of a person. WP-19 was verified against a throwaway Node stub that was never committed, which means the next session that wants to look at the UI writes it again. A committed development fixture under `edge/web-banking/scripts/` would be the obvious home, and it is the same kind of artefact as `dev-token.mjs`: a test fixture, not a component of the bank. | Open |
 
 ---
 
