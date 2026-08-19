@@ -18,6 +18,9 @@ import bank.tessera.ledger.application.OpenAccount;
 import bank.tessera.ledger.application.PlaceHold;
 import bank.tessera.ledger.application.ReleaseHold;
 import bank.tessera.ledger.application.ReverseTransfer;
+import bank.tessera.ledger.api.idempotency.IdempotencyFilter;
+import bank.tessera.ledger.api.idempotency.RequestFingerprint;
+import bank.tessera.ledger.api.problem.ProblemWriter;
 import bank.tessera.ledger.application.Transfer;
 import bank.tessera.ledger.port.AccountRepository;
 import bank.tessera.ledger.port.HoldRepository;
@@ -26,6 +29,7 @@ import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.ReferenceGenerator;
 import bank.tessera.ledger.port.UnitOfWork;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import javax.sql.DataSource;
 import org.springframework.context.annotation.Bean;
@@ -186,5 +190,24 @@ public class LedgerConfiguration {
     @Bean
     ReleaseHold releaseHold(HoldRepository holds, UnitOfWork unitOfWork, Clock clock) {
         return new ReleaseHold(holds, unitOfWork, clock);
+    }
+
+    @Bean
+    RequestFingerprint requestFingerprint(ObjectMapper json) {
+        return new RequestFingerprint(json);
+    }
+
+    @Bean
+    ProblemWriter problemWriter(ObjectMapper json) {
+        return new ProblemWriter(json);
+    }
+
+    @Bean
+    IdempotencyFilter idempotencyFilter(
+            IdempotencyStore store,
+            RequestFingerprint fingerprints,
+            TransactionTemplate transactions,
+            ProblemWriter problems) {
+        return new IdempotencyFilter(store, fingerprints, transactions, problems);
     }
 }

@@ -11,6 +11,7 @@ import bank.tessera.ledger.domain.OverdraftNotPermittedException;
 import bank.tessera.ledger.domain.UnbalancedEntryException;
 import bank.tessera.ledger.port.IdempotencyConflictException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -112,6 +113,27 @@ public class LedgerProblemHandler {
                 .getFieldErrors()
                 .forEach(error -> violations.add(
                         Map.of("field", error.getField(), "message", String.valueOf(error.getDefaultMessage()))));
+
+        ProblemDetail problem = problem(
+                HttpStatus.BAD_REQUEST,
+                ProblemType.VALIDATION_FAILED,
+                "One or more fields are not valid.",
+                request);
+        problem.setProperty("violations", violations);
+        return problem;
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ProblemDetail constraintViolation(ConstraintViolationException failure, HttpServletRequest request) {
+        // Raised by @Validated on a header or path variable - an Idempotency-Key shorter than the
+        // sixteen characters the contract requires, for instance. Without this handler it reaches
+        // the catch-all and a client is told the ledger failed when in fact their request was
+        // rejected, which is a materially different thing to be told.
+        List<Map<String, String>> violations = new ArrayList<>();
+        failure.getConstraintViolations()
+                .forEach(violation -> violations.add(Map.of(
+                        "field", String.valueOf(violation.getPropertyPath()),
+                        "message", violation.getMessage())));
 
         ProblemDetail problem = problem(
                 HttpStatus.BAD_REQUEST,
