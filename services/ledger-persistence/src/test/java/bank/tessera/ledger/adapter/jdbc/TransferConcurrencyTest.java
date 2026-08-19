@@ -2,10 +2,13 @@ package bank.tessera.ledger.adapter.jdbc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import bank.tessera.ledger.application.AuditTrail;
+import bank.tessera.ledger.application.TransferEvents;
 import bank.tessera.ledger.application.OpenAccount;
 import bank.tessera.ledger.application.Transfer;
 import bank.tessera.ledger.domain.Account;
 import bank.tessera.ledger.domain.AccountRef;
+import bank.tessera.ledger.port.AuditContext;
 import bank.tessera.ledger.domain.AccountStatus;
 import bank.tessera.ledger.domain.AccountType;
 import bank.tessera.ledger.domain.CurrencyCode;
@@ -73,13 +76,17 @@ class TransferConcurrencyTest {
         JdbcUnitOfWork unitOfWork =
                 new JdbcUnitOfWork(Transactions.of(dataSource), new AccountLocks(accounts));
 
-        OpenAccount openAccount = new OpenAccount(accounts, readModel, unitOfWork, Clock.systemUTC());
+        AuditTrail audit = auditTrail(jdbc);
+        OpenAccount openAccount =
+                new OpenAccount(accounts, readModel, unitOfWork, audit, Clock.systemUTC());
         transfer = new Transfer(
                 accounts,
                 entries,
                 readModel,
                 new JdbcReferenceGenerator(jdbc, Clock.systemUTC()),
                 unitOfWork,
+                audit,
+                transferEvents(jdbc),
                 Clock.systemUTC());
 
         openAccount.open(new OpenAccount.Command(
@@ -162,5 +169,40 @@ class TransferConcurrencyTest {
         // Every transfer took from one ring account and gave to another, so the total is untouched.
         // A lost update shows up here as a figure that is simply wrong, with no exception anywhere.
         assertThat(totalAcrossTheRing()).isEqualTo(before);
+    }
+
+    /**
+     * A real audit trail, against the same database.
+     *
+     * <p>A no-op double here would leave the advisory lock the chain serialises on untested on the
+     * one path that contends for it. The audit append happens inside every transfer's transaction,
+     * so it is part of what this test is measuring whether it is asserted on or not.
+     */
+    private static AuditTrail auditTrail(NamedParameterJdbcTemplate jdbc) {
+        return new AuditTrail(
+                new JdbcAuditLog(jdbc, new com.fasterxml.jackson.databind.ObjectMapper()),
+                testContext(),
+                Clock.systemUTC());
+    }
+
+    /** No inbound request here, so no correlation id - which the audit row records as absent. */
+    private static AuditContext testContext() {
+        return new AuditContext() {
+            @Override
+            public String actor() {
+                return "test";
+            }
+
+            @Override
+            public java.util.Optional<String> correlationId() {
+                return java.util.Optional.empty();
+            }
+        };
+    }
+
+    /** A real outbox, against the same database, so events are written where a relay would find them. */
+    private static TransferEvents transferEvents(NamedParameterJdbcTemplate jdbc) {
+        return new TransferEvents(
+                new JdbcEventOutbox(jdbc, LedgerEventJson.mapper()), testContext());
     }
 }

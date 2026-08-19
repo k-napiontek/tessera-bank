@@ -4,9 +4,11 @@ import bank.tessera.ledger.domain.AccountRef;
 import bank.tessera.ledger.domain.Hold;
 import bank.tessera.ledger.domain.HoldRef;
 import bank.tessera.ledger.domain.Money;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.UnitOfWork;
 import java.time.Clock;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -26,12 +28,19 @@ public final class CaptureHold {
     private final HoldRepository holds;
     private final Transfer transfer;
     private final UnitOfWork unitOfWork;
+    private final AuditTrail audit;
     private final Clock clock;
 
-    public CaptureHold(HoldRepository holds, Transfer transfer, UnitOfWork unitOfWork, Clock clock) {
+    public CaptureHold(
+            HoldRepository holds,
+            Transfer transfer,
+            UnitOfWork unitOfWork,
+            AuditTrail audit,
+            Clock clock) {
         this.holds = Objects.requireNonNull(holds, "holds");
         this.transfer = Objects.requireNonNull(transfer, "transfer");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
+        this.audit = Objects.requireNonNull(audit, "audit");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -72,7 +81,21 @@ public final class CaptureHold {
             // The domain refuses a transition out of anything but PLACED, so it remains the
             // authority even though the guard above has already answered. Belt and braces on the one
             // path where being wrong means charging a customer twice.
-            holds.save(hold.capture(posted.transferReference(), clock.instant()));
+            Hold captured = holds.save(hold.capture(posted.transferReference(), clock.instant()));
+
+            // Two rows for one request, and deliberately: Transfer has already recorded the posting
+            // under its own reference. This one records what became of the reservation, which is a
+            // different fact about a different subject.
+            audit.record(
+                    AuditAction.HOLD_CAPTURED,
+                    captured.reference().value(),
+                    Map.of("status", hold.status().name()),
+                    Map.of(
+                            "status", captured.status().name(),
+                            "accountRef", captured.account().value(),
+                            "capturedByTransferRef", posted.transferReference().value(),
+                            "capturedAmountMinor", String.valueOf(command.amount().amountMinor()),
+                            "transitionedAt", captured.transitionedAt().orElseThrow().toString()));
             return posted;
         });
     }

@@ -7,12 +7,14 @@ import bank.tessera.ledger.domain.Hold;
 import bank.tessera.ledger.domain.HoldRef;
 import bank.tessera.ledger.domain.Money;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.ReferenceGenerator;
 import bank.tessera.ledger.port.UnitOfWork;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -27,6 +29,7 @@ public final class PlaceHold {
     private final HoldRepository holds;
     private final ReferenceGenerator references;
     private final UnitOfWork unitOfWork;
+    private final AuditTrail audit;
     private final Clock clock;
 
     public PlaceHold(
@@ -34,11 +37,13 @@ public final class PlaceHold {
             HoldRepository holds,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
             Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.holds = Objects.requireNonNull(holds, "holds");
         this.references = Objects.requireNonNull(references, "references");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
+        this.audit = Objects.requireNonNull(audit, "audit");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -71,8 +76,18 @@ public final class PlaceHold {
             // Refusing here would make the ledger disagree with the card network about a hold the
             // network has already told the customer about.
             HoldRef reference = references.nextHoldReference();
-            return holds.save(Hold.place(
+            Hold placed = holds.save(Hold.place(
                     reference, account.reference(), command.amount(), placedAt, command.expiresAt()));
+            audit.record(
+                    AuditAction.HOLD_PLACED,
+                    placed.reference().value(),
+                    Map.of(),
+                    Map.of(
+                            "accountRef", placed.account().value(),
+                            "amountMinor", String.valueOf(placed.amount().amountMinor()),
+                            "currency", placed.amount().currency().code(),
+                            "status", placed.status().name()));
+            return placed;
         });
     }
 

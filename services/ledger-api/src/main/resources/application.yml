@@ -25,6 +25,18 @@ spring:
     # until a transfer posts - and a serialiser that emitted nulls for both would erase that.
     default-property-inclusion: non_null
 
+  kafka:
+    bootstrap-servers: ${LEDGER_KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # The event is written to the outbox in the postings' transaction, so it is already durable
+      # before Kafka hears of it. acks=all is what makes the relay's "mark only after the broker
+      # accepted it" mean the broker's replicas accepted it, not one leader that may still fail over.
+      acks: all
+      properties:
+        enable.idempotence: true
+
   mvc:
     # Every error, including the ones Spring raises before a controller is reached, is an RFC 9457
     # Problem Details document. Without this a missing required header returns Spring's own error
@@ -45,3 +57,13 @@ server:
 logging:
   level:
     root: INFO
+
+tessera:
+  outbox:
+    # How often the relay looks for pending events. Small enough that a transfer is announced in well
+    # under a second, large enough that an idle service is not polling PostgreSQL continuously.
+    relay-interval-ms: ${LEDGER_OUTBOX_INTERVAL_MS:500}
+    batch-size: ${LEDGER_OUTBOX_BATCH:100}
+    # Bounded on purpose. A relay blocked forever on a broker that is not answering is an outage that
+    # looks like a healthy process.
+    publish-timeout-ms: ${LEDGER_OUTBOX_PUBLISH_TIMEOUT_MS:10000}

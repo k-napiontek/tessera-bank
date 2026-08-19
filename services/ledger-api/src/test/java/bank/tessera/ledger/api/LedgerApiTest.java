@@ -24,7 +24,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * Ryuk removes the container when the JVM exits, which is the same arrangement
  * {@code PostgresSupport} uses in {@code ledger-persistence}.
  */
-@SpringBootTest
+// The outbox relay is off here. These tests are about HTTP and the ledger, there is no broker for
+// the relay to reach, and a scheduled task retrying against one would add ten-second waits to every
+// class. KafkaOutboxContractTest turns it on against a real broker.
+@SpringBootTest(properties = "tessera.outbox.relay-enabled=false")
 @AutoConfigureMockMvc
 public abstract class LedgerApiTest {
 

@@ -2,13 +2,24 @@ package bank.tessera.ledger.api.config;
 
 import bank.tessera.ledger.adapter.jdbc.AccountLocks;
 import bank.tessera.ledger.adapter.jdbc.JdbcAccountRepository;
+import bank.tessera.ledger.adapter.jdbc.LedgerEventJson;
+import bank.tessera.ledger.adapter.outbox.EventPublisher;
+import bank.tessera.ledger.adapter.outbox.OutboxRelay;
+import bank.tessera.ledger.adapter.jdbc.JdbcAuditLog;
+import bank.tessera.ledger.adapter.jdbc.JdbcEventOutbox;
 import bank.tessera.ledger.adapter.jdbc.JdbcHoldRepository;
 import bank.tessera.ledger.adapter.jdbc.JdbcIdempotencyStore;
 import bank.tessera.ledger.adapter.jdbc.JdbcJournalEntryRepository;
 import bank.tessera.ledger.adapter.jdbc.JdbcLedgerReadModel;
 import bank.tessera.ledger.adapter.jdbc.JdbcReferenceGenerator;
 import bank.tessera.ledger.adapter.jdbc.JdbcUnitOfWork;
+import bank.tessera.ledger.api.audit.HttpAuditContext;
+import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
+import bank.tessera.ledger.api.outbox.KafkaEventPublisher;
+import bank.tessera.ledger.api.outbox.OutboxRelayScheduler;
+import bank.tessera.ledger.application.AuditTrail;
 import bank.tessera.ledger.application.CaptureHold;
+import bank.tessera.ledger.application.TransferEvents;
 import bank.tessera.ledger.application.GetAccount;
 import bank.tessera.ledger.application.GetBalance;
 import bank.tessera.ledger.application.GetStatement;
@@ -23,6 +34,9 @@ import bank.tessera.ledger.api.idempotency.RequestFingerprint;
 import bank.tessera.ledger.api.problem.ProblemWriter;
 import bank.tessera.ledger.application.Transfer;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditContext;
+import bank.tessera.ledger.port.AuditLog;
+import bank.tessera.ledger.port.EventOutbox;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.IdempotencyStore;
 import bank.tessera.ledger.port.JournalEntryRepository;
@@ -31,9 +45,14 @@ import bank.tessera.ledger.port.ReferenceGenerator;
 import bank.tessera.ledger.port.UnitOfWork;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.time.Duration;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -53,6 +72,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * instead. The adapters take one as a constructor argument for that reason rather than building
  * their own."</em>
  */
+@EnableScheduling
 @Configuration(proxyBeanMethods = false)
 public class LedgerConfiguration {
 
@@ -100,6 +120,57 @@ public class LedgerConfiguration {
     }
 
     @Bean
+    AuditLog auditLog(NamedParameterJdbcTemplate jdbc, ObjectMapper json) {
+        return new JdbcAuditLog(jdbc, json);
+    }
+
+    @Bean
+    AuditContext auditContext() {
+        return new HttpAuditContext();
+    }
+
+    @Bean
+    AuditTrail auditTrail(AuditLog auditLog, AuditContext auditContext, Clock clock) {
+        return new AuditTrail(auditLog, auditContext, clock);
+    }
+
+    @Bean
+    EventOutbox eventOutbox(NamedParameterJdbcTemplate jdbc) {
+        // Its own ObjectMapper, not the application's. The application's serves the REST contract and
+        // this one serves the AsyncAPI contract; sharing one means a setting changed for one silently
+        // changes the other, and the change surfaces as a consumer failing to parse days later.
+        return new JdbcEventOutbox(jdbc, LedgerEventJson.mapper());
+    }
+
+    @Bean
+    TransferEvents transferEvents(EventOutbox outbox, AuditContext auditContext) {
+        return new TransferEvents(outbox, auditContext);
+    }
+
+    @Bean
+    EventPublisher eventPublisher(
+            KafkaTemplate<String, String> kafka,
+            @Value("${tessera.outbox.publish-timeout-ms:10000}") long timeoutMillis) {
+        return new KafkaEventPublisher(kafka, Duration.ofMillis(timeoutMillis));
+    }
+
+    @Bean
+    OutboxRelay outboxRelay(
+            NamedParameterJdbcTemplate jdbc, TransactionTemplate transactions, EventPublisher publisher) {
+        return new OutboxRelay(jdbc, transactions, publisher);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "tessera.outbox.relay-enabled", havingValue = "true", matchIfMissing = true)
+    OutboxRelayScheduler outboxRelayScheduler(
+            OutboxRelay relay, @Value("${tessera.outbox.batch-size:100}") int batchSize) {
+        // Switchable because relaying and serving requests are separable jobs: an operator may want
+        // the relay on a subset of instances, and a test that is not about Kafka should not be
+        // hammering a broker that is not there.
+        return new OutboxRelayScheduler(relay, batchSize);
+    }
+
+    @Bean
     IdempotencyStore idempotencyStore(NamedParameterJdbcTemplate jdbc) {
         return new JdbcIdempotencyStore(jdbc);
     }
@@ -113,8 +184,12 @@ public class LedgerConfiguration {
 
     @Bean
     OpenAccount openAccount(
-            AccountRepository accounts, LedgerReadModel readModel, UnitOfWork unitOfWork, Clock clock) {
-        return new OpenAccount(accounts, readModel, unitOfWork, clock);
+            AccountRepository accounts,
+            LedgerReadModel readModel,
+            UnitOfWork unitOfWork,
+            AuditTrail audit,
+            Clock clock) {
+        return new OpenAccount(accounts, readModel, unitOfWork, audit, clock);
     }
 
     @Bean
@@ -156,8 +231,10 @@ public class LedgerConfiguration {
             LedgerReadModel readModel,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
-        return new Transfer(accounts, entries, readModel, references, unitOfWork, clock);
+        return new Transfer(accounts, entries, readModel, references, unitOfWork, audit, events, clock);
     }
 
     @Bean
@@ -167,8 +244,11 @@ public class LedgerConfiguration {
             LedgerReadModel readModel,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
-        return new ReverseTransfer(accounts, entries, readModel, references, unitOfWork, clock);
+        return new ReverseTransfer(
+                accounts, entries, readModel, references, unitOfWork, audit, events, clock);
     }
 
     @Bean
@@ -177,19 +257,32 @@ public class LedgerConfiguration {
             HoldRepository holds,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
             Clock clock) {
-        return new PlaceHold(accounts, holds, references, unitOfWork, clock);
+        return new PlaceHold(accounts, holds, references, unitOfWork, audit, clock);
     }
 
     @Bean
     CaptureHold captureHold(
-            HoldRepository holds, Transfer transfer, UnitOfWork unitOfWork, Clock clock) {
-        return new CaptureHold(holds, transfer, unitOfWork, clock);
+            HoldRepository holds,
+            Transfer transfer,
+            UnitOfWork unitOfWork,
+            AuditTrail audit,
+            Clock clock) {
+        return new CaptureHold(holds, transfer, unitOfWork, audit, clock);
     }
 
     @Bean
-    ReleaseHold releaseHold(HoldRepository holds, UnitOfWork unitOfWork, Clock clock) {
-        return new ReleaseHold(holds, unitOfWork, clock);
+    ReleaseHold releaseHold(
+            HoldRepository holds, UnitOfWork unitOfWork, AuditTrail audit, Clock clock) {
+        return new ReleaseHold(holds, unitOfWork, audit, clock);
+    }
+
+    @Bean
+    CorrelationIdFilter correlationIdFilter() {
+        // Ordered ahead of the idempotency filter by the Ordered interface it implements, so that a
+        // request rejected before any controller runs still carries an id.
+        return new CorrelationIdFilter();
     }
 
     @Bean
