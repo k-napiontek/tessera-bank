@@ -1,12 +1,72 @@
-export function App(): React.JSX.Element {
+/**
+ * The application shell: a session, and the screens that need one.
+ *
+ * Signed out there is one screen and no client, because without a token there is nothing this
+ * application can usefully ask the gateway. That is why the client is built inside the signed-in
+ * branch rather than held at the root with an empty token.
+ */
+
+import { Route, Routes } from 'react-router';
+import { GatewayProvider } from './api/GatewayProvider';
+import { Dashboard } from './screens/Dashboard';
+import { SignIn } from './session/SignIn';
+import { SessionProvider, useSession } from './session/session';
+
+function SignedIn({
+  token,
+  accountRefs,
+  onSignOut,
+}: {
+  token: string;
+  accountRefs: readonly string[];
+  onSignOut: () => void;
+}): React.JSX.Element {
   return (
-    <div className="app">
-      <header>
+    <GatewayProvider token={token} accountRefs={accountRefs}>
+      <header className="masthead">
         <h1>Tessera Bank</h1>
+        <button type="button" className="link-button" onClick={onSignOut}>
+          Sign out
+        </button>
       </header>
       <main>
-        <p>Sign in to see your accounts.</p>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+        </Routes>
       </main>
-    </div>
+    </GatewayProvider>
+  );
+}
+
+function Shell(): React.JSX.Element {
+  const session = useSession();
+
+  if (session.status === 'signed-out') {
+    return (
+      <>
+        <header className="masthead">
+          <h1>Tessera Bank</h1>
+        </header>
+        <main>
+          <SignIn onSignIn={session.signIn} />
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <SignedIn
+      token={session.token}
+      accountRefs={session.accountRefs}
+      onSignOut={session.signOut}
+    />
+  );
+}
+
+export function App(): React.JSX.Element {
+  return (
+    <SessionProvider>
+      <Shell />
+    </SessionProvider>
   );
 }
