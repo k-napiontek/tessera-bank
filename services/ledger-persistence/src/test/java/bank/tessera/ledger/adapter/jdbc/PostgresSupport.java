@@ -67,6 +67,12 @@ final class PostgresSupport {
         // service does; a pool larger than the thread count would hide lock waits behind spare
         // connections.
         config.setMaximumPoolSize(maximumPoolSize);
+        // Hikari defaults minimumIdle to maximumPoolSize, so every pool here opened its full eight
+        // connections the moment it was built. One schema per test class multiplied that by the
+        // number of test classes, and the suite reached PostgreSQL's default 100-client limit and
+        // failed with "sorry, too many clients already" - in whichever class happened to run last,
+        // which made it look like that class's fault. Connections are now opened on demand.
+        config.setMinimumIdle(1);
         return new HikariDataSource(config);
     }
 

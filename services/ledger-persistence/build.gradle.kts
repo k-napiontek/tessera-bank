@@ -30,6 +30,10 @@ dependencies {
 
     implementation(platform("org.springframework.boot:spring-boot-dependencies:3.2.12"))
     implementation("org.springframework.data:spring-data-jdbc")
+    // The audit trail's before and after state, and the outbox payload, are jsonb columns. Jackson is
+    // an adapter concern only: HexagonalBoundariesTest forbids it in ..ledger.domain.. and
+    // ..ledger.port.., which is where it would actually do damage.
+    implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.springframework:spring-jdbc")
     // Flyway 9, which Boot 3.2 manages. PostgreSQL support lives in flyway-core there; the separate
     // flyway-database-postgresql artefact only exists from Flyway 10 and is not in this BOM.
