@@ -22,9 +22,9 @@ Updated by the executing session at the start and end of every work package, per
 > still gates five of the six unfinished packages.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
-> its task list and have it reviewed first. **WP-10's task list is detailed** and under review in
-> [#35](https://github.com/k-napiontek/tessera-bank/pull/35), together with ADR 0010, which names the
-> Oracle substitute TD-005 promised and never delivered. Neither is on `main` until that PR merges.
+> its task list and have it reviewed first. **WP-10's task list is detailed** - see
+> [#35](https://github.com/k-napiontek/tessera-bank/pull/35), which also carries ADR 0010 naming the
+> Oracle substitute TD-005 promised and never delivered.
 >
 > **Stratum 4 is complete.** `edge/api-gateway` (Go) authenticates a bearer token with the algorithm
 > pinned, routes only what the OpenAPI contract declares, limits each caller per route, and forwards
