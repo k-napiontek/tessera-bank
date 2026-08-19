@@ -36,6 +36,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    // Liveness and readiness probes, and the Micrometer registry the business metrics land in.
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // The scrape format. The registry is a client-side choice and belongs here; what scrapes it,
+    // how often, and what alerts on it belong to the platform repositories (ADR 0001).
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     implementation("org.flywaydb:flyway-core")
     // The broker end of the outbox relay. The only Kafka dependency in the repository, and it is a
     // client: no topic creation and no broker configuration lives here (ADR 0001).

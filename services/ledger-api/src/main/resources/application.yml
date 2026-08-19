@@ -54,6 +54,45 @@ server:
     include-message: never
     include-exception: false
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only what an operator and a scrape genuinely need. The default is `health` alone; the
+        # temptation is `*`, which exposes heapdump, env and configprops - env alone prints every
+        # resolved property, including the database password.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db
+      # Splits /actuator/health into /liveness and /readiness. They answer different questions and a
+      # platform acts on them differently: a failing liveness probe restarts the pod, a failing
+      # readiness probe takes it out of the load balancer.
+      probes:
+        enabled: true
+      # Never `always`. A health detail names the failing component and, for a datasource, the
+      # exception it failed with - which is an unauthenticated description of the internals.
+      show-details: when-authorized
+  health:
+    # **The database is in readiness and deliberately not in liveness.**
+    #
+    # Spring's default readiness group is `readinessState` alone, which reports ready as long as the
+    # application context has started - so a ledger that cannot reach PostgreSQL is declared ready
+    # and is sent traffic it can only reject. Adding `db` is the whole point of configuring this.
+    #
+    # It stays out of liveness because restarting the pod does not fix a database outage; it turns
+    # one outage into a crash-loop across every instance at once, and then the recovery has to
+    # contend with a stampede of reconnecting pods.
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: ledger-api
+
 logging:
   level:
     root: INFO
