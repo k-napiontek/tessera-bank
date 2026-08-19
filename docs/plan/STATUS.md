@@ -9,14 +9,17 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-12 - `api-gateway` (Go)** is next: the lowest-numbered package whose dependencies are all
-> `Done`. WP-10 and WP-11 sit ahead of it on the critical path and WP-10 is still **blocked on
-> tooling** - only `openjdk@17` and `openjdk@26` are installed and it needs JDK 8. See F-02 and F-10.
-> WP-13 (`fraud-scoring`, Python) and WP-17 (`reporting`, Python) are also unblocked now that WP-09
-> is done, and both are off the critical path.
+> **WP-12 - `api-gateway` (Go)** is `In progress`. Its task list was detailed and reviewed on
+> 2026-08-19, together with three decisions that shape the code: two justified dependencies
+> (`golang-jwt/jwt/v5`, `prometheus/client_golang`), a gateway that validates and forwards the
+> caller's token rather than minting one, and a rate limiter whose state is per instance and
+> documented as such. WP-10 and WP-11 sit ahead of it on the critical path and WP-10 is still
+> **blocked on tooling** - only `openjdk@17` and `openjdk@26` are installed and it needs JDK 8. See
+> F-02 and F-10. WP-13 (`fraud-scoring`, Python) and WP-17 (`reporting`, Python) are also unblocked
+> now that WP-09 is done, and both are off the critical path.
 >
-> Every package below is still frame-only until detailed - F-02 - so the next session's first job is
-> to fill in the chosen package's task list and have it reviewed.
+> Every package other than WP-12 is still frame-only until detailed - F-02 - so a session picking one
+> up must fill in its task list and have it reviewed first.
 >
 > **The ledger is now complete as a service.** It posts double-entry money over HTTP, idempotently,
 > against real PostgreSQL; it records every movement in an append-only hash-chained audit trail; it
@@ -48,7 +51,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d49e0d0`, `5aabcbd` |
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
-| [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Not started` | | |
+| [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `In progress` | | |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Not started` | | |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
