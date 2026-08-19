@@ -3,6 +3,7 @@
  *
  * tokens     the only place a raw value appears, and the file contrast.test.ts reads
  * base       the typeface, the reset, and the controls every screen shares
+ * shell      the app bar, the navigation, and how the page reshapes across three widths
  * components the pieces the four screens are built from
  *
  * Later files may use earlier ones and never the reverse, so a token is defined before anything
@@ -11,4 +12,5 @@
 
 @import './styles/tokens.css';
 @import './styles/base.css';
+@import './styles/shell.css';
 @import './styles/components.css';
