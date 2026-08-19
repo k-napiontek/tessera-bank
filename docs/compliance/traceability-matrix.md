@@ -1,9 +1,9 @@
 # Requirements traceability matrix
 
-> **Partially filled.** The requirement catalogue below is complete - all 60 ids, each with its
+> **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02 to WP-09, WP-12, WP-13 and WP-17. Every work package adds its own as part of the Definition of Done,
-> and WP-18 verifies that none is missing.
+> WP-02 to WP-09, WP-10a, WP-12, WP-13, WP-14, WP-17 and WP-19. Every work package adds its own as
+> part of the Definition of Done, and WP-18 verifies that none is missing.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
 
@@ -12,8 +12,8 @@ Requirement to design to code to test, for the whole estate. This is the artefac
 ## Requirement catalogue
 
 **The authority for requirement IDs.** Every `REQ-*` id in this repository is defined here, extracted
-from the Traceability section of the work package that owns it. 60 requirements across
-eighteen packages.
+from the Traceability section of the work package that owns it. 68 requirements across
+twenty-four packages.
 
 A requirement is **owned** by exactly one package - the one that implements and verifies it. Other
 packages may *contribute* to a requirement without owning it; a contract that makes something
@@ -150,6 +150,23 @@ point of a traceability matrix.
 | REQ-OPS-003 | Operators can see and work reconciliation breaks | [WP-15](../plan/wp/WP-15-backoffice.md) |
 | REQ-OPS-004 | Operator actions are attributable and audited | [WP-15](../plan/wp/WP-15-backoffice.md) |
 | REQ-OPS-005 | The incident process is exercised, not merely documented | [WP-18](../plan/wp/WP-18-incident-exercise.md) |
+
+**Performance and capacity** (`REQ-PERF-*`)
+
+Added by the workload strand. Capacity is a different concern from operations, and folding it into
+`REQ-OPS-*` - where 002 is already the metric surface and 005 the incident process - would leave the
+prefix meaning nothing in particular.
+
+| ID | Requirement | Owned by |
+|---|---|---|
+| REQ-PERF-001 | Demand is described as a versioned model, not embedded in a tool | [WP-20](../plan/wp/WP-20-workload-model.md) |
+| REQ-PERF-002 | A load run is reproducible from its recorded manifest | [WP-20](../plan/wp/WP-20-workload-model.md) |
+| REQ-PERF-003 | Offered load is independent of the system's response | [WP-21](../plan/wp/WP-21-workload-driver.md) |
+| REQ-PERF-004 | Query cost is measured at production cardinality, not at fixture size | [WP-22](../plan/wp/WP-22-ledger-data-volume.md) |
+| REQ-PERF-005 | Every service states its SLI, its objective and its error budget | [WP-23](../plan/wp/WP-23-slo-baseline.md) |
+| REQ-PERF-006 | Normal is recorded before it is needed | [WP-23](../plan/wp/WP-23-slo-baseline.md) |
+| REQ-PERF-007 | Degradation is exercised, not assumed | [WP-24](../plan/wp/WP-24-failure-injection.md) |
+| REQ-PERF-008 | Every stratum is exercised at volume, not only the one that is easy to drive | [WP-25](../plan/wp/WP-25-estate-drivers.md) |
 
 **Reconciliation** (`REQ-REC-*`)
 

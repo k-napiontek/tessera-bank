@@ -124,8 +124,9 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Fifteen of the plan's twenty rows are `Done` - WP-10 counts twice, being split into a schema half
-and a SOAP half - and stratum 1 is under way.
+Fifteen of the plan's twenty-six rows are `Done` - WP-10 counts twice, being split into a schema half
+and a SOAP half - and stratum 1 is under way. Six of the eleven that remain are the **workload
+strand**, WP-20 to WP-25, added to the plan before any of it was built.
 [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the authority; this is the shape of it.
 
 | Stratum | What exists |
@@ -137,6 +138,7 @@ and a SOAP half - and stratum 1 is under way.
 | **`batch/`** | `reporting` in Python: daily position, movement summary and a fixed-width regulatory extract, generated from the ledger and **reproducible** - a rerun for a past date at the recorded position produces byte-identical output, because a report is cut at an audit sequence rather than at a timestamp. Control totals reconcile to the ledger independently. |
 | **1 - `legacy/`** | `customer-master`, the system of record, half-built: a Java 8 Maven module whose build refuses any other JDK, an Oracle-dialect schema, and the business logic in PL/SQL packages where a 2011 team put it - reads, and applying a posted transfer idempotently. Tested against **real Oracle 23ai Free** in a container, because a compatibility mode runs no PL/SQL and would have tested a pretence. The WSDL-first SOAP endpoint and the WAR on Tomcat 8.5 are WP-10b. |
 | **2 - `integration/`** | Nothing yet. `integration/` holds READMEs only. |
+| **Workload** | Nothing yet. WP-20 to WP-25 declare a bank's day as a contract in `contracts/workload/`, a Go driver that executes it at volume, a production-shaped ledger to execute it against, an SLO catalogue with a recorded baseline, and failure injection. The estate has never been under load, which is what makes every metric in it a number that has only ever been zero. |
 
 The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, with the gateway in
 front of it (`go -C edge/api-gateway run ./cmd/gateway`) and `fraud-scoring` consuming what it
