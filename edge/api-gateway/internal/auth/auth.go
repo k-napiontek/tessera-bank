@@ -70,6 +70,12 @@ func (p Principal) HasScope(name string) bool {
 
 type contextKey struct{}
 
+// WithPrincipal puts an authenticated principal on a context. The middleware uses it, and so does
+// any test that needs a request to look as though authentication has already run.
+func WithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, contextKey{}, principal)
+}
+
 // PrincipalFrom returns the authenticated principal, if the middleware ran and allowed the request.
 func PrincipalFrom(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(contextKey{}).(Principal)
@@ -141,7 +147,7 @@ func Middleware(verifier *Verifier) func(http.Handler) http.Handler {
 				reject(w, r, err)
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, principal)))
+			next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), principal)))
 		})
 	}
 }

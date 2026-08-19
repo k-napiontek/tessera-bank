@@ -61,6 +61,11 @@ func Routes() []Route {
 
 type contextKey struct{}
 
+// WithRoute puts a matched route on a context.
+func WithRoute(ctx context.Context, route Route) context.Context {
+	return context.WithValue(ctx, contextKey{}, route)
+}
+
 // FromContext returns the route the request matched.
 func FromContext(ctx context.Context) (Route, bool) {
 	route, ok := ctx.Value(contextKey{}).(Route)
@@ -90,7 +95,7 @@ func Middleware(routes []Route) func(http.Handler) http.Handler {
 					continue
 				}
 				if candidate.route.Method == r.Method {
-					next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), contextKey{}, candidate.route)))
+					next.ServeHTTP(w, r.WithContext(WithRoute(r.Context(), candidate.route)))
 					return
 				}
 				allowed = append(allowed, candidate.route.Method)
