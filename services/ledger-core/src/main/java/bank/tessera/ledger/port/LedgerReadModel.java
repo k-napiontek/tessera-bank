@@ -40,4 +40,30 @@ public interface LedgerReadModel {
      * it.
      */
     Optional<EntryRef> reversedBy(EntryRef entry);
+
+    /** Remittance information carried by the entry, if any was supplied. */
+    Optional<String> entryReference(EntryRef entry);
+
+    /**
+     * Attaches remittance information to an entry.
+     *
+     * <p>Called in the same transaction as the append. It is not part of {@code JournalEntry}
+     * because no double-entry invariant depends on free text, and putting it on the aggregate would
+     * mean the balancing rules had a 35-character customer-supplied field inside them.
+     */
+    void recordEntryReference(EntryRef entry, String reference);
+
+    /**
+     * One page of an account's statement, oldest first.
+     *
+     * <p>The query is keyset, not offset: {@code cursor} names the last movement of the previous
+     * page and the next page begins strictly after it. An offset would skip and duplicate rows while
+     * movements are being posted, which on a statement is a wrong answer rather than a slow one.
+     *
+     * @param cursor an opaque cursor from a previous page, or null for the first page
+     * @param limit the maximum number of movements to return
+     * @throws IllegalArgumentException if the cursor was not issued by this ledger
+     */
+    StatementPage statementPage(
+            AccountRef account, LocalDate from, LocalDate to, String cursor, int limit);
 }

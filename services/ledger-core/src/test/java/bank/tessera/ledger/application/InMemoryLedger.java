@@ -15,11 +15,15 @@ import bank.tessera.ledger.port.AccountRepository;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
+import bank.tessera.ledger.port.Movement;
 import bank.tessera.ledger.port.ReferenceGenerator;
+import bank.tessera.ledger.port.StatementPage;
 import bank.tessera.ledger.port.UnitOfWork;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -43,6 +47,7 @@ final class InMemoryLedger {
     final Map<HoldRef, Hold> holdsByRef = new LinkedHashMap<>();
     final Map<AccountRef, AccountDates> datesByAccount = new LinkedHashMap<>();
     final Map<EntryRef, Instant> postedAtByEntry = new LinkedHashMap<>();
+    final Map<EntryRef, String> referenceByEntry = new LinkedHashMap<>();
 
     /** Every set of accounts a use case asked to be locked, in call order. */
     final List<List<AccountRef>> lockRequests = new ArrayList<>();
@@ -175,7 +180,125 @@ final class InMemoryLedger {
                     .map(JournalEntry::reference)
                     .findFirst();
         }
+
+        @Override
+        public Optional<String> entryReference(EntryRef entry) {
+            return Optional.ofNullable(referenceByEntry.get(entry));
+        }
+
+        @Override
+        public void recordEntryReference(EntryRef entry, String reference) {
+            if (!entriesByRef.containsKey(entry)) {
+                throw new IllegalStateException("No such entry: " + entry);
+            }
+            referenceByEntry.put(entry, reference);
+        }
+
+        @Override
+        public StatementPage statementPage(
+                AccountRef account, LocalDate from, LocalDate to, String cursor, int limit) {
+            List<Movement> everything = movementsFor(account);
+            List<Movement> inRange = everything.stream()
+                    .filter(movement -> !movement.valueDate().isBefore(from))
+                    .filter(movement -> !movement.valueDate().isAfter(to))
+                    .toList();
+
+            int start = 0;
+            if (cursor != null) {
+                String resumeAfter = decodeCursor(cursor);
+                start = indexOf(inRange, resumeAfter) + 1;
+                if (start == 0) {
+                    throw new IllegalArgumentException("Statement cursor was not issued by this ledger.");
+                }
+            }
+
+            List<Movement> page = inRange.subList(start, Math.min(start + limit, inRange.size()));
+            boolean hasMore = start + limit < inRange.size();
+
+            Money opening = Money.zero(accountsByRef.get(account).currency());
+            String boundary = page.isEmpty()
+                    ? (cursor == null ? null : decodeCursor(cursor))
+                    : page.get(0).movementReference();
+            for (Movement movement : everything) {
+                if (boundary != null && movement.movementReference().equals(boundary)) {
+                    if (page.isEmpty()) {
+                        opening = opening.plus(effectOf(account, movement));
+                    }
+                    break;
+                }
+                if (boundary == null && !movement.valueDate().isBefore(from)) {
+                    break;
+                }
+                opening = opening.plus(effectOf(account, movement));
+            }
+
+            String next = hasMore
+                    ? encodeCursor(page.get(page.size() - 1).movementReference())
+                    : null;
+            return StatementPage.of(page, opening, next);
+        }
     };
+
+    private Money effectOf(AccountRef account, Movement movement) {
+        AccountType type = accountsByRef.get(account).type();
+        return type.signedEffect(movement.direction(), movement.amount());
+    }
+
+    private static int indexOf(List<Movement> movements, String movementReference) {
+        for (int i = 0; i < movements.size(); i++) {
+            if (movements.get(i).movementReference().equals(movementReference)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Every movement touching the account, oldest first, over all time.
+     *
+     * <p>Ordered the way the adapter orders it - value date, posting instant, entry reference, leg -
+     * so the fake and PostgreSQL agree about what "the next page" means. A fake that sorted
+     * differently would let a paging bug pass here and fail only against the database.
+     */
+    List<Movement> movementsFor(AccountRef account) {
+        List<Movement> movements = new ArrayList<>();
+        for (JournalEntry entry : entriesByRef.values()) {
+            List<Posting> postings = entry.postings();
+            for (int i = 0; i < postings.size(); i++) {
+                Posting posting = postings.get(i);
+                if (posting.account().equals(account)) {
+                    movements.add(Movement.of(
+                            entry.reference(),
+                            i + 1,
+                            posting.account(),
+                            posting.direction(),
+                            posting.amount(),
+                            entry.valueDate(),
+                            postedAtByEntry.getOrDefault(entry.reference(), Instant.EPOCH),
+                            referenceByEntry.get(entry.reference())));
+                }
+            }
+        }
+        movements.sort(Comparator.comparing(Movement::valueDate)
+                .thenComparing(Movement::postedAt)
+                .thenComparing(movement -> movement.entry().value())
+                .thenComparingInt(Movement::legNo));
+        return movements;
+    }
+
+    private static String encodeCursor(String movementReference) {
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(movementReference.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String decodeCursor(String cursor) {
+        try {
+            return new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8);
+        } catch (RuntimeException malformed) {
+            throw new IllegalArgumentException("Statement cursor was not issued by this ledger.");
+        }
+    }
 
     /** Hands out references in order, so a test can name the one it expects. */
     static final class SequentialReferences implements ReferenceGenerator {
