@@ -111,10 +111,18 @@ throughout.
    halves are tested, because the difference between them is the kind of thing a reasonable
    implementer gets wrong in the same direction twice.
 7. **`PKG_POSTING.apply_transfer`.** Idempotent on `transfer_ref` through a unique constraint, not
-   through a prior `SELECT`: two calls racing must lose one at the database. Applies both legs, sets
-   `last_movement_date`, and reports `already_applied`. The duplicate test re-invokes the procedure
-   for real - a test that passes a flag asserting duplication would be satisfied by a constant. A leg
-   naming an unknown account, and a leg against a `CLOSED` account, both raise.
+   through a prior `SELECT`: two calls racing must lose one at the database, and the test that
+   proves it runs eight deliveries at once, because a sequential test cannot tell the two
+   implementations apart. Applies both legs by the account type's sign convention, sets
+   `last_movement_date`, and reports `already_applied`.
+
+   **Corrected during execution.** This task said a leg against a `CLOSED` account should raise, and
+   that is wrong. `NotifyTransferPosted` reports a posting the ledger has **already made**; refusing
+   it does not unmake the movement, it only leaves this master permanently wrong about that account
+   and hides the disagreement from `batch/recon` by never recording it. A block belongs before a
+   payment, where it can still prevent one. So status is not consulted, and what raises is an
+   integrity failure: an unknown account, a currency that cannot be added to the balance it is aimed
+   at, a non-positive amount, or both legs naming one account.
 8. **DAO layer.** Plain JDBC over `CallableStatement`, no ORM, written the way 2011 wrote it. Tests
    against the real container.
 9. **Documentation and landing.** Module README, parent-pom README, **TD-005 updated to name the

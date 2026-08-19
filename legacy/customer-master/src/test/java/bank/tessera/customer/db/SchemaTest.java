@@ -173,6 +173,19 @@ public class SchemaTest {
                 invalid.append(rows.getString(1)).append(' ').append(rows.getString(2)).append('\n');
             }
             rows.close();
+
+            // The compiler's own words, line and column included. Reporting only the object name
+            // sends the reader back to Oracle to ask the question the build already had the answer
+            // to.
+            rows = statement.executeQuery(
+                    "SELECT name, type, line, position, text FROM user_errors ORDER BY name, sequence");
+            while (rows.next()) {
+                invalid.append("  ").append(rows.getString("type")).append(' ')
+                        .append(rows.getString("name")).append(" line ").append(rows.getInt("line"))
+                        .append(':').append(rows.getInt("position")).append(' ')
+                        .append(rows.getString("text").trim()).append('\n');
+            }
+            rows.close();
         } finally {
             statement.close();
         }
