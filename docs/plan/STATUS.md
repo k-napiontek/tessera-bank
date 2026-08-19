@@ -9,17 +9,22 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-12 - `api-gateway` (Go)** is `In progress`. Its task list was detailed and reviewed on
-> 2026-08-19, together with three decisions that shape the code: two justified dependencies
-> (`golang-jwt/jwt/v5`, `prometheus/client_golang`), a gateway that validates and forwards the
-> caller's token rather than minting one, and a rate limiter whose state is per instance and
-> documented as such. WP-10 and WP-11 sit ahead of it on the critical path and WP-10 is still
-> **blocked on tooling** - only `openjdk@17` and `openjdk@26` are installed and it needs JDK 8. See
-> F-02 and F-10. WP-13 (`fraud-scoring`, Python) and WP-17 (`reporting`, Python) are also unblocked
-> now that WP-09 is done, and both are off the critical path.
+> **WP-13 - `fraud-scoring` (Python)** is next among the unblocked packages, with **WP-17
+> (`reporting`, Python)** beside it; both sit off the critical path and depend only on WP-09. The
+> critical path itself is still stopped at **WP-10**, which is **blocked on tooling** - it needs JDK 8
+> and only `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10. WP-14 (`web-banking`) is
+> unblocked now that WP-12 is done.
 >
 > Every package other than WP-12 is still frame-only until detailed - F-02 - so a session picking one
 > up must fill in its task list and have it reviewed first.
+>
+> **The edge exists.** `edge/api-gateway` authenticates a bearer token with the algorithm pinned,
+> authorises coarsely by scope, matches every request against the OpenAPI contract's routes, limits
+> each caller per route, gives the estate one correlation id, and forwards to the ledger under a
+> timeout with a retry that only ever replays what is safe to replay. Health and metrics are on a
+> second port. Run it with `make test-edge`, or boot it in front of a live ledger with
+> `go -C edge/api-gateway run ./cmd/gateway` - see the component README for the environment it needs.
+> Stratum 4 now has a toolchain: `make build-edge`, `make test-edge`, `make lint-edge`.
 >
 > **The ledger is now complete as a service.** It posts double-entry money over HTTP, idempotently,
 > against real PostgreSQL; it records every movement in an append-only hash-chained audit trail; it
@@ -30,7 +35,8 @@ Updated by the executing session at the start and end of every work package, per
 > broker through Testcontainers, so a running Docker daemon remains the only prerequisite.
 >
 > **Stratum 0 is complete** and the overnight cycle runs end to end locally (`make eod`). WP-16 waits
-> on WP-11, which waits on WP-10.
+> on WP-11, which waits on WP-10. A customer request now reaches the ledger through the edge, and the
+> ledger's postings still reach no older stratum: the bridge is WP-11, behind WP-10.
 
 ---
 
@@ -51,7 +57,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d450de4`, `53f5831` |
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
-| [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `In progress` | | |
+| [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Not started` | | |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
@@ -113,6 +119,11 @@ becomes its own change when picked up.
 | F-30 | WP-09 | **Nothing runs `AuditChain.verify()` on a schedule.** The verifier exists and is tested, and an operator can run it - but tamper evidence that is only checked when somebody thinks to check it is evidence nobody is looking at. It needs a scheduled job and a metric, and the job belongs with the retention work in F-28 because both walk the same tables. | Open |
 | F-31 | WP-09 | **The root `README.md` was stale again**, claiming five packages done and "no persistence, no REST endpoint" three packages after both arrived. Corrected on WP-09's second branch because leaving it would have made a document actively wrong on the day the audit chain merged. This is the second occurrence of exactly what F-17 describes, which strengthens the case for the check F-17 proposes rather than for another manual correction. | Open |
 | F-32 | WP-09 | **Boot switches observability off inside `@SpringBootTest`.** Deliberate - a test run must not push to a real backend - but it leaves only a `SimpleMeterRegistry`, so `/actuator/prometheus` does not exist and there is no `Tracer` to assert on. Without `@AutoConfigureObservability` a metrics test passes while verifying nothing, which is the failure mode this repository cares about most. Recorded because the next module to add metrics will hit it, and the symptom - a 500 from a scrape endpoint that plainly should exist - does not name the cause. | Open |
+| F-33 | WP-12 | **`ledger-api` validates no token.** The OpenAPI document declares `bearerAuth` on every operation and the ledger enforces none of it: WP-08 built no authentication, and WP-12 forwards the caller's token unchanged precisely so the ledger *can* validate it. Until it does, "the gateway checked it" is exactly the assumption a defence in depth is supposed not to make - anything that reaches the ledger's port directly is unauthenticated. Fixing it is a change to WP-08's component, so it was recorded rather than done on this branch. | Open |
+| F-34 | WP-12 | **The edge's own error surface is in no contract.** `contracts/openapi/ledger-core.yaml` is the ledger's contract, and the gateway answers with problem types the ledger never emits - `unauthenticated`, `forbidden`, `rate-limited`, `no-route`, `payload-too-large`, `upstream-timeout`, `upstream-unusable`, `upstream-oversized`. They share the estate's namespace and are documented in `edge/api-gateway/README.md`, but a client integrating against the contract alone will not find them. Contracts are WP-02's, and a gateway contract was not in WP-12's scope. | Open |
+| F-35 | WP-12 | **`govulncheck` reports 12 advisories in the Go standard library of the machine's toolchain**, go1.25.6, fixed in go1.25.13; several are reachable from `net/http` and `crypto/tls` on the serving path. **No dependency of the gateway is flagged.** This is a machine prerequisite rather than a repository change - `brew upgrade go` - and it is the same class of gap as F-10. Worth a note in `docs/consuming-this-repo.md` when that stub is written, because "the edge tier needs Go" is not the same statement as "the edge tier needs a Go without known advisories". | Open |
+| F-36 | WP-12 | **Nothing runs `govulncheck` or a Go linter as part of `make lint`.** `lint-edge` runs `gofmt -l` and `go vet`, which is the floor rather than a quality gate: no `staticcheck`, no `errcheck`, and no vulnerability scan. F-03 records that `quality/` holds no rule files; this records that stratum 4 has now arrived with the same gap, and that a Go tier is where the tooling to close it is cheapest. | Open |
+| F-37 | WP-12 | **The rate limiter cannot be observed.** `Limiter.Tracked()` reports how many buckets are held and nothing exports it, so the memory the limiter uses - and the sweep that is supposed to bound it - are invisible in production. A gauge belongs beside the refusal counter; it was left out because WP-12's metric list names requests, latency, refusals and upstream failures, and adding to that list is a decision rather than an omission. | Open |
 
 ---
 
@@ -141,6 +152,10 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-18 | The cycle **refuses to apply the same movement file twice**. On success `run-eod.sh` writes a marker holding the file's SHA-256 and the business date; a second run with the identical file for the same date exits 8 unless `--rerun` is passed. A corrected file re-sent for the same date is allowed, because that is normal operations. Applying a day's movements twice doubles every posting in the bank, and "the operator would notice" is not a control. |
 | 2026-08-18 | Stratum 0's **subtotal accumulators are `PIC S9(15)V99`**, two digits wider than the `S9(13)V99` balances they sum, and the report's money columns are 15 digits wide so totals print under the same columns with the same picture. Not defensive: the synthetic data's PLN total is `10,000,074,741,234.88` - 14 digits - because WP-03 deliberately seeds an account at the maximum representable balance. A 13-digit accumulator would have truncated it in silence. |
 | 2026-08-18 | The ledger's persistence lives in a **separate module**, `services/ledger-persistence`, rather than beside the domain in `ledger-core`. That module carries no framework on its compile classpath, so a Spring import there fails to compile rather than failing a rule, and `DomainPurityTest` scans every source in it. Adapters in the same module would have forced that scan to be narrowed to the domain package - weakening a control that works, to make room for new code. ArchUnit still has teeth because the persistence module holds both sides on its classpath. This changed WP-07's stated verification command from `:services:ledger-core:test`. **Strongest outstanding ADR candidate; see F-09, F-12.** |
+| 2026-08-19 | The gateway's rate limit is **per instance**, and every place that describes it says so: *n* gateways permit *n* times the configured rate. A shared counter needs a store ADR 0001 forbids this repository from describing, and a limiter that claims to be global is worse than one that is honestly local - the first is relied upon. See ADR 0006. |
+| 2026-08-19 | The gateway **validates the customer's token and forwards it unchanged**; it mints nothing. The OpenAPI document said the token was *issued* at the edge, which contradicted WP-12's Out of scope section - the contract was corrected in the commit before the first line of Go. An edge component holding a signing key could mint any identity in the bank. See ADR 0007. |
+| 2026-08-19 | Stratum 4's two dependencies are **justified rather than avoided**: `golang-jwt/jwt/v5` and `prometheus/client_golang`. "Standard library first" is a constraint on what is written by hand, and hand-rolled signature verification is where `alg: none` and algorithm confusion hide. The Go directive follows what those dependencies require - currently 1.25 - which the tier's documented `Go 1.22+` permits; downgrading three transitive modules to hold a lower floor was tried, and it imported an advisory to satisfy a documentation floor. |
+| 2026-08-19 | Health probes and metrics are served on a **second port**. The ledger serves its actuator endpoints beside its API, and refusing that arrangement at the edge is half the reason the gateway exists; repeating it there would have been a poor joke. The customer-facing listener answers 404 to `/metrics` even with a valid token. |
 | 2026-08-18 | A ledger balance is **derived two independent ways on purpose**. `balanceOf` reads the materialised `balance` row - the fast path an API call takes - and `BalanceReconciliation` sums the postings in SQL, reimplementing the sign convention that `AccountType.signedEffect` holds in Java. The duplication is the control: a check written against the same code it checks proves nothing, and if `balanceOf` summed the postings the reconciliation would compare a number to itself. This does not contradict WP-06's "`Account` stores no balance" - the aggregate holds none; the database materialises one and is then held to account for it. |
 | 2026-08-18 | **Locking more than one account goes through `AccountLocks.lockInOrder`, which sorts by reference.** The port locks one account at a time and widening it to suit an adapter would invert the dependency the architecture protects, so the rule lives in the persistence module. The order is arbitrary; that it is the same order every time is the whole mechanism. Proven by deleting the single `.sorted(...)` line and rerunning the ring test, which produced five `deadlock detected` errors from PostgreSQL - the rule is load-bearing, not decorative. |
 | 2026-08-18 | A PostgreSQL trigger function must address its tables through **`TG_TABLE_SCHEMA`**, never by an unqualified name. A function body resolves unqualified names against the *caller's* `search_path`, not the schema it was created in, so the balanced-entry trigger worked during migration and failed the moment it was called from a connection with a different `search_path`. |
