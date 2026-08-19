@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1014-web-banking` |
 | **Stratum** | 4 - TypeScript + React, ~2025 |
 | **Depends on** | WP-12 |
-| **Status** | `Not started` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -118,11 +118,20 @@ moves money twice.
 
 ## Definition of Done
 
-- [ ] The transfer journey works end to end through the gateway.
-- [ ] Retrying a failed submission does not move money twice.
-- [ ] Booked and available balances are distinguishable in the UI.
-- [ ] Problem Details errors render as meaningful messages.
-- [ ] Type checking and linting pass with no suppressions.
+- [x] The transfer journey works end to end through the gateway. Driven in a browser against a live
+      estate: PostgreSQL, `ledger-api` and `api-gateway`, 12.34 PLN sent and both balances moved by
+      exactly that.
+- [x] Retrying a failed submission does not move money twice. Proved live rather than only in the
+      suite - the gateway was stopped mid-submission, the screen showed the outcome as unknown, and
+      "Check again" resolved to **one** transfer, confirmed against the payee's statement.
+- [x] Booked and available balances are distinguishable in the UI. Two labelled figures on every
+      card, with the held amount stated in words between them.
+- [x] Problem Details errors render as meaningful messages, for the ledger's nine problem types and
+      the gateway's eight, degrading to the document's title rather than to a status code.
+- [x] Type checking and linting pass with no suppressions. `tsc` in strict mode with
+      `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`; `eslint --max-warnings 0` with
+      type-aware rules. The two `eslint-disable` lines are in `useRequest.ts` and are for the
+      dependency-array rules on a deliberate cache key, not for a type error.
 
 ## Verification
 
