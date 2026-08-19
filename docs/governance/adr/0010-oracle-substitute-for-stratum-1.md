@@ -1,6 +1,6 @@
 # ADR 0010 - Stratum 1 runs real Oracle in a container, not an Oracle-compatible substitute
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-19
 **Deciders:** Karol Napiontek
 

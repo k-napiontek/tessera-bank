@@ -71,4 +71,4 @@ date for a real one.
 | [0007](0007-gateway-validates-and-forwards.md) | The gateway validates the customer's token and forwards it unchanged | Accepted | 2026-08-19 |
 | [0008](0008-fraud-rules-are-pure-functions.md) | Fraud rules are pure functions, and the recorded version covers the parameters | Accepted | 2026-08-19 |
 | [0009](0009-reports-are-cut-at-an-audit-position.md) | A report is cut at an audit sequence position, not at a timestamp | Accepted | 2026-08-19 |
-| [0010](0010-oracle-substitute-for-stratum-1.md) | Stratum 1 runs real Oracle in a container, not an Oracle-compatible substitute | Proposed | 2026-08-19 |
+| [0010](0010-oracle-substitute-for-stratum-1.md) | Stratum 1 runs real Oracle in a container, not an Oracle-compatible substitute | Accepted | 2026-08-19 |
