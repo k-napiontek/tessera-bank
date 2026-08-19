@@ -12,6 +12,7 @@ The new double-entry ledger - the strangler fig growing around the mainframe cor
 |---|---|
 | `ledger-core/` | The double-entry ledger domain. Pure Java, no framework on its classpath at all. |
 | `ledger-persistence/` | PostgreSQL adapters behind the ledger's ports: schema, locking, reconciliation. |
+| `ledger-api/` | The REST adapter: controllers, wire types, RFC 9457 errors, idempotency. The only Spring Boot application here. |
 | `payment-engine/` | ISO 20022 outbound payments. On the map, out of initial scope. |
 
 ## Architecture
@@ -31,10 +32,20 @@ ports, driven out by unit and property tests. WP-07 built the persistence behind
 schema, JDBC adapters, deterministic lock ordering and a reconciliation routine - against real
 PostgreSQL via Testcontainers.
 
+WP-08 composed them and put the result behind HTTP. The **use cases** live in `ledger-core` beside
+the domain, driven by fakes with no database at all: opening an account, transferring, reversing,
+placing and capturing holds, and a cursor-paged statement. They reach infrastructure through a
+`UnitOfWork` port, so the transaction boundary is an application concern while the deterministic
+lock ordering stays in the adapter where WP-07 put it. `ledger-api` holds the web adapter and the
+idempotency filter that makes a retry safe.
+
+Follow-up **F-22** is closed: `Transfer` consults `Balance.afterEffect` inside the lock, so an entry
+can no longer take a forbidden-overdraft account below zero.
+
 ```bash
-make docker        # the persistence tests need a running daemon
-make test-services # both modules
+make docker        # the persistence and API tests need a running daemon
+make test-services # all three modules
 ```
 
-The REST API, idempotency and Problem Details are WP-08; the audit chain and outbox are WP-09.
+The audit chain, the transactional outbox, metrics and structured logging are WP-09.
 

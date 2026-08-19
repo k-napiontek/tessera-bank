@@ -26,11 +26,32 @@ ever points back.
 
 | Table | Holds |
 |---|---|
-| `account` | reference, customer, type, currency, status, overdraft limit |
-| `journal_entry` | reference, value date, currency |
+| `account` | reference, customer, type, currency, status, overdraft limit, opening date |
+| `journal_entry` | reference, value date, currency, remittance text, the entry it reverses |
 | `posting` | one leg: entry, sequence, account, direction, amount. **Append-only** |
 | `balance` | the materialised booked balance, one row per account |
 | `hold` | an amount reserved but not posted |
+| `idempotency_record` | a money-moving request's key, its fingerprint and the response it produced |
+
+WP-08 added three migrations, each for something the REST contract needs the database to remember:
+
+| Migration | Adds | Why |
+|---|---|---|
+| `V3__ledger_references.sql` | `account.opened_date`, `journal_entry.reverses`, two sequences | `opened_date` is a **business** date, and `created_at` is when the row was inserted - they differ the moment an account is migrated in from the mainframe. `reverses` closes a gap WP-07 could not have seen: `JournalEntry` has carried `reverses()` since WP-06 and the schema had nowhere to put it, so a reversal round-tripped losing the link to the entry it corrected. |
+| `V4__movement_reference.sql` | `journal_entry.reference_text` | Remittance information, 35 characters as in the SEPA field. On the entry rather than the posting because the canonical model says one value is copied onto both legs, and no invariant depends on it - which is also why `JournalEntry` does not carry it. |
+| `V5__idempotency.sql` | `idempotency_record` | The table exists for its primary key. See below. |
+
+**A transfer is reversed at most once, and the unique index says so.** `journal_entry_reverses_uq`
+is a partial unique index on `reverses`. The use case checks first, but a check in one code path is
+not a control: two concurrent reversal requests both pass it, and the account is credited twice for
+a single erroneous debit - by a second entry that balances perfectly, so nothing downstream reports
+it.
+
+**The idempotency claim is an upsert, not a read followed by a write.**
+`INSERT ... ON CONFLICT (key) DO UPDATE` takes a row lock and *waits* for a conflicting transaction
+that has not committed; `DO NOTHING` skips instead, and the following `SELECT` cannot see the
+uncommitted row either - so both retries conclude the key is theirs. Demonstrated: with `DO NOTHING`,
+eight threads retrying one request execute it eight times.
 
 **Money is `bigint` minor units plus a `char(3)` ISO 4217 code.** Never `numeric`, never a float. A
 `numeric` column invites a `BigDecimal` into the row mappers, and the domain forbids one outright.
@@ -38,6 +59,11 @@ ever points back.
 **A null `overdraft_limit_minor` means forbidden, not zero.** `upTo(zero)` is a different policy - an
 account permitted to reach exactly zero - and collapsing the two hands an overdraft of nothing to
 accounts that must never have one.
+
+**There is now a transfer service, and it is not here.** WP-08 composes locking, the overdraft
+decision and the append in `ledger-core`'s `application` package, reaching this module through the
+`UnitOfWork` port. `JdbcUnitOfWork` delegates to `AccountLocks.lockInOrder`, so the ordering rule
+this module owns is untouched.
 
 ## Which invariant is enforced where
 
@@ -124,5 +150,8 @@ nothing - the worst outcome available, since it would then be cited as evidence.
 - **PostgreSQL `timestamptz` stores microseconds and `Instant` carries nanoseconds.** An instant with
   nanos does not survive the round trip, so fixtures use microsecond precision. An equality assertion
   would otherwise fail against a correct adapter.
-- **There is no transfer service here.** Locking, appending and the overdraft decision are composed by
-  WP-08. This module supplies the pieces and proves each one holds under concurrency.
+- **There is still no transfer service here, and there should not be.** WP-08 composes locking, the
+  append and the overdraft decision in `ledger-core`, and reaches this module through the
+  `UnitOfWork` port. This module supplies the pieces and proves each holds under concurrency -
+  including, now, that the composition does: `TransferConcurrencyTest` runs the ring through the use
+  case rather than the adapter and asserts total value is conserved.

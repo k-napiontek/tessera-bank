@@ -60,13 +60,18 @@ public final class JdbcJournalEntryRepository implements JournalEntryRepository 
         transactions.executeWithoutResult(status -> {
             jdbc.update(
                     """
-                    INSERT INTO journal_entry (reference, value_date, currency)
-                    VALUES (:reference, :valueDate, :currency)
+                    INSERT INTO journal_entry (reference, value_date, currency, reverses)
+                    VALUES (:reference, :valueDate, :currency, :reverses)
                     """,
                     new MapSqlParameterSource()
                             .addValue("reference", entry.reference().value())
                             .addValue("valueDate", entry.valueDate())
-                            .addValue("currency", entry.currency().code()));
+                            .addValue("currency", entry.currency().code())
+                            // WP-06 has carried reverses() since the domain was written and WP-07's
+                            // schema had nowhere to put it, so a reversal round-tripped losing the
+                            // link to the entry it corrected. The unique index on this column is
+                            // what stops one transfer being reversed twice.
+                            .addValue("reverses", entry.reverses().map(EntryRef::value).orElse(null)));
 
             List<Posting> postings = entry.postings();
             for (int index = 0; index < postings.size(); index++) {
@@ -197,11 +202,12 @@ public final class JdbcJournalEntryRepository implements JournalEntryRepository 
 
         Map<String, List<Posting>> postingsByEntry = new LinkedHashMap<>();
         Map<String, LocalDate> valueDates = new LinkedHashMap<>();
+        Map<String, String> reversedByEntry = new LinkedHashMap<>();
 
         jdbc.query(
                 """
-                SELECT e.reference, e.value_date, p.seq, p.account_ref, p.direction, p.amount_minor,
-                       p.currency
+                SELECT e.reference, e.value_date, e.reverses, p.seq, p.account_ref, p.direction,
+                       p.amount_minor, p.currency
                   FROM journal_entry e
                   JOIN posting p ON p.entry_ref = e.reference
                  WHERE e.reference IN (:references)
@@ -211,6 +217,10 @@ public final class JdbcJournalEntryRepository implements JournalEntryRepository 
                 row -> {
                     String entry = row.getString("reference");
                     valueDates.putIfAbsent(entry, row.getDate("value_date").toLocalDate());
+                    String reverses = row.getString("reverses");
+                    if (reverses != null) {
+                        reversedByEntry.putIfAbsent(entry, reverses);
+                    }
                     postingsByEntry
                             .computeIfAbsent(entry, key -> new ArrayList<>())
                             .add(Posting.of(
@@ -222,9 +232,40 @@ public final class JdbcJournalEntryRepository implements JournalEntryRepository 
                 });
 
         List<JournalEntry> entries = new ArrayList<>(postingsByEntry.size());
-        postingsByEntry.forEach((reference, postings) ->
-                entries.add(JournalEntry.of(EntryRef.of(reference), valueDates.get(reference), postings)));
+        postingsByEntry.forEach((reference, postings) -> entries.add(
+                rebuild(EntryRef.of(reference), valueDates.get(reference), postings,
+                        reversedByEntry.get(reference))));
         return entries;
+    }
+
+    /**
+     * Rebuilds an entry, going through {@code reverse} when it is a reversal.
+     *
+     * <p>{@link JournalEntry} offers no way to set {@code reverses} except by reversing the entry it
+     * corrects - deliberately, since a reversal that does not descend from its original cannot be
+     * trusted to be its opposite. So the original is loaded and reversed, exactly as the hold adapter
+     * rebuilds a captured hold by placing it and applying the recorded transition.
+     *
+     * <p>The rebuilt postings are then checked against the ones actually stored. They must match: the
+     * reversal was written as the flip of its original, and if the two ever disagree the database has
+     * a correction that does not correct what it names. Trusting the computed version and discarding
+     * the stored one would hide exactly that.
+     */
+    private JournalEntry rebuild(
+            EntryRef reference, LocalDate valueDate, List<Posting> stored, String reverses) {
+        if (reverses == null) {
+            return JournalEntry.of(reference, valueDate, stored);
+        }
+        JournalEntry original = findByReference(EntryRef.of(reverses))
+                .orElseThrow(() -> new IllegalStateException(
+                        "Entry " + reference + " reverses " + reverses + ", which does not exist."));
+        JournalEntry rebuilt = original.reverse(reference, valueDate);
+        if (!rebuilt.postings().equals(stored)) {
+            throw new IllegalStateException(
+                    "Entry " + reference + " is stored as a reversal of " + reverses
+                            + ", but its postings are not that entry's opposite.");
+        }
+        return rebuilt;
     }
 
     @Override
