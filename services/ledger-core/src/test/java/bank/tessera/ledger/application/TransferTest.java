@@ -49,7 +49,7 @@ class TransferTest {
     @BeforeEach
     void setUp() {
         ledger = new InMemoryLedger();
-        openAccount = new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, FIXED);
+        openAccount = new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
         openAccount.open(open(ALICE, PLN, OverdraftPolicy.forbidden()));
         openAccount.open(open(BOB, PLN, OverdraftPolicy.forbidden()));
         openAccount.open(open(EURO, EUR, OverdraftPolicy.forbidden()));
@@ -59,6 +59,7 @@ class TransferTest {
                 ledger.readModel,
                 new InMemoryLedger.SequentialReferences(),
                 ledger.unitOfWork,
+                ledger.auditTrail(FIXED),
                 FIXED);
     }
 
@@ -141,7 +142,7 @@ class TransferTest {
         // A ledger of its own: ALICE is opened here with an arranged facility rather than the
         // forbidden policy the rest of this class uses.
         InMemoryLedger fresh = new InMemoryLedger();
-        OpenAccount opener = new OpenAccount(fresh.accounts, fresh.readModel, fresh.unitOfWork, FIXED);
+        OpenAccount opener = new OpenAccount(fresh.accounts, fresh.readModel, fresh.unitOfWork, fresh.auditTrail(FIXED), FIXED);
         opener.open(new OpenAccount.Command(
                 ALICE,
                 CustomerRef.of("CU0000000001"),
@@ -158,6 +159,7 @@ class TransferTest {
                 fresh.readModel,
                 new InMemoryLedger.SequentialReferences(),
                 fresh.unitOfWork,
+                fresh.auditTrail(FIXED),
                 FIXED);
 
         overdrawable.execute(new Transfer.Command(ALICE, BOB, Money.of(50_00, PLN), null, null));

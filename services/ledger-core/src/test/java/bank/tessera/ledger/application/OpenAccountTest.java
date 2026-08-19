@@ -34,7 +34,7 @@ class OpenAccountTest {
     @BeforeEach
     void setUp() {
         ledger = new InMemoryLedger();
-        openAccount = new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, FIXED);
+        openAccount = new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
     }
 
     private OpenAccount.Command command(AccountRef reference, LocalDate openedDate) {

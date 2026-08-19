@@ -12,6 +12,9 @@ import bank.tessera.ledger.domain.Money;
 import bank.tessera.ledger.domain.Posting;
 import bank.tessera.ledger.port.AccountDates;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditContext;
+import bank.tessera.ledger.port.AuditEntry;
+import bank.tessera.ledger.port.AuditLog;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
@@ -51,6 +54,32 @@ final class InMemoryLedger {
 
     /** Every set of accounts a use case asked to be locked, in call order. */
     final List<List<AccountRef>> lockRequests = new ArrayList<>();
+
+    /** Every audit entry appended, in order. Nothing here rolls back, so a test asserting that a
+     * failed use case wrote nothing is asserting that it never called append at all. */
+    final List<AuditEntry> auditEntries = new ArrayList<>();
+
+    final AuditLog auditLog = auditEntries::add;
+
+    /** The context ledger-api will supply from the MDC, fixed here so hashes are reproducible. */
+    static final String CORRELATION_ID = "5c2f0b1e-0000-4000-8000-000000000001";
+
+    /** The audit trail every money-moving use case now requires. */
+    AuditTrail auditTrail(java.time.Clock clock) {
+        return new AuditTrail(auditLog, auditContext, clock);
+    }
+
+    final AuditContext auditContext = new AuditContext() {
+        @Override
+        public String actor() {
+            return "ledger-api";
+        }
+
+        @Override
+        public Optional<String> correlationId() {
+            return Optional.of(CORRELATION_ID);
+        }
+    };
 
     /** How many transactions were opened, so a test can assert reads happen inside exactly one. */
     int transactions;

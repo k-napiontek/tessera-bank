@@ -11,11 +11,13 @@ import bank.tessera.ledger.domain.Money;
 import bank.tessera.ledger.domain.OverdraftPolicy;
 import bank.tessera.ledger.port.AccountDates;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.UnitOfWork;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -31,13 +33,19 @@ public final class OpenAccount {
     private final AccountRepository accounts;
     private final LedgerReadModel readModel;
     private final UnitOfWork unitOfWork;
+    private final AuditTrail audit;
     private final Clock clock;
 
     public OpenAccount(
-            AccountRepository accounts, LedgerReadModel readModel, UnitOfWork unitOfWork, Clock clock) {
+            AccountRepository accounts,
+            LedgerReadModel readModel,
+            UnitOfWork unitOfWork,
+            AuditTrail audit,
+            Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.readModel = Objects.requireNonNull(readModel, "readModel");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
+        this.audit = Objects.requireNonNull(audit, "audit");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -62,6 +70,17 @@ public final class OpenAccount {
 
             Account saved = accounts.save(account);
             readModel.recordAccountOpened(saved.reference(), openedDate);
+
+            audit.record(
+                    AuditAction.ACCOUNT_OPENED,
+                    saved.reference().value(),
+                    Map.of(),
+                    Map.of(
+                            "customerRef", saved.customer().value(),
+                            "accountType", saved.type().name(),
+                            "currency", saved.currency().code(),
+                            "status", saved.status().name(),
+                            "openedDate", openedDate.toString()));
 
             // A new account has no postings and no holds, so both balances are zero in its own
             // currency. Reading them back from the database would prove nothing and cost a query.

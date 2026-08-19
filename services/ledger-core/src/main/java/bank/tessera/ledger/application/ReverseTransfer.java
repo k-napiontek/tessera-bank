@@ -7,6 +7,7 @@ import bank.tessera.ledger.domain.EntryRef;
 import bank.tessera.ledger.domain.JournalEntry;
 import bank.tessera.ledger.domain.Posting;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.ReferenceGenerator;
@@ -14,6 +15,7 @@ import bank.tessera.ledger.port.UnitOfWork;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -34,6 +36,7 @@ public final class ReverseTransfer {
     private final LedgerReadModel readModel;
     private final ReferenceGenerator references;
     private final UnitOfWork unitOfWork;
+    private final AuditTrail audit;
     private final Clock clock;
 
     public ReverseTransfer(
@@ -42,12 +45,14 @@ public final class ReverseTransfer {
             LedgerReadModel readModel,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
             Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.entries = Objects.requireNonNull(entries, "entries");
         this.readModel = Objects.requireNonNull(readModel, "readModel");
         this.references = Objects.requireNonNull(references, "references");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
+        this.audit = Objects.requireNonNull(audit, "audit");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -96,6 +101,17 @@ public final class ReverseTransfer {
             if (command.reference() != null) {
                 readModel.recordEntryReference(reference, command.reference());
             }
+
+            // The reason is recorded because a reversal is the one operation whose "why" an auditor
+            // will ask about first, and the contract already forbids the field from being empty.
+            audit.record(
+                    AuditAction.TRANSFER_REVERSED,
+                    reference.value(),
+                    Map.of(),
+                    Map.of(
+                            "reversesTransferRef", command.original().value(),
+                            "reason", command.reason(),
+                            "valueDate", valueDate.toString()));
 
             return TransferView.of(
                     appended,
