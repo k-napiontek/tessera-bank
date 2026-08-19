@@ -15,6 +15,7 @@ import bank.tessera.ledger.adapter.jdbc.JdbcReferenceGenerator;
 import bank.tessera.ledger.adapter.jdbc.JdbcUnitOfWork;
 import bank.tessera.ledger.api.audit.HttpAuditContext;
 import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
+import bank.tessera.ledger.api.metrics.MoneyMovementMetricsFilter;
 import bank.tessera.ledger.api.outbox.KafkaEventPublisher;
 import bank.tessera.ledger.api.outbox.OutboxRelayScheduler;
 import bank.tessera.ledger.application.AuditTrail;
@@ -44,6 +45,8 @@ import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.ReferenceGenerator;
 import bank.tessera.ledger.port.UnitOfWork;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import javax.sql.DataSource;
@@ -169,6 +172,32 @@ public class LedgerConfiguration {
         // hammering a broker that is not there.
         return new OutboxRelayScheduler(relay, batchSize);
     }
+
+    @Bean
+    MoneyMovementMetricsFilter moneyMovementMetricsFilter(MeterRegistry registry) {
+        return new MoneyMovementMetricsFilter(registry);
+    }
+
+    @Bean
+    OutboxGauges outboxGauges(OutboxRelay relay, MeterRegistry registry) {
+        // Gauges, not counters: both answer "how bad is it right now", and both are read from the
+        // table rather than accumulated in memory - so a restarted instance reports the truth
+        // immediately instead of starting again from zero.
+        Gauge.builder("ledger.outbox.pending", relay, OutboxRelay::pending)
+                .description("Events written but not yet published to the broker")
+                .register(registry);
+        Gauge.builder("ledger.outbox.lag", relay, OutboxRelay::oldestPendingSeconds)
+                .description("Age of the oldest unpublished event")
+                .baseUnit("seconds")
+                .register(registry);
+        // The lag is the one to alert on. A backlog of ten thousand draining steadily is a busy
+        // afternoon; a backlog of one that has not moved in ten minutes is an incident, and a count
+        // cannot tell the two apart.
+        return new OutboxGauges();
+    }
+
+    /** Nothing but a handle, so the registration above happens exactly once at startup. */
+    public static final class OutboxGauges {}
 
     @Bean
     IdempotencyStore idempotencyStore(NamedParameterJdbcTemplate jdbc) {
