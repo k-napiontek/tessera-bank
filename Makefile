@@ -9,8 +9,8 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help build test lint plan status eod \
-        build-mainframe build-services test-contracts test-mainframe test-services \
-        lint-contracts jdk17 docker
+        build-mainframe build-services build-edge test-contracts test-mainframe test-services \
+        test-edge lint-contracts lint-edge jdk17 docker go
 
 # ---------------------------------------------------------------------------------------------
 # Stratum 3 needs a JDK 17 and will not accept a substitute - see the pinned-stack rule in
@@ -46,6 +46,18 @@ docker: ## Report whether the Docker daemon the persistence tests need is runnin
 		    echo "  open -a Docker"; \
 		    exit 1)
 
+# ---------------------------------------------------------------------------------------------
+# Stratum 4 builds with the Go toolchain the module declares. Go downloads a newer toolchain by
+# itself when GOTOOLCHAIN is left alone, so the only real prerequisite is that go exists at all -
+# and its absence otherwise shows up as "command not found" from inside a recipe.
+# ---------------------------------------------------------------------------------------------
+go: ## Report which Go the edge tier will use
+	@command -v go >/dev/null 2>&1 \
+		&& echo "Go: $$(go version)" \
+		|| (echo "No Go toolchain found. Stratum 4 needs one - see CLAUDE.md."; \
+		    echo "  brew install go"; \
+		    exit 1)
+
 jdk17: ## Report which JDK 17 the Java tier will use
 ifeq ($(JAVA17),)
 	@echo "No JDK 17 found. Stratum 3 is pinned to Java 17 - see CLAUDE.md."
@@ -58,8 +70,8 @@ endif
 
 # --- build ------------------------------------------------------------------------------------
 
-build: build-mainframe build-services ## Build every tier with its native toolchain
-	@echo "Nothing to build in legacy/, integration/, edge/ or batch/ - no source there yet."
+build: build-mainframe build-services build-edge ## Build every tier with its native toolchain
+	@echo "Nothing to build in legacy/, integration/ or batch/ - no source there yet."
 
 build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 	@cobc -x -std=ibm -Wall -I mainframe/copybook \
@@ -72,9 +84,13 @@ build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
 		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build
 
+build-edge: go ## Build the Go edge components
+	@go -C edge/api-gateway build ./...
+	@echo "OK    api-gateway builds"
+
 # --- test -------------------------------------------------------------------------------------
 
-test: test-contracts test-mainframe test-services ## Run every tier's test suite
+test: test-contracts test-mainframe test-services test-edge ## Run every tier's test suite
 	@echo
 	@echo "OK    every tier with tests passed"
 
@@ -96,13 +112,22 @@ test-services: jdk17 docker ## Ledger domain, persistence and API, the last two 
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
 		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test
 
+test-edge: go ## The api-gateway, under the race detector
+	@go -C edge/api-gateway test -race ./...
+
 # --- lint -------------------------------------------------------------------------------------
 
-lint: lint-contracts ## Run every tier's linters and quality gates
-	@echo "No linter configured for the other tiers yet - see quality/ and follow-up F-03."
+lint: lint-contracts lint-edge ## Run every tier's linters and quality gates
+	@echo "No linter configured for the mainframe or Java tiers yet - see quality/ and follow-up F-03."
 
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
 	@bash contracts/validate.sh
+
+lint-edge: go ## gofmt and go vet over the Go tier
+	@test -z "$$(gofmt -l edge/api-gateway)" \
+		|| (echo "gofmt would change:"; gofmt -l edge/api-gateway; exit 1)
+	@go -C edge/api-gateway vet ./...
+	@echo "OK    gofmt and go vet are clean"
 
 # --- run --------------------------------------------------------------------------------------
 
