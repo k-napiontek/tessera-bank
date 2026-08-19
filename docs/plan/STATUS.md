@@ -9,14 +9,19 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **Every remaining package is blocked behind WP-10, and WP-10 is blocked on tooling.** It needs a
-> JDK 8 and this machine has no Java runtime at all - `/usr/libexec/java_home` finds none, and
-> Homebrew holds only `openjdk`, `openjdk@17` and `openjdk@26`. WP-15 waits on WP-10; WP-11 waits on
-> WP-10; WP-16 waits on WP-11; WP-18 waits on WP-16. **Installing a JDK 8 is the single action that
-> unblocks the rest of this repository.** See F-10.
+> **WP-10a is in progress.** The tooling blocker is gone: a JDK 8 is installed - Zulu 8.96.0.205
+> (arm64), which `/usr/libexec/java_home -v 1.8` finds - and Maven 3.9.16 builds against it. That was
+> the single action holding up the rest of this repository, and it has happened. See F-10.
+>
+> **WP-10 is split into two halves on one ticket**, 10a and 10b, because detailed out it spans a
+> build system, a database, a stored-procedure layer, a SOAP endpoint, a WAR and a deployment test.
+> After WP-09 this file recorded that the right answer at that size is to split the package in the
+> plan rather than the pull request; this is the first package to do it. WP-11 and WP-15 wait on
+> **10b**, WP-16 on WP-11, WP-18 on WP-16.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
-> its task list and have it reviewed first.
+> its task list and have it reviewed first. **WP-10 is now detailed**; WP-11, WP-15, WP-16 and WP-18
+> are not.
 >
 > **Stratum 4 is complete.** `edge/api-gateway` (Go) authenticates a bearer token with the algorithm
 > pinned, routes only what the OpenAPI contract declares, limits each caller per route, and forwards
@@ -78,12 +83,13 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Done` | [#19](https://github.com/k-napiontek/tessera-bank/pull/19) | `2d7bb3a` |
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Done` | [#22](https://github.com/k-napiontek/tessera-bank/pull/22) | `4dae229` |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d450de4`, `53f5831` |
-| [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
-| [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
+| [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `In progress` | | |
+| [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Not started` | | |
+| [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10b | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `4562165` |
-| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
+| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b | `Not started` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
@@ -94,8 +100,8 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 01 -> 02 -+-> 06 -> 07 -> 08 -> 09 -+-> 11 -> 16 -> 18
           |                          |
           +-> 03 -> 04 -> 05 --------+
-          |
-          +-> 10 --------------------+
+          |                          |
+          +-> 10a -> 10b ------------+
 ```
 
 `12`, `13`, `14`, `15` and `17` sit off the critical path and can be taken whenever their
@@ -119,7 +125,7 @@ becomes its own change when picked up.
 | F-07 | WP-02 | `npx @asyncapi/cli validate`, the command WP-02's Verification section names, cannot be installed at any published version: every one depends on `@asyncapi/studio-ui@0.5.0`, which is not on the npm registry (HTTP 404). The document itself is valid - `@asyncapi/parser`, the engine that CLI wraps, reports 0 errors and 0 warnings. `contracts/validate.sh` tries the CLI first and falls back to the parser, so the specified command resumes automatically once upstream is fixed. Accepted by the repository owner at merge: the document is valid, only the tool is broken. | Open |
 | F-08 | WP-02 | A WSDL reference-consistency check was written and run during WP-02 verification - it confirms every message part resolves, the document/literal wrapped naming rule holds, and every `tb:` type the WSDL uses exists in the canonical XSD. It is **not** in `validate.sh`, because WP-02 names only two validation artefacts and widening the branch was the wrong call. `xmllint --noout` alone proves well-formedness, not that the references resolve. | Open |
 | F-09 | WP-02 | The stratum 0 scale-2 constraint - `PIC S9(13)V99 COMP-3` cannot represent JPY or BHD, so the integration tier must reject them before they reach the mainframe - is architecturally significant and arguably warrants an ADR. It is fully documented in `canonical-data-model.md` section 2, but the Definition of Done's ADR box cannot be honestly ticked without one. | Open |
-| F-10 | WP-06 | The development machine had no JDK and no GnuCOBOL. JDK 17 (`openjdk@17`) and Gradle 9.7 were installed for WP-06. **GnuCOBOL 3.2.0 is now installed**, and WP-03, WP-04 and WP-05 have all been executed and verified against it. **JDK 8 is still missing**, so WP-10 and WP-11 cannot be. `openjdk@17` is keg-only, so `JAVA_HOME` must point at `/opt/homebrew/opt/openjdk@17` when invoking Gradle. | Open - JDK 8 half only, 2026-08-18 |
+| F-10 | WP-06 | The development machine had no JDK and no GnuCOBOL. JDK 17 (`openjdk@17`) and Gradle 9.7 were installed for WP-06; **GnuCOBOL 3.2.0** followed, and WP-03 to WP-05 were verified against it. **A JDK 8 is now installed too** - Zulu 8.96.0.205 (arm64), found by `/usr/libexec/java_home -v 1.8` - so WP-10 and WP-11 are executable. Two `JAVA_HOME` traps survive the closure and are handled in the `Makefile` rather than left to be rediscovered: `openjdk@17` is keg-only, so Gradle needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17`; and bare `mvn` on this machine resolves Homebrew's **JDK 26**, so every Maven recipe passes a JDK 8 explicitly. | **Closed** - 2026-08-19 |
 | F-11 | WP-02 | The requirement ids in the traceability matrix collided with the catalogue the work packages already defined - 14 genuine collisions, introduced by WP-02 task 8. Fixed in [#3](https://github.com/k-napiontek/tessera-bank/pull/3), which also added a catalogue index of all 60 ids so the mistake cannot repeat. | **Closed** - 2026-08-17 |
 | F-12 | WP-06 | The Definition of Done's ADR box was left unticked. Two decisions in WP-06 are arguably architecturally significant - `Account` stores no balance, and `Money` arithmetic throws on overflow rather than wrapping - and both are recorded in [#5](https://github.com/k-napiontek/tessera-bank/pull/5) and `services/ledger-core/README.md` but not as ADRs. Together with F-09 there are now two candidate ADRs outstanding. | Open |
 | F-13 | WP-06 | `openjdk@17` is keg-only on this machine, so `./gradlew` needs `JAVA_HOME=/opt/homebrew/opt/openjdk@17` unless 17 is the default JVM. `docs/consuming-this-repo.md` names JDK 17 as a prerequisite but does not mention this. Worth a line there when that document is next revised. | Open |
@@ -232,3 +238,6 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-17 | The OpenAPI contract declares a bearer security scheme. Redocly's `security-defined` rule failed the lint with 11 errors otherwise, and the alternative - adding a config file to switch the rule off - would weaken a validator to hide a real gap. The contract states what it expects; `edge/api-gateway` remains the only component that authenticates. |
 | 2026-08-17 | Stratum 0 carries scale-2 currencies only. `PIC S9(13)V99 COMP-3` hard-codes two decimals, so JPY (scale 0) and BHD (scale 3) cannot be represented. Rather than change the picture clause, the constraint is documented and WP-11 rejects such movements before they reach the mainframe - a real limitation of a 1995 domestic core, and the kind of thing this repository exists to reproduce. See F-09. |
 | 2026-08-17 | Work packages merge with a merge commit, not a squash. `PROTOCOL.md` sizes commits deliberately at 3-10 per package; squashing would erase the history that rule exists to produce. |
+| 2026-08-19 | **WP-10 is split into WP-10a and WP-10b on one ticket**, the first package split in the plan rather than in the pull request. That is what this log concluded after WP-09 landed as two pull requests, and the size here is the same: a build system, a database, a stored-procedure layer, a SOAP endpoint, a WAR and a deployment test. The work-package file stays a single document because six others link to it; `STATUS.md` carries the two rows. |
+| 2026-08-19 | **The Oracle substitute is real Oracle.** TD-005 has said "a compatible substitute" since WP-01 without naming one, and the choice decides whether this stratum has a stored-procedure layer at all. `gvenzl/oracle-free:23-slim-faststart` publishes an arm64 image, so PL/SQL genuinely compiles and runs under Testcontainers on this machine. H2's Oracle-compatibility mode was the alternative: it runs no PL/SQL, so the procedures would have been Java aliases wearing the name - the dialect lock-in TD-005 exists to reproduce, not reproduced. |
+| 2026-08-19 | **Testcontainers in a 2011 tier is a deliberate anachronism.** The pinned stack is a constraint on what ships, not on what runs the tests, and the alternative is a stored-procedure layer nothing executes. The tests themselves are JUnit 4, which is the era's tooling. |
