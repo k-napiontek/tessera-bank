@@ -9,8 +9,9 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help build test lint plan status eod \
-        build-mainframe build-services build-edge test-contracts test-mainframe test-services \
-        test-edge test-gateway test-fraud lint-contracts lint-edge jdk17 docker go uv
+        build-mainframe build-services build-edge build-batch test-contracts test-mainframe \
+        test-services test-edge test-gateway test-fraud test-batch test-reporting lint-contracts \
+        lint-edge lint-batch jdk17 docker go uv
 
 # ---------------------------------------------------------------------------------------------
 # Stratum 3 needs a JDK 17 and will not accept a substitute - see the pinned-stack rule in
@@ -83,8 +84,8 @@ endif
 
 # --- build ------------------------------------------------------------------------------------
 
-build: build-mainframe build-services build-edge ## Build every tier with its native toolchain
-	@echo "Nothing to build in legacy/, integration/ or batch/ - no source there yet."
+build: build-mainframe build-services build-edge build-batch ## Build every tier with its native toolchain
+	@echo "Nothing to build in legacy/ or integration/ - no source there yet."
 
 build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 	@cobc -x -std=ibm -Wall -I mainframe/copybook \
@@ -103,9 +104,13 @@ build-edge: go uv ## Build the edge tier - Go and Python
 	@cd edge/fraud-scoring && uv sync --locked --quiet
 	@echo "OK    fraud-scoring resolves against its lock file"
 
+build-batch: uv ## Build the batch tier - Python
+	@cd batch/reporting && uv sync --locked --quiet
+	@echo "OK    reporting resolves against its lock file"
+
 # --- test -------------------------------------------------------------------------------------
 
-test: test-contracts test-mainframe test-services test-edge ## Run every tier's test suite
+test: test-contracts test-mainframe test-services test-edge test-batch ## Run every tier's test suite
 	@echo
 	@echo "OK    every tier with tests passed"
 
@@ -135,9 +140,19 @@ test-gateway: go ## The api-gateway, under the race detector
 test-fraud: uv docker ## fraud-scoring, including one test against a real Kafka
 	@cd edge/fraud-scoring && uv run pytest
 
+test-batch: test-reporting ## Every batch component
+
+# ---------------------------------------------------------------------------------------------
+# The reporting tests run against real PostgreSQL with the ledger's own Flyway migrations applied,
+# for the same reason the ledger's own do: a reader proved against a hand-written schema is verified
+# against a fiction, and it keeps passing on the day WP-07 adds a column.
+# ---------------------------------------------------------------------------------------------
+test-reporting: uv docker ## reporting, against real PostgreSQL with the ledger schema
+	@cd batch/reporting && uv run pytest
+
 # --- lint -------------------------------------------------------------------------------------
 
-lint: lint-contracts lint-edge ## Run every tier's linters and quality gates
+lint: lint-contracts lint-edge lint-batch ## Run every tier's linters and quality gates
 	@echo "No linter configured for the mainframe or Java tiers yet - see quality/ and follow-up F-03."
 
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
@@ -152,6 +167,12 @@ lint-edge: go uv ## gofmt and go vet over Go, ruff over Python
 	@cd edge/fraud-scoring && uv run ruff format --check . >/dev/null \
 		|| (echo "ruff format would change files in edge/fraud-scoring"; exit 1)
 	@echo "OK    ruff is clean"
+
+lint-batch: uv ## ruff over the batch tier
+	@cd batch/reporting && uv run ruff check .
+	@cd batch/reporting && uv run ruff format --check . >/dev/null \
+		|| (echo "ruff format would change files in batch/reporting"; exit 1)
+	@echo "OK    ruff is clean over batch/reporting"
 
 # --- run --------------------------------------------------------------------------------------
 

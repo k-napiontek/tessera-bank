@@ -8,6 +8,6 @@ The jobs that run on a schedule rather than in response to a request. Banks have
 
 | Directory | Stack | Holds |
 |---|---|---|
-| `recon/` | - | Reconciliation between the COBOL master and the PostgreSQL ledger |
-| `reporting/` | Python 3.12 | Regulatory and management reporting |
+| `recon/` | - | Reconciliation between the COBOL master and the PostgreSQL ledger - not started, waits on WP-11 |
+| `reporting/` | Python 3.12 | Regulatory and management reporting - **built**, see [`reporting/`](reporting/) |
 
