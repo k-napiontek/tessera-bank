@@ -134,8 +134,11 @@ build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 		-o $(CURDIR)/mainframe/data/out/eodrept mainframe/cobol/EODREPT.CBL
 	@echo "OK    ACCTPOST and EODREPT compiled"
 
+# Packaging a WAR must not need a database. Left to run the test phase, `package` starts Oracle and
+# this target quietly acquires a Docker prerequisite it does not declare - so it skips tests, and
+# `test-legacy` is the one target that runs them.
 build-legacy: jdk8 ## Build the Java 8 tier - customer-master as a WAR
-	@JAVA_HOME="$(JAVA8)" mvn --quiet -f legacy/customer-master/pom.xml package
+	@JAVA_HOME="$(JAVA8)" mvn --quiet -DskipTests -f legacy/customer-master/pom.xml package
 	@echo "OK    customer-master packages as a WAR"
 
 build-services: jdk17 ## Build the Java 17 tier
