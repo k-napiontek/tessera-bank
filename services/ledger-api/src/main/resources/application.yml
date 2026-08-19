@@ -54,6 +54,60 @@ server:
     include-message: never
     include-exception: false
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only what an operator and a scrape genuinely need. The default is `health` alone; the
+        # temptation is `*`, which exposes heapdump, env and configprops - env alone prints every
+        # resolved property, including the database password.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db
+      # Splits /actuator/health into /liveness and /readiness. They answer different questions and a
+      # platform acts on them differently: a failing liveness probe restarts the pod, a failing
+      # readiness probe takes it out of the load balancer.
+      probes:
+        enabled: true
+      # Never `always`. A health detail names the failing component and, for a datasource, the
+      # exception it failed with - which is an unauthenticated description of the internals.
+      show-details: when-authorized
+  health:
+    # **The database is in readiness and deliberately not in liveness.**
+    #
+    # Spring's default readiness group is `readinessState` alone, which reports ready as long as the
+    # application context has started - so a ledger that cannot reach PostgreSQL is declared ready
+    # and is sent traffic it can only reject. Adding `db` is the whole point of configuring this.
+    #
+    # It stays out of liveness because restarting the pod does not fix a database outage; it turns
+    # one outage into a crash-loop across every instance at once, and then the recovery has to
+    # contend with a stampede of reconnecting pods.
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: ledger-api
+
+  tracing:
+    # W3C `traceparent`, which is what the Go gateway and the Python consumer speak. It is the
+    # default; it is written down because the alternative - B3 - is what an older Spring Cloud Sleuth
+    # estate emits, and a mismatch does not fail, it silently starts a new trace at every hop.
+    propagation:
+      type: w3c
+    sampling:
+      # Not 1.0. Tracing every transfer in a bank is a volume of spans nobody keeps and nobody reads,
+      # and the sampling decision propagates - so an unsampled request costs one header rather than a
+      # span at every tier. Raised per environment by the platform repositories.
+      probability: ${LEDGER_TRACE_SAMPLE:0.1}
+
+    # No exporter, and no collector endpoint. Where traces are shipped is deployment configuration
+    # (ADR 0001). What this repository owns is that the spans exist and that the context propagates.
+
 logging:
   level:
     root: INFO

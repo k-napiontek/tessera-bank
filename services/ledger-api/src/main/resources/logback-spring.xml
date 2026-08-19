@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  One log format, and it is JSON.
+
+  A service whose logs are shipped and searched should emit what the aggregator parses, and emit the
+  same thing everywhere: a pattern locally and JSON in production means the format that matters is
+  the one nobody ever reads during development, and its first field-name mistake is discovered in an
+  incident.
+
+  Boot 3.4 does this natively. Stratum 3 is pinned to Boot 3.2 (CLAUDE.md), so the encoder is an
+  explicit dependency. That pin is deliberate and is not to be "fixed".
+
+  REQ-DP-002 is the constraint that shapes the field list: account references and correlation ids,
+  never a name, an address, a national identifier or anything a customer typed. LogHygieneTest holds
+  this file to it.
+-->
+<configuration>
+
+    <springProperty scope="context" name="applicationName" source="spring.application.name"
+                    defaultValue="ledger-api"/>
+
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!--
+              The MDC is included wholesale, which is what carries the correlation id onto every
+              line without any call site having to remember it. It is also the reason nothing but a
+              correlation id may ever be put there: whatever is in the MDC is in the logs, and a
+              request-scoped map is exactly where somebody will one day park a customer name.
+            -->
+            <includeMdc>true</includeMdc>
+            <includeContext>false</includeContext>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <thread>thread</thread>
+                <logger>logger</logger>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+            <customFields>{"service":"${applicationName}"}</customFields>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="JSON"/>
+    </root>
+
+</configuration>

@@ -34,6 +34,7 @@ of them knows this one.
 | `correlation/` | The filter that gives every request an id, and the MDC it lives in. |
 | `audit/` | The audit context: who is asking, under which request. |
 | `outbox/` | The Kafka end of the relay, and the timer that drives it. |
+| `metrics/` | The business metrics, measured at the boundary rather than inside the use cases. |
 | `config/` | The bean graph, written out by hand because nothing below carries an annotation to scan. |
 
 ## Correlation
@@ -114,6 +115,41 @@ not declare, and rendering `amountMinor` through `Money.toPlainString()`. The se
 `"0.00"` and `string found, integer expected`, which is the defect this repository exists to prevent
 appearing on a wire.
 
+## Observability
+
+Three signals, each answering a different question. The operator's view is
+[`docs/runbooks/ledger-observability.md`](../../docs/runbooks/ledger-observability.md); what follows
+is why it is shaped this way.
+
+**Probes.** `/actuator/health/liveness` and `/readiness` must answer differently or neither is worth
+having: a failing liveness probe restarts the process, a failing readiness probe removes it from the
+load balancer. The database is in **readiness** - Spring's default group is `readinessState` alone,
+which reports ready as soon as the context has started, so a ledger that cannot reach PostgreSQL
+would be declared ready and sent traffic it can only reject. It stays out of **liveness** because
+restarting a pod does not fix a database outage; it turns one outage into a crash-loop across every
+instance at once.
+
+**Metrics, measured at the boundary.** `MoneyMovementMetricsFilter` sits in the filter chain rather
+than inside the use cases, for two reasons: the use cases live in `ledger-core`, which carries no
+framework on its compile classpath and must not start now, and what an operator needs is what the
+customer experienced. A replay is its own outcome, not a success - counting a `200` from the
+idempotency store as a posting would inflate throughput with work nobody did and hide the signal that
+matters, which is clients timing out. Rejections are counted but not timed: mixing a validation
+failure that returns in a millisecond with a transfer that took two locks produces a percentile
+describing neither.
+
+**Logs are JSON, in one format everywhere.** A pattern locally and JSON in production means the
+format that matters is the one nobody reads during development. Boot gains structured logging
+natively in 3.4; stratum 3 is pinned to 3.2, so the encoder is an explicit dependency. Everything in
+the MDC is on every line, which is what carries the correlation id without any call site remembering
+it - and is why `LogHygieneTest` holds the MDC to an allowlist.
+
+**Tracing produces spans and propagates W3C `traceparent`, and ships nothing.** There is no exporter
+and no collector address here; that is deployment configuration (ADR 0001). The correlation id and
+the trace id coexist deliberately: a trace reaches as far as W3C propagation does, while the
+correlation id also survives the SOAP call and the fixed-width record the ESB writes for a mainframe
+where no tracing exists.
+
 ## Tests
 
 | Test | What it holds |
@@ -128,6 +164,10 @@ appearing on a wire.
 | `CorrelationIdTest` | An id on every response, including the two that reset it. |
 | `AuditTrailEndToEndTest` | The request's id reaches the audit row; a rejected transfer leaves none. |
 | `KafkaOutboxContractTest` | A transfer relayed to a real broker, validated against the AsyncAPI document. |
+| `HealthProbeTest` | With the database stopped, readiness is 503 and liveness is still 200. |
+| `LogHygieneTest` | A marker a customer supplied never reaches a log line; the MDC is on an allowlist. |
+| `BusinessMetricsTest` | Every outcome counted under its own tag, and all of it scrapeable. |
+| `TracingTest` | A log line inside a span carries its trace id; the context leaves as `traceparent`. |
 
 One container and one Spring context for the whole module, so the database is shared: every test
 takes account references of its own from `LedgerApiTest.freshAccountReference()`. A test that
@@ -147,9 +187,12 @@ make test-services # all three modules
 - **There is no authentication here**, and there should not be. `edge/api-gateway` (WP-12) owns it.
   The contract declares a bearer scheme because a contract that omits its security requirement is
   incomplete, not because this application checks one.
-- **The audit chain and the outbox are here; metrics and structured logging are not yet.** WP-09
-  lands in two pull requests and this is the first. Until the second, logging is Boot's default
-  console format.
+- **Spring Boot switches observability off inside `@SpringBootTest`.** Deliberately, so a test run
+  cannot push to a real backend - but it leaves only a `SimpleMeterRegistry`, so `/actuator/prometheus`
+  does not exist and there is no `Tracer` to assert on. `@AutoConfigureObservability` is what turns
+  it back on, and without it a metrics test passes while verifying nothing.
+- **`management.endpoint.prometheus.access` is a Boot 3.4 property.** This module is pinned to 3.2
+  and the exposure list governs it instead.
 - **The outbox relay is a scheduled bean, switchable by `tessera.outbox.relay-enabled`.** Every test
   context but `KafkaOutboxContractTest` turns it off: there is no broker for it to reach, and a
   scheduled task retrying against one adds a ten-second wait to every class.
