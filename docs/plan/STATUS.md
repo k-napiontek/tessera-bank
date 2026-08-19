@@ -9,8 +9,11 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-13 - `fraud-scoring` (Python)** is next among the unblocked packages, with **WP-17
-> (`reporting`, Python)** beside it; both sit off the critical path and depend only on WP-09. The
+> **WP-13 - `fraud-scoring` (Python)** is `In progress`. Its task list was detailed and reviewed on
+> 2026-08-19, with three decisions: determinism plus a keyed topic as the duplicate control rather
+> than a seen-set, a real broker in the test suite through Testcontainers, and `confluent-kafka` as
+> the client. **WP-17** (`reporting`, Python) is the other unblocked package; both sit off the
+> critical path and depend only on WP-09. The
 > critical path itself is still stopped at **WP-10**, which is **blocked on tooling** - it needs JDK 8
 > and only `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10. WP-14 (`web-banking`) is
 > unblocked now that WP-12 is done.
@@ -58,7 +61,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `020cee2` |
-| [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Not started` | | |
+| [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `In progress` | | |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
