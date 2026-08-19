@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  customer-master - the system of record for customers and account metadata.
+
+  Stratum 1, vintage ~2011: Java 8, Servlet 3.0, JAX-WS SOAP, Maven 3, packaged as a WAR for
+  Tomcat 8.5. Those versions are load-bearing and are not to be raised - see the legacy-strata rule
+  in CLAUDE.md and ADR 0002. Nearly everything this build needs is pinned in the corporate parent,
+  which is what a parent POM is for.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>bank.tessera</groupId>
+    <artifactId>tessera-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../platform/parent-pom/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>customer-master</artifactId>
+  <packaging>war</packaging>
+
+  <name>customer-master</name>
+  <description>Customer and account metadata, exposed over WSDL-first SOAP.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc8</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>customer-master</finalName>
+  </build>
+
+</project>
