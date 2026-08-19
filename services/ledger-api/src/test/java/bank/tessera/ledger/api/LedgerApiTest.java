@@ -1,16 +1,12 @@
 package bank.tessera.ledger.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * The application, running against real PostgreSQL.
@@ -20,21 +16,27 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * must work on account references of its own - {@link #freshAccountReference()} exists for that, and
  * a test that hard-codes a reference will pass alone and fail beside its neighbours.
  *
- * <p>Flyway runs on startup, so the schema under test is the one the migrations produce rather than
- * one a test helper built to match.
+ * <p><strong>Started in a static initialiser, not by {@code @Testcontainers}.</strong> That JUnit
+ * extension stops a {@code @Container} when the class that declares it finishes, and Spring caches
+ * its context - and the connection pool inside it - across every test class in the module. The
+ * second class then holds a pool pointing at a container that no longer exists, and fails with
+ * "Failed to obtain JDBC Connection" for a reason that has nothing to do with what it was testing.
+ * Ryuk removes the container when the JVM exits, which is the same arrangement
+ * {@code PostgresSupport} uses in {@code ledger-persistence}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
-@ExtendWith(SpringExtension.class)
 public abstract class LedgerApiTest {
 
-    @Container
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("tessera_ledger")
             .withUsername("ledger")
             .withPassword("ledger");
+
+    static {
+        POSTGRES.start();
+    }
 
     private static int nextAccount = 1;
 

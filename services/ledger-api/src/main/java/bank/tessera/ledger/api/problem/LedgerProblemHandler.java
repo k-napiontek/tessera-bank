@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -40,7 +42,15 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  * <p><strong>The last handler is the important one.</strong> Without a catch-all, an unrecognised
  * exception reaches Spring's default handling and the client learns the class name of whatever
  * failed - and, if a SQL error made it that far, a fragment of the statement with it.
+ *
+ * <p><strong>Ordered ahead of Spring's own.</strong> {@code spring.mvc.problemdetails.enabled} adds
+ * a built-in advice so that framework failures are Problem documents too, and it is wanted - but it
+ * answers with {@code type: about:blank}, which is the RFC's way of saying "nothing machine-readable
+ * here". Both advices sit at the default precedence and the winner between them is unspecified, so
+ * this one is pinned in front: every response the contract declares carries a {@code type} a client
+ * can branch on.
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class LedgerProblemHandler {
 
