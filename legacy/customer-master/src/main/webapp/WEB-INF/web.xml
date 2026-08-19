@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Servlet 3.0 deployment descriptor.
+
+  Servlet 3.0 made web.xml optional, and a 2011 team kept writing one anyway - annotations were new,
+  the operations team read this file to find out what a WAR did, and a descriptor is what the change
+  advisory board reviewed. WP-10b adds the JAX-WS endpoint declaration here.
+-->
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+                             http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
+         version="3.0">
+
+  <display-name>customer-master</display-name>
+
+</web-app>

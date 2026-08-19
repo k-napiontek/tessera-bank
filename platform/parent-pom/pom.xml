@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The corporate parent POM.
+
+  Every bank has one. It is how a platform team pins versions and enforces standards across dozens
+  of application teams without touching their code, and it is the reason a 2011 module's pom.xml is
+  twenty lines rather than two hundred.
+
+  It expresses the compiler level PER MODULE rather than across the estate. Strata 1 and 2 are
+  pinned to Java 8 and stratum 3 to Java 17, and a parent that forced one level would either drag
+  the legacy tiers forward - which the legacy-strata rule in CLAUDE.md forbids - or hold the modern
+  tier back. A child overrides tessera.java.level and tessera.jdk.range together, or inherits the
+  Java 8 defaults below, because Java 8 is what the Maven-built tiers of this estate use.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>bank.tessera</groupId>
+  <artifactId>tessera-parent</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>Tessera Bank corporate parent</name>
+  <description>Pinned plugin and dependency versions for every Maven-built module in the estate.</description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- The per-module compiler level. Overridden by a module in another stratum, never here. -->
+    <tessera.java.level>1.8</tessera.java.level>
+    <!-- The JDK the build must RUN on, which is not the same statement as the level it targets:
+         javac -source 1.8 on a JDK 17 compiles against JDK 17's rt classes and will happily accept
+         an API that did not exist in 2011. Enforcing the runtime is what makes the level honest. -->
+    <tessera.jdk.range>[1.8,1.9)</tessera.jdk.range>
+
+    <!-- Plugin versions. Pinned so a build in five years produces what a build today produces;
+         an unpinned plugin is a dependency on whatever Maven Central held that morning. -->
+    <maven-clean-plugin.version>3.2.0</maven-clean-plugin.version>
+    <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+    <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+    <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
+    <maven-war-plugin.version>3.4.0</maven-war-plugin.version>
+    <maven-jar-plugin.version>3.4.1</maven-jar-plugin.version>
+    <maven-install-plugin.version>3.1.2</maven-install-plugin.version>
+    <maven-enforcer-plugin.version>3.4.1</maven-enforcer-plugin.version>
+    <jaxws-maven-plugin.version>2.6</jaxws-maven-plugin.version>
+    <cargo-maven3-plugin.version>1.10.15</cargo-maven3-plugin.version>
+    <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
+
+    <!-- Dependency versions. -->
+    <junit.version>4.13.2</junit.version>
+    <testcontainers.version>1.19.8</testcontainers.version>
+    <ojdbc8.version>21.11.0.0</ojdbc8.version>
+    <slf4j.version>1.7.36</slf4j.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- JUnit 4, not 5. Stratum 1 is 2011 and the test tooling should read like it. -->
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>${junit.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- Oracle's own JDBC driver for Java 8. Freely redistributable from Maven Central under the
+           Oracle Free Use Terms; the DATABASE is what is not distributable, not the driver. -->
+      <dependency>
+        <groupId>com.oracle.database.jdbc</groupId>
+        <artifactId>ojdbc8</artifactId>
+        <version>${ojdbc8.version}</version>
+      </dependency>
+
+      <!-- Testcontainers is an anachronism in a 2011 tier and a deliberate one: the pinned stack
+           constrains what ships, not what runs the tests, and the alternative is a stored-procedure
+           layer that nothing ever executes. The 1.19 line is the last that still supports Java 8. -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>${slf4j.version}</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>${maven-clean-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${maven-resources-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler-plugin.version}</version>
+          <configuration>
+            <source>${tessera.java.level}</source>
+            <target>${tessera.java.level}</target>
+            <!-- The Java tier's other half compiles with -Xlint:all -Werror and this one does too.
+                 A warning nobody reads is a warning that is not there. -->
+            <compilerArgs>
+              <arg>-Xlint:all</arg>
+              <arg>-Werror</arg>
+            </compilerArgs>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${maven-surefire-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${maven-failsafe-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-war-plugin</artifactId>
+          <version>${maven-war-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${maven-jar-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>${maven-install-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>jaxws-maven-plugin</artifactId>
+          <version>${jaxws-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.cargo</groupId>
+          <artifactId>cargo-maven3-plugin</artifactId>
+          <version>${cargo-maven3-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>build-helper-maven-plugin</artifactId>
+          <version>${build-helper-maven-plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <!-- The quality gate every child inherits: the build refuses to run on the wrong JDK rather
+           than producing bytecode nobody asked for. Maven itself is checked too, because a
+           pluginManagement block is only as pinned as the Maven that reads it. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${maven-enforcer-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>enforce-toolchain</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>${tessera.jdk.range}</version>
+                  <message>
+                    This module builds on JDK 8 only. See the legacy-strata rule in CLAUDE.md - the
+                    version is load-bearing, not incidental. Point JAVA_HOME at a JDK 8, or run the
+                    build through `make build-legacy`, which finds one for you.
+                  </message>
+                </requireJavaVersion>
+                <requireMavenVersion>
+                  <version>[3.6,)</version>
+                </requireMavenVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
