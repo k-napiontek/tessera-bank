@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1017-reporting` |
 | **Stratum** | 4 - Python 3.12, ~2025 |
 | **Depends on** | WP-09 |
-| **Status** | `Not started` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -131,10 +131,10 @@ impossible by construction. The run instant belongs in the manifest beside the r
 
 ## Definition of Done
 
-- [ ] Each report generates and its control totals reconcile to the ledger.
-- [ ] Rerunning for a past date produces byte-identical output.
-- [ ] The regulatory extract validates against its declared format.
-- [ ] No personal data appears in any output.
+- [x] Each report generates and its control totals reconcile to the ledger.
+- [x] Rerunning for a past date produces byte-identical output.
+- [x] The regulatory extract validates against its declared format.
+- [x] No personal data appears in any output.
 
 ## Verification
 
