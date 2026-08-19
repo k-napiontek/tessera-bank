@@ -18,12 +18,13 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, ClassVar, Final
 
-LOG_LEVELS: Final = frozenset({"debug", "info", "warning", "error"})
+# Re-exported so a reader of the configuration can see what bounds the thresholds, and imported
+# rather than restated so the contract's range is defined exactly once.
+from fraud_scoring.events import MAX_SCORE, MIN_SCORE
 
-# The contract's own limits. A score is an integer 0-1000 in
-# contracts/asyncapi/ledger-events.yaml, so a threshold outside that range is not a threshold.
-MIN_SCORE: Final = 0
-MAX_SCORE: Final = 1000
+__all__ = ["LOG_LEVELS", "MAX_SCORE", "MIN_SCORE", "ConfigError", "Settings", "load"]
+
+LOG_LEVELS: Final = frozenset({"debug", "info", "warning", "error"})
 
 
 class ConfigError(Exception):

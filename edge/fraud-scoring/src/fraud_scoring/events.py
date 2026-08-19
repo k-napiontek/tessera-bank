@@ -28,6 +28,13 @@ ALLOW: Final = "ALLOW"
 REVIEW: Final = "REVIEW"
 BLOCK: Final = "BLOCK"
 
+# The score's range and the reason code's length, as the contract fixes them. They live beside the
+# types that go on the wire so that the configuration and the engine cannot hold two opinions about
+# what the contract allows.
+MIN_SCORE: Final = 0
+MAX_SCORE: Final = 1000
+MAX_CODE_LENGTH: Final = 8
+
 
 class MalformedEvent(Exception):
     """The bytes on the topic are not a transfer this service can score."""
