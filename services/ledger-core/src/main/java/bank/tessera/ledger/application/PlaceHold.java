@@ -49,6 +49,12 @@ public final class PlaceHold {
         }
         Instant placedAt = clock.instant();
 
+        // Before the lock, for the reason Transfer gives: the locking port can only refuse, and its
+        // refusal would reach a caller as a conflict rather than as "no such account".
+        if (accounts.findByReference(command.account()).isEmpty()) {
+            throw new AccountNotFoundException(command.account());
+        }
+
         return unitOfWork.inTransactionLocking(List.of(command.account()), () -> {
             Account account = accounts.findByReference(command.account())
                     .orElseThrow(() -> new AccountNotFoundException(command.account()));
