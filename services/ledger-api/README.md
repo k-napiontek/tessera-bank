@@ -31,7 +31,29 @@ of them knows this one.
 | `dto/` | The wire types, and the mapping to and from the domain. |
 | `problem/` | RFC 9457 Problem Details, and the one enum of stable `type` URIs. |
 | `idempotency/` | The filter that makes a retry safe, and the request fingerprint it turns on. |
+| `correlation/` | The filter that gives every request an id, and the MDC it lives in. |
+| `audit/` | The audit context: who is asking, under which request. |
+| `outbox/` | The Kafka end of the relay, and the timer that drives it. |
 | `config/` | The bean graph, written out by hand because nothing below carries an annotation to scan. |
+
+## Correlation
+
+Every request has an id, whether or not the caller supplied one. `CorrelationIdFilter` accepts
+`X-Correlation-Id` when it is a UUID, generates one when it is absent or malformed, puts it in the
+SLF4J MDC, and echoes it on the response. From the MDC it reaches the Problem document, the audit row
+and the outbox event, so one customer request is one identifier across the estate.
+
+Three details that are not incidental:
+
+- **It is ordered first.** The idempotency filter can reject a request before any controller runs,
+  and its Problem document must carry the same id as the response header. That is exactly the path a
+  support engineer is looking at.
+- **A non-UUID is replaced, not propagated.** What arrives here reaches log lines and a Problem
+  document; honouring arbitrary text would let a caller choose this service's log contents, and would
+  break the join with every tier that keys on a UUID.
+- **The header is re-applied after `response.reset()`.** Two paths replace a half-written response -
+  the idempotency conflict and the replay - and `reset()` clears headers along with the body. Without
+  the re-application the id vanishes from precisely the two responses that most need it, silently.
 
 ## Idempotency
 
@@ -103,6 +125,9 @@ appearing on a wire.
 | `TransferEndpointsTest` | Transfers, reversals, and the replay that moves money once. |
 | `HoldEndpointsTest` | Placing, capturing and releasing, and what each does to the two balances. |
 | `OpenApiContractTest` | The implementation against the document, with a coverage assertion. |
+| `CorrelationIdTest` | An id on every response, including the two that reset it. |
+| `AuditTrailEndToEndTest` | The request's id reaches the audit row; a rejected transfer leaves none. |
+| `KafkaOutboxContractTest` | A transfer relayed to a real broker, validated against the AsyncAPI document. |
 
 One container and one Spring context for the whole module, so the database is shared: every test
 takes account references of its own from `LedgerApiTest.freshAccountReference()`. A test that
@@ -122,6 +147,12 @@ make test-services # all three modules
 - **There is no authentication here**, and there should not be. `edge/api-gateway` (WP-12) owns it.
   The contract declares a bearer scheme because a contract that omits its security requirement is
   incomplete, not because this application checks one.
-- **No metrics, no structured logging, no audit chain and no outbox.** All WP-09.
+- **The audit chain and the outbox are here; metrics and structured logging are not yet.** WP-09
+  lands in two pull requests and this is the first. Until the second, logging is Boot's default
+  console format.
+- **The outbox relay is a scheduled bean, switchable by `tessera.outbox.relay-enabled`.** Every test
+  context but `KafkaOutboxContractTest` turns it off: there is no broker for it to reach, and a
+  scheduled task retrying against one adds a ten-second wait to every class.
 - **`requestedAt` and `postedAt` report the same instant.** They diverge only once there is a queue
-  in front of the ledger, which is WP-09's work. Inventing a gap now would be fiction.
+  in front of the ledger. There still is not one: the outbox queues the *announcement*, not the
+  posting. Inventing a gap would be fiction.

@@ -32,6 +32,8 @@ ever points back.
 | `balance` | the materialised booked balance, one row per account |
 | `hold` | an amount reserved but not posted |
 | `idempotency_record` | a money-moving request's key, its fingerprint and the response it produced |
+| `audit_record` | who did what to which subject, with a hash of the previous row. **Append-only** |
+| `outbox_record` | a domain event, written with the postings and published afterwards |
 
 WP-08 added three migrations, each for something the REST contract needs the database to remember:
 
@@ -40,6 +42,40 @@ WP-08 added three migrations, each for something the REST contract needs the dat
 | `V3__ledger_references.sql` | `account.opened_date`, `journal_entry.reverses`, two sequences | `opened_date` is a **business** date, and `created_at` is when the row was inserted - they differ the moment an account is migrated in from the mainframe. `reverses` closes a gap WP-07 could not have seen: `JournalEntry` has carried `reverses()` since WP-06 and the schema had nowhere to put it, so a reversal round-tripped losing the link to the entry it corrected. |
 | `V4__movement_reference.sql` | `journal_entry.reference_text` | Remittance information, 35 characters as in the SEPA field. On the entry rather than the posting because the canonical model says one value is copied onto both legs, and no invariant depends on it - which is also why `JournalEntry` does not carry it. |
 | `V5__idempotency.sql` | `idempotency_record` | The table exists for its primary key. See below. |
+
+WP-09 added three more:
+
+| Migration | Adds | Why |
+|---|---|---|
+| `V6__hold_transitioned_at.sql` | `hold.transitioned_at` | Follow-up F-21. Every transition took an `Instant`, validated it and threw it away, so a released hold could not say when it was released and this adapter passed a value it knew was ignored. A `CHECK` makes "null" and "still `PLACED`" the same statement, and a second refuses a hold that ended before it began. |
+| `V7__audit_log.sql` | `audit_record`, two triggers | Append-only against the application, hash-chained against everyone else. See below. |
+| `V8__outbox.sql` | `outbox_record`, a partial index | The event lands in the postings' transaction; a relay publishes from here. [ADR 0004](../../docs/governance/adr/0004-transactional-outbox.md). |
+
+**The audit trail's two mechanisms do different jobs, and conflating them is the usual mistake.** The
+row trigger stops the application from editing a row - that is the control that operates every day.
+The hash chain catches whoever gets past it: a superuser, a DBA with DDL rights, a backup restored
+with one row altered. It cannot prevent the edit, only make it impossible to hide, and saying so is
+the point: a control that claims to prevent what it can only detect is worse than one that states the
+difference. Note the **statement-level `TRUNCATE` trigger** beside the row-level one - `TRUNCATE`
+fires no row trigger, so without it a single statement empties the whole trail and the control never
+runs. [ADR 0005](../../docs/governance/adr/0005-hash-chained-audit-trail.md).
+
+**Appends to the chain serialise on `pg_advisory_xact_lock`, and that is a stated cost.** Reading the
+last hash and inserting the row that chains onto it must be one atomic step, or two concurrent
+appends claim the same predecessor and `audit_record_previous_unique` refuses the loser - a chain
+defect surfacing as a customer's transfer failing. Every money-moving transaction therefore queues
+behind this lock for the duration of its own transaction. That is the price of one global chain, and
+it is the chain being global that makes a *missing* row detectable.
+
+**What is hashed is normalised first.** `timestamptz` keeps microseconds while `Instant` carries
+nanoseconds, and a `uuid` column returns lowercase whatever case it was given. Hash before
+normalising and verification reports tampering on rows nobody touched - and a control that cries wolf
+gets switched off.
+
+**The outbox row is an insert and nothing else.** `JdbcEventOutbox` opens no transaction, starts no
+thread and reaches no broker; every one of those would reintroduce the dual write the table exists to
+avoid. `OutboxRelay` publishes **and only then marks dispatched** - the reverse order turns a failed
+publish into a permanently lost event, and `OutboxRelayTest` fails on that mutation.
 
 **A transfer is reversed at most once, and the unique index says so.** `journal_entry_reverses_uq`
 is a partial unique index on `reverses`. The use case checks first, but a check in one code path is
@@ -139,14 +175,25 @@ nothing - the worst outcome available, since it would then be cited as evidence.
 | `JdbcJournalEntryRepositoryTest` | the money path, with expected figures written out as numbers |
 | `AccountLocksConcurrencyTest` | the ring transfer, and the lock order asserted directly |
 | `BalanceReconciliationTest` | zero drift, and a corrupted row detected |
+| `AuditChainTest` | a tampered row named, a deleted row caught at its successor, `TRUNCATE` refused |
+| `OutboxTransactionTest` | the event commits with the postings and rolls back with them |
+| `OutboxRelayTest` | publish-then-mark, and republication after a crash in the window |
 | `HexagonalBoundariesTest` | the domain imports no framework and never knows the adapters exist |
 
 ## Notes for the next change
 
 - **`Hold` is rehydrated through `place` then its recorded transition.** It exposes no reconstruction
   factory by design. Do not add one: a persistence-shaped back door into an aggregate is how a
-  lifecycle stops being enforced. The transition methods take an instant they do not retain, so the
-  value passed cannot affect the rebuilt hold - a round-trip equality test proves it.
+  lifecycle stops being enforced. The transition instant now comes from the row rather than from
+  `placed_at` - WP-09 closed F-21 - so the round-trip test asserts the value, where it used to prove
+  the value could not matter.
+- **Each test class that appends to the audit chain wants a schema of its own.** Half of
+  `AuditChainTest` breaks the chain deliberately, and a shared schema would make every later
+  assertion depend on which test ran first.
+- **Pools open connections on demand.** Hikari defaults `minimumIdle` to `maximumPoolSize`, so every
+  per-class schema opened its full eight connections at once; adding schemas reached PostgreSQL's
+  100-client limit and failed in whichever class happened to run last, which made it look like that
+  class's fault.
 - **PostgreSQL `timestamptz` stores microseconds and `Instant` carries nanoseconds.** An instant with
   nanos does not survive the round trip, so fixtures use microsecond precision. An equality assertion
   would otherwise fail against a correct adapter.
