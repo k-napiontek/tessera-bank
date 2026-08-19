@@ -9,25 +9,22 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-13 - `fraud-scoring` (Python)** is `In progress`. Its task list was detailed and reviewed on
-> 2026-08-19, with three decisions: determinism plus a keyed topic as the duplicate control rather
-> than a seen-set, a real broker in the test suite through Testcontainers, and `confluent-kafka` as
-> the client. **WP-17** (`reporting`, Python) is the other unblocked package; both sit off the
-> critical path and depend only on WP-09. The
-> critical path itself is still stopped at **WP-10**, which is **blocked on tooling** - it needs JDK 8
-> and only `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10. WP-14 (`web-banking`) is
-> unblocked now that WP-12 is done.
+> **WP-17 - `reporting` (Python)** is the next unblocked package, and it sits off the critical path
+> as WP-13 did. **WP-14** (`web-banking`, React) is unblocked too, now that WP-12 is done. The
+> critical path itself is still stopped at **WP-10**, which is **blocked on tooling**: it needs JDK 8
+> and only `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10.
 >
-> Every package other than WP-12 is still frame-only until detailed - F-02 - so a session picking one
-> up must fill in its task list and have it reviewed first.
+> Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
+> its task list and have it reviewed first.
 >
-> **The edge exists.** `edge/api-gateway` authenticates a bearer token with the algorithm pinned,
-> authorises coarsely by scope, matches every request against the OpenAPI contract's routes, limits
-> each caller per route, gives the estate one correlation id, and forwards to the ledger under a
-> timeout with a retry that only ever replays what is safe to replay. Health and metrics are on a
-> second port. Run it with `make test-edge`, or boot it in front of a live ledger with
-> `go -C edge/api-gateway run ./cmd/gateway` - see the component README for the environment it needs.
-> Stratum 4 now has a toolchain: `make build-edge`, `make test-edge`, `make lint-edge`.
+> **The edge exists, on both sides of the ledger.** `edge/api-gateway` (Go) authenticates a bearer
+> token with the algorithm pinned, routes only what the OpenAPI contract declares, limits each caller
+> per route, and forwards under a timeout with a retry that only replays what is safe to replay.
+> `edge/fraud-scoring` (Python 3.12 under `uv`) consumes the ledger's transfer events, scores them
+> against an explainable rule set whose every rule is a pure function of one event, and publishes a
+> decision that can be reproduced from a version covering the thresholds as well as the code. It is
+> the **first consumer of the outbox WP-09 built**. Run them with `make test-gateway` and
+> `make test-fraud`; `make test-fraud` needs Docker, because four of its tests start a real Kafka.
 >
 > **The ledger is now complete as a service.** It posts double-entry money over HTTP, idempotently,
 > against real PostgreSQL; it records every movement in an append-only hash-chained audit trail; it
@@ -61,7 +58,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
-| [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `In progress` | | |
+| [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
@@ -127,6 +124,10 @@ becomes its own change when picked up.
 | F-35 | WP-12 | **`govulncheck` reports 12 advisories in the Go standard library of the machine's toolchain**, go1.25.6, fixed in go1.25.13; several are reachable from `net/http` and `crypto/tls` on the serving path. **No dependency of the gateway is flagged.** This is a machine prerequisite rather than a repository change - `brew upgrade go` - and it is the same class of gap as F-10. Worth a note in `docs/consuming-this-repo.md` when that stub is written, because "the edge tier needs Go" is not the same statement as "the edge tier needs a Go without known advisories". | Open |
 | F-36 | WP-12 | **Nothing runs `govulncheck` or a Go linter as part of `make lint`.** `lint-edge` runs `gofmt -l` and `go vet`, which is the floor rather than a quality gate: no `staticcheck`, no `errcheck`, and no vulnerability scan. F-03 records that `quality/` holds no rule files; this records that stratum 4 has now arrived with the same gap, and that a Go tier is where the tooling to close it is cheapest. | Open |
 | F-37 | WP-12 | **The rate limiter cannot be observed.** `Limiter.Tracked()` reports how many buckets are held and nothing exports it, so the memory the limiter uses - and the sweep that is supposed to bound it - are invisible in production. A gauge belongs beside the refusal counter; it was left out because WP-12's metric list names requests, latency, refusals and upstream failures, and adding to that list is a decision rather than an omission. | Open |
+| F-38 | WP-13 | **Nothing consumes `tessera.fraud.decision.v1`.** The scoring service publishes a decision and the estate does nothing with it: a `BLOCK` is an opinion nobody reads, and the reversal it is supposed to trigger has no trigger. WP-13's Out of scope excludes acting on a decision and excludes case management, correctly - but until some package consumes this topic, the control the service represents is documentation rather than a control. The consumer belongs with whoever owns the reversal path. | Open |
+| F-39 | WP-13 | **The rule set cannot see across transfers, and that is a stated limitation rather than a gap.** Every rule is a pure function of one event, so a single 9 990.00 payment is flagged as structuring and ten of them in an hour look exactly like one. Closing it properly needs a feature store where account-level aggregates are versioned and addressable *as of* a point in time - which keeps rules pure. Adding a dictionary to a rule instead would break REQ-FRD-003 silently. See ADR 0008. | Open |
+| F-40 | WP-13 | **The thresholds shipped are placeholders, not calibrated numbers.** 100 000.00 for a high-value transfer and a 5% structuring band under a 10 000.00 reporting threshold are plausible and untuned; the weights are coarse for the same reason. Nothing in this repository could calibrate them - that needs outcome data - so what matters is that changing them changes `modelVersion`, and it does. Worth a line in whatever document describes running this service for real. | Open |
+| F-41 | WP-13 | **The score histogram has no alert and the decision counter no baseline.** `tessera_fraud_score` will show a rule set drifting towards a threshold long before the outcomes change, which is the reason it is a histogram - but nothing watches it, and there is no recorded "normal" to compare against. The same is true of `tessera_fraud_malformed_total`, where any non-zero value is a producer sending something this consumer cannot read. Alerting rules belong to the platform repositories; the metrics are here and named. | Open |
 
 ---
 
@@ -159,6 +160,10 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-19 | The gateway **validates the customer's token and forwards it unchanged**; it mints nothing. The OpenAPI document said the token was *issued* at the edge, which contradicted WP-12's Out of scope section - the contract was corrected in the commit before the first line of Go. An edge component holding a signing key could mint any identity in the bank. See ADR 0007. |
 | 2026-08-19 | Stratum 4's two dependencies are **justified rather than avoided**: `golang-jwt/jwt/v5` and `prometheus/client_golang`. "Standard library first" is a constraint on what is written by hand, and hand-rolled signature verification is where `alg: none` and algorithm confusion hide. The Go directive follows what those dependencies require - currently 1.25 - which the tier's documented `Go 1.22+` permits; downgrading three transitive modules to hold a lower floor was tried, and it imported an advisory to satisfy a documentation floor. |
 | 2026-08-19 | Health probes and metrics are served on a **second port**. The ledger serves its actuator endpoints beside its API, and refusing that arrangement at the edge is half the reason the gateway exists; repeating it there would have been a poor joke. The customer-facing listener answers 404 to `/metrics` even with a valid token. |
+| 2026-08-19 | `edge/fraud-scoring` promises **exactly one distinct decision per transfer, not exactly one message**. Scoring is a pure function and the decision topic is keyed by `transferRef`, so a redelivered event produces byte-identical output that a compacted view collapses. The literal reading needs a durable seen-set, which is a store ADR 0001 forbids describing - so the README states which of the two the service actually provides. |
+| 2026-08-19 | The scorer **publishes the decision before committing the offset**, the same ordering the outbox relay uses: reversed, a crash between the two loses a decision permanently and leaves nothing to say so. A message that cannot be parsed is counted, logged and committed - halting would let one malformed message end scoring for the whole bank on every restart. |
+| 2026-08-19 | **No velocity rule, and no behavioural rule of any kind**, because they would make REQ-FRD-003 false while leaving it stated. `modelVersion` carries a digest of the thresholds as well as the catalogue version, so a decision is reproducible even after a threshold has moved. See ADR 0008. |
+| 2026-08-19 | Stratum 4's Python half is **pinned to 3.12 and managed by `uv`, which fetches the interpreter itself** - so the tier builds on a machine with no Python installed. `ruff` is its linter, with `B`, `S`, `DTZ` and `RUF` enabled beyond the defaults; it is the first tier in this repository to have a real linter, which sharpens rather than closes F-03. |
 | 2026-08-18 | A ledger balance is **derived two independent ways on purpose**. `balanceOf` reads the materialised `balance` row - the fast path an API call takes - and `BalanceReconciliation` sums the postings in SQL, reimplementing the sign convention that `AccountType.signedEffect` holds in Java. The duplication is the control: a check written against the same code it checks proves nothing, and if `balanceOf` summed the postings the reconciliation would compare a number to itself. This does not contradict WP-06's "`Account` stores no balance" - the aggregate holds none; the database materialises one and is then held to account for it. |
 | 2026-08-18 | **Locking more than one account goes through `AccountLocks.lockInOrder`, which sorts by reference.** The port locks one account at a time and widening it to suit an adapter would invert the dependency the architecture protects, so the rule lives in the persistence module. The order is arbitrary; that it is the same order every time is the whole mechanism. Proven by deleting the single `.sorted(...)` line and rerunning the ring test, which produced five `deadlock detected` errors from PostgreSQL - the rule is load-bearing, not decorative. |
 | 2026-08-18 | A PostgreSQL trigger function must address its tables through **`TG_TABLE_SCHEMA`**, never by an unqualified name. A function body resolves unqualified names against the *caller's* `search_path`, not the schema it was created in, so the balanced-entry trigger worked during migration and failed the moment it was called from a connection with a different `search_path`. |
