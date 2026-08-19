@@ -181,7 +181,14 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 	@python3 mainframe/jcl/test-sortrec.py 2>&1 >/dev/null | tail -3
 	@python3 mainframe/jcl/test-eod-cycle.py
 
-test-legacy: jdk8 ## customer-master - Java 8 unit tests
+# ---------------------------------------------------------------------------------------------
+# The schema and the stored procedures run against real Oracle Database 23ai Free in a container.
+# TD-005 accepts that Oracle is not distributable and calls for a substitute; this is it. A
+# compatibility mode was the alternative and runs no PL/SQL at all, so the two things this stratum
+# exists to reproduce - the dialect lock-in and the stored-procedure layer - would both have been
+# reproduced by something else pretending. First run pulls ~2GB.
+# ---------------------------------------------------------------------------------------------
+test-legacy: jdk8 docker ## customer-master, with the schema and PL/SQL on real Oracle
 	@JAVA_HOME="$(JAVA8)" mvn -f legacy/customer-master/pom.xml test
 
 test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL
