@@ -124,19 +124,21 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Five of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
+Nine of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
 authority; this is the shape of it.
 
 | Stratum | What exists |
 |---|---|
 | **Contracts** | All four families: COBOL copybooks with a column map, canonical XSD, customer-master WSDL, ledger-core OpenAPI, Kafka AsyncAPI - all derived from [`canonical-data-model.md`](docs/architecture/canonical-data-model.md) and validated by `contracts/validate.sh` |
 | **0 - `mainframe/`** | `ACCTPOST.CBL`, the balanced-line match-merge, with six rejection reasons and balancing control totals. A COMP-3 encoder and a deterministic synthetic data generator. |
-| **3 - `services/`** | The `ledger-core` domain: `Money`, `Account`, `JournalEntry`, `Balance`, `Hold` and the repository ports. Pure Java 17, no framework on the compile classpath. |
+| **3 - `services/`** | The ledger, end to end: the `ledger-core` domain (`Money`, `Account`, `JournalEntry`, `Balance`, `Hold`, pure Java 17 with no framework on its compile classpath), PostgreSQL persistence with deterministic lock ordering, a REST API with required idempotency and RFC 9457 problems, an append-only hash-chained audit trail, a transactional outbox relayed to Kafka, and metrics, structured JSON logging and health probes. |
 | **1, 2, 4** | Nothing yet. `legacy/`, `integration/`, `edge/` and `batch/` hold READMEs only. |
 
-No tier is deployable: there is no persistence, no REST endpoint and no wiring between strata. What
-exists is the contracts, the mainframe batch core and the ledger domain - the parts everything else
-is built against.
+The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, and the overnight
+COBOL cycle runs with `make eod`. Nothing joins them yet - the legacy, integration and edge strata
+hold READMEs only, so there is no path from a customer request to the mainframe and no deployable
+estate. What exists is the contracts, the mainframe batch core and the ledger, which is the tier
+everything else is built against.
 
 ```bash
 make test     # every tier that has something to run

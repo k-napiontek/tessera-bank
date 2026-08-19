@@ -97,6 +97,22 @@ public final class OutboxRelay {
         return count == null ? 0L : count;
     }
 
+    /**
+     * How long the oldest waiting event has waited, in seconds. Zero when nothing is waiting.
+     *
+     * <p>The number to alert on, rather than the count. A backlog of ten thousand events draining
+     * steadily is a busy afternoon; a backlog of one that has not moved in ten minutes is an
+     * incident, and a count cannot tell the two apart.
+     */
+    public long oldestPendingSeconds() {
+        Long seconds = jdbc.queryForObject(
+                "SELECT coalesce(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::bigint"
+                        + " FROM outbox_record WHERE dispatched_at IS NULL",
+                Map.of(),
+                Long.class);
+        return seconds == null ? 0L : seconds;
+    }
+
     private void markDispatched(PendingMessage message) {
         jdbc.update(
                 "UPDATE outbox_record SET dispatched_at = now(), attempts = attempts + 1"

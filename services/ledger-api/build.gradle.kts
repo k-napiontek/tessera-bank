@@ -36,6 +36,19 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    // Liveness and readiness probes, and the Micrometer registry the business metrics land in.
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // The scrape format. The registry is a client-side choice and belongs here; what scrapes it,
+    // how often, and what alerts on it belong to the platform repositories (ADR 0001).
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
+    // Structured logging. Boot gains this natively in 3.4; stratum 3 is pinned to 3.2, so the
+    // encoder is an explicit dependency rather than a property - and its version is explicit too,
+    // because the Boot 3.2 BOM does not manage it.
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    // Tracing through the OpenTelemetry bridge. The bridge and the propagation format only - there is
+    // no exporter and no collector address here, because where traces are shipped is deployment
+    // configuration and belongs to the platform repositories (ADR 0001).
+    implementation("io.micrometer:micrometer-tracing-bridge-otel")
     implementation("org.flywaydb:flyway-core")
     // The broker end of the outbox relay. The only Kafka dependency in the repository, and it is a
     // client: no topic creation and no broker configuration lives here (ADR 0001).
