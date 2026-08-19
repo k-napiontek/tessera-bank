@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1012-api-gateway` |
 | **Stratum** | 4 - Go, ~2025 |
 | **Depends on** | WP-08 |
-| **Status** | `In progress` |
+| **Status** | `Done` |
 
 ## Objective
 
