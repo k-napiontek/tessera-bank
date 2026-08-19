@@ -394,3 +394,84 @@ form button {
     white-space: nowrap;
   }
 }
+
+/* ---- The transfer journey ----------------------------------------------- */
+
+/*
+ * Three stages, numbered, because this is a sequence and the order carries information a customer
+ * needs: the confirmation is where the request stops changing, and somebody who does not know a
+ * second step is coming reads the first one as the last.
+ */
+.steps {
+  display: flex;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-5);
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 3px solid var(--line-strong);
+  color: var(--ink-muted);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.step[data-state='done'],
+.step[data-state='current'] {
+  border-top-color: var(--navy-700);
+  color: var(--navy-900);
+}
+
+.step-index {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+}
+
+.step[data-state='done'] .step-index,
+.step[data-state='current'] .step-index {
+  background: var(--navy-700);
+  color: var(--ink-inverse);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.actions button {
+  flex: 1 1 auto;
+}
+
+/* An outcome names itself in a heading and in a live region; the stripe is the third signal. */
+.panel-posted {
+  border-left: 4px solid var(--green-700);
+}
+
+.panel-rejected {
+  border-left: 4px solid var(--red-600);
+}
+
+.transfer .panel,
+.transfer form {
+  max-width: 34rem;
+}
+
+/* An account reference is checked character by character, and a proportional face makes that
+   harder. Same reasoning as the monospace on a card title and in the movements table. */
+.ref-input {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
