@@ -9,6 +9,7 @@
 import { Route, Routes } from 'react-router';
 import { GatewayProvider } from './api/GatewayProvider';
 import { Dashboard } from './screens/Dashboard';
+import { Statement } from './screens/Statement';
 import { SignIn } from './session/SignIn';
 import { SessionProvider, useSession } from './session/session';
 
@@ -32,6 +33,7 @@ function SignedIn({
       <main>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/accounts/:accountRef/statement" element={<Statement />} />
         </Routes>
       </main>
     </GatewayProvider>

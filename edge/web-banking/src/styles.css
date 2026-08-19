@@ -234,3 +234,64 @@ a {
   margin: 0.9rem 0 0;
   font-size: 0.9rem;
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: var(--gap) 0;
+}
+
+.range label {
+  margin: 0;
+}
+
+.range input {
+  width: auto;
+}
+
+.account-ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin-top: 0;
+}
+
+.movements {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--gap);
+}
+
+.movements th,
+.movements td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.movements th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.movements .numeric {
+  text-align: right;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}

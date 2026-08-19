@@ -25,10 +25,10 @@ export function testClient(): GatewayClient {
 
 export function renderSignedIn(
   ui: ReactNode,
-  options: { accountRefs?: readonly string[]; client?: GatewayClient } = {},
+  options: { accountRefs?: readonly string[]; client?: GatewayClient; route?: string } = {},
 ): RenderResult {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[options.route ?? '/']}>
       <GatewayProvider
         client={options.client ?? testClient()}
         accountRefs={options.accountRefs ?? [ACCOUNT_ONE, ACCOUNT_TWO]}
