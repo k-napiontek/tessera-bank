@@ -24,7 +24,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 public final class JdbcHoldRepository implements HoldRepository {
 
     private static final String COLUMNS =
-            "reference, account_ref, amount_minor, currency, status, placed_at, expires_at, captured_by";
+            "reference, account_ref, amount_minor, currency, status, placed_at, expires_at,"
+                    + " transitioned_at, captured_by";
 
     /**
      * Which statuses still reduce available balance, taken from the enum rather than restated.
@@ -49,13 +50,14 @@ public final class JdbcHoldRepository implements HoldRepository {
                 """
                 INSERT INTO hold
                     (reference, account_ref, amount_minor, currency, status, placed_at, expires_at,
-                     captured_by)
+                     transitioned_at, captured_by)
                 VALUES
                     (:reference, :account, :amount, :currency, :status, :placedAt, :expiresAt,
-                     :capturedBy)
+                     :transitionedAt, :capturedBy)
                 ON CONFLICT (reference) DO UPDATE SET
-                    status      = EXCLUDED.status,
-                    captured_by = EXCLUDED.captured_by
+                    status          = EXCLUDED.status,
+                    transitioned_at = EXCLUDED.transitioned_at,
+                    captured_by     = EXCLUDED.captured_by
                 """,
                 new MapSqlParameterSource()
                         .addValue("reference", hold.reference().value())
@@ -67,6 +69,11 @@ public final class JdbcHoldRepository implements HoldRepository {
                         .addValue(
                                 "expiresAt",
                                 hold.expiresAt()
+                                        .map(at -> OffsetDateTime.ofInstant(at, java.time.ZoneOffset.UTC))
+                                        .orElse(null))
+                        .addValue(
+                                "transitionedAt",
+                                hold.transitionedAt()
                                         .map(at -> OffsetDateTime.ofInstant(at, java.time.ZoneOffset.UTC))
                                         .orElse(null))
                         .addValue("capturedBy", hold.capturedBy().map(EntryRef::value).orElse(null)));
@@ -111,11 +118,11 @@ public final class JdbcHoldRepository implements HoldRepository {
      * with a lifecycle, and a persistence-shaped back door into it is how a lifecycle stops being
      * enforced. So a captured or released hold is placed and then transitioned.
      *
-     * <p>The transition methods demand an instant but do not retain one - {@code transitionTo} carries
-     * forward only {@code placedAt} - so the value passed here cannot affect the rebuilt aggregate, and
-     * {@code placedAt} is passed rather than inventing a timestamp the row does not hold. A test
-     * asserts the rebuilt hold equals the original, which is what makes that claim checkable rather
-     * than merely stated.
+     * <p>The transition instant comes from the row. It used to come from {@code placed_at}, because
+     * {@code transitionTo} discarded whatever it was given (follow-up F-21) and there was no honest
+     * value to pass. Now that the aggregate keeps it, the column holds it and a test asserts it
+     * survives the round trip - which is the difference between a value that cannot matter and one
+     * that does.
      */
     private static Hold mapHold(ResultSet row, int rowNumber) throws SQLException {
         CurrencyCode currency = CurrencyCode.of(row.getString("currency"));
@@ -131,11 +138,13 @@ public final class JdbcHoldRepository implements HoldRepository {
 
         HoldStatus status = HoldStatus.valueOf(row.getString("status"));
         String capturedBy = row.getString("captured_by");
+        OffsetDateTime transitioned = row.getObject("transitioned_at", OffsetDateTime.class);
+        Instant transitionedAt = transitioned == null ? null : transitioned.toInstant();
         return switch (status) {
             case PLACED -> placed;
-            case CAPTURED -> placed.capture(EntryRef.of(capturedBy), placedAt);
-            case RELEASED -> placed.release(placedAt);
-            case EXPIRED -> placed.expire(placedAt);
+            case CAPTURED -> placed.capture(EntryRef.of(capturedBy), transitionedAt);
+            case RELEASED -> placed.release(transitionedAt);
+            case EXPIRED -> placed.expire(transitionedAt);
         };
     }
 }

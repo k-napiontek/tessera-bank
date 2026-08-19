@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
 import bank.tessera.ledger.application.AccountAlreadyOpenException;
 import bank.tessera.ledger.application.AccountNotFoundException;
 import bank.tessera.ledger.application.AlreadyReversedException;
@@ -46,8 +47,12 @@ class LedgerProblemHandlerTest {
 
     @BeforeEach
     void setUp() {
+        // The correlation filter is in the chain because the handler now reads the resolved id from
+        // the MDC rather than the raw header. Leaving it out would test a handler that can never
+        // find an id, which is a mapping nobody runs in production.
         mvc = MockMvcBuilders.standaloneSetup(new ThrowingController())
                 .setControllerAdvice(new LedgerProblemHandler())
+                .addFilters(new CorrelationIdFilter())
                 .build();
     }
 
@@ -148,11 +153,13 @@ class LedgerProblemHandlerTest {
     }
 
     @Test
-    @DisplayName("a correlation id is echoed when the gateway sent one, and absent otherwise")
-    void theCorrelationIdIsEchoed() throws Exception {
+    @DisplayName("a correlation id is echoed when the gateway sent one, and generated when it did not")
+    void theCorrelationIdIsAlwaysPresent() throws Exception {
         mvc.perform(get("/throw/not-found").header("X-Correlation-Id", "5c2f0b1e-0000-4000-8000-000000000001"))
                 .andExpect(jsonPath("$.correlationId").value("5c2f0b1e-0000-4000-8000-000000000001"));
-        mvc.perform(get("/throw/not-found")).andExpect(jsonPath("$.correlationId").doesNotExist());
+        // Changed by WP-09. It used to be absent here, which meant the one document a support
+        // engineer reads when something went wrong carried nothing to trace it with.
+        mvc.perform(get("/throw/not-found")).andExpect(jsonPath("$.correlationId").exists());
     }
 
     /** Exists only to raise each failure the handler must map. */

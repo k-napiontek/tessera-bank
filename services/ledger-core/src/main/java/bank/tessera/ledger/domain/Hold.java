@@ -12,7 +12,11 @@ import java.util.Optional;
  * exactly why capture must post the entry and clear the hold together, or available balance would be
  * reduced twice for one payment.
  *
- * <p>Immutable: each transition returns a new instance.
+ * <p>Immutable: each transition returns a new instance, which carries the instant of that
+ * transition. It did not always: until WP-09 every transition validated the instant it was given and
+ * then rebuilt from {@code placedAt}, so a released hold could not say when it was released
+ * (follow-up F-21). The audit chain records when a thing happened, and the placement instant is not
+ * an answer to that.
  *
  * <p>Traces to {@code Hold} in docs/architecture/canonical-data-model.md. Strata 3 and 4 only; the
  * mainframe has no such concept.
@@ -25,6 +29,7 @@ public final class Hold {
     private final HoldStatus status;
     private final Instant placedAt;
     private final Instant expiresAt;
+    private final Instant transitionedAt;
     private final EntryRef capturedBy;
 
     private Hold(
@@ -34,6 +39,7 @@ public final class Hold {
             HoldStatus status,
             Instant placedAt,
             Instant expiresAt,
+            Instant transitionedAt,
             EntryRef capturedBy) {
         this.reference = reference;
         this.account = account;
@@ -41,6 +47,7 @@ public final class Hold {
         this.status = status;
         this.placedAt = placedAt;
         this.expiresAt = expiresAt;
+        this.transitionedAt = transitionedAt;
         this.capturedBy = capturedBy;
     }
 
@@ -56,7 +63,7 @@ public final class Hold {
         if (!amount.isPositive()) {
             throw new IllegalArgumentException("A hold amount must be strictly positive, but was: " + amount);
         }
-        return new Hold(reference, account, amount, HoldStatus.PLACED, placedAt, expiresAt, null);
+        return new Hold(reference, account, amount, HoldStatus.PLACED, placedAt, expiresAt, null, null);
     }
 
     public HoldRef reference() {
@@ -87,6 +94,11 @@ public final class Hold {
         return Optional.ofNullable(capturedBy);
     }
 
+    /** When this hold left {@code PLACED}, or empty while it is still placed. */
+    public Optional<Instant> transitionedAt() {
+        return Optional.ofNullable(transitionedAt);
+    }
+
     /** Whether this hold still reduces available balance. */
     public boolean isActive() {
         return status.isActive();
@@ -112,7 +124,14 @@ public final class Hold {
                     "Hold " + reference + " is already " + status
                             + " and cannot become " + target + "; every transition out of PLACED is final.");
         }
-        return new Hold(reference, account, amount, target, placedAt, expiresAt, entry);
+        if (at.isBefore(placedAt)) {
+            // Kept rather than clamped. A hold that ended before it began is a caller passing the
+            // wrong instant, and the audit chain would record the wrong instant as fact.
+            throw new IllegalArgumentException(
+                    "Hold " + reference + " cannot become " + target + " at " + at
+                            + ", which is before it was placed at " + placedAt + ".");
+        }
+        return new Hold(reference, account, amount, target, placedAt, expiresAt, at, entry);
     }
 
     @Override

@@ -44,6 +44,25 @@ The suite touches no database, no container and no network, and runs in about a 
 consequence of the zero-framework rule rather than a happy accident, and `DomainPurityTest` keeps it
 that way by failing on any framework import.
 
+### What a use case records
+
+Every money-moving use case takes an `AuditTrail`, and the two posting use cases also take a
+`TransferEvents`. Both are **required** constructor arguments: a use case that can be built without
+them is one that can run without leaving a record or announcing itself, and that is precisely what
+REQ-AUD-001 and REQ-EVT-001 forbid. Both append inside the transaction the use case is already in, so
+a rejected transfer leaves neither an audit row nor an event.
+
+The two disagree about one field, deliberately. The audit row **omits** the remittance `reference`;
+the event **carries** it. It is the one field a paying customer controls, the canonical model
+classifies it restricted-if-misused, and an audit row is retained for years - while the event is how
+that reference reaches the ESB, which encodes it into a `MOVEREC` for the mainframe to print. The
+exclusions differ because the consumers do.
+
+`AuditEntry` defines what is hashed, in pure Java, so the definition is testable in milliseconds; the
+chaining needs a database and stays in the adapter. The encoding is length-prefixed rather than
+concatenated, which is the actual control - see
+[ADR 0005](../../docs/governance/adr/0005-hash-chained-audit-trail.md).
+
 ### Two decisions worth knowing
 
 **`Account` carries no balance.** A balance is derived from postings. Storing one on the aggregate

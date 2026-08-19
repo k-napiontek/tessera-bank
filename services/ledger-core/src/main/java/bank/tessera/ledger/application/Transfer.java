@@ -10,6 +10,7 @@ import bank.tessera.ledger.domain.JournalEntry;
 import bank.tessera.ledger.domain.Money;
 import bank.tessera.ledger.domain.Posting;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.ReferenceGenerator;
@@ -17,6 +18,7 @@ import bank.tessera.ledger.port.UnitOfWork;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -47,6 +49,8 @@ public final class Transfer {
     private final LedgerReadModel readModel;
     private final ReferenceGenerator references;
     private final UnitOfWork unitOfWork;
+    private final AuditTrail audit;
+    private final TransferEvents events;
     private final Clock clock;
 
     public Transfer(
@@ -55,12 +59,16 @@ public final class Transfer {
             LedgerReadModel readModel,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.entries = Objects.requireNonNull(entries, "entries");
         this.readModel = Objects.requireNonNull(readModel, "readModel");
         this.references = Objects.requireNonNull(references, "references");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -125,13 +133,32 @@ public final class Transfer {
                         readModel.recordEntryReference(reference, command.reference());
                     }
 
-                    return TransferView.of(
+                    // Inside the transaction, and after the entry exists. A rejected transfer never
+                    // reaches this line, and a rolled-back one takes the audit row with it.
+                    audit.record(
+                            AuditAction.TRANSFER_POSTED,
+                            reference.value(),
+                            Map.of(),
+                            Map.of(
+                                    "debitAccountRef", debit.reference().value(),
+                                    "creditAccountRef", credit.reference().value(),
+                                    "amountMinor", String.valueOf(command.amount().amountMinor()),
+                                    "currency", command.amount().currency().code(),
+                                    "valueDate", valueDate.toString()));
+
+                    TransferView posted = TransferView.of(
                             entry,
                             readModel.entryPostedAt(reference)
                                     .orElseThrow(() -> new IllegalStateException(
                                             "Entry " + reference + " was appended but has no posting instant.")),
                             null,
                             command.reference());
+
+                    // The same transaction as the postings. That is the whole of the outbox pattern:
+                    // an event that describes a transfer that did not commit cannot exist, because
+                    // the row carrying it would not have committed either.
+                    events.publish(posted);
+                    return posted;
                 });
     }
 

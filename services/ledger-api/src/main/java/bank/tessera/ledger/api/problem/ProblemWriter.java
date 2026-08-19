@@ -1,5 +1,6 @@
 package bank.tessera.ledger.api.problem;
 
+import bank.tessera.ledger.api.correlation.CorrelationId;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,12 +44,12 @@ public final class ProblemWriter {
         problem.setDetail(detail);
         problem.setInstance(URI.create(request.getRequestURI()));
 
-        String correlationId = request.getHeader("X-Correlation-Id");
-        if (correlationId != null && !correlationId.isBlank()) {
-            problem.setProperty("correlationId", correlationId);
-        }
+        // The resolved id, not the raw header: a request that arrived without one still has an id,
+        // and a client that sent something that was not a UUID does not get it echoed back.
+        CorrelationId.current().ifPresent(id -> problem.setProperty("correlationId", id));
 
         response.reset();
+        CorrelationId.applyTo(response);
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

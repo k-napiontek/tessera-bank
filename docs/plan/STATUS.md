@@ -9,14 +9,16 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-09 - Ledger audit chain and outbox** is next: the lowest-numbered package whose dependencies
-> are all `Done` (WP-08). Its task list still reads "To be detailed before execution". It needs the
-> same running Docker daemon WP-07 and WP-08 need.
+> **WP-09 - Ledger audit chain and outbox** is `In progress`. Its task list is now detailed, and it
+> lands as **two pull requests on ticket TB-1009**: audit chain and outbox first, observability
+> second. One change record covering all three of its concerns would have run past 2 000 lines, which
+> is the size the commit-sizing rule exists to prevent. It needs the same running Docker daemon WP-07
+> and WP-08 need.
 >
 > WP-09 has an unusually clear starting point. The ledger now posts money through one composed use
 > case, inside one transaction, so there is exactly one place an audit row and an outbox row belong.
-> F-21 becomes actionable there too: `Hold.transitionTo` discards the instant of its own transition,
-> which an audit chain will want.
+> F-21 is being closed there: `Hold.transitionTo` discards the instant of its own transition, which
+> the audit chain wants.
 >
 > **The ledger is now reachable over HTTP** and every money-moving request is idempotent. F-22 is
 > closed. Run it with `make test-services`, or boot it with
@@ -47,7 +49,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [06](wp/WP-06-ledger-domain.md) | Ledger domain - pure Java, no Spring, property tests | 3 | 02 | `Done` | [#5](https://github.com/k-napiontek/tessera-bank/pull/5) | `e67dc3e` |
 | [07](wp/WP-07-ledger-persistence.md) | Ledger persistence - schema, migrations, locking, Testcontainers | 3 | 06 | `Done` | [#19](https://github.com/k-napiontek/tessera-bank/pull/19) | `eb538ca` |
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Done` | [#22](https://github.com/k-napiontek/tessera-bank/pull/22) | `429ce24` |
-| [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Not started` | | |
+| [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `In progress` | | |
 | [10](wp/WP-10-customer-master.md) | `customer-master` - Java 8, WSDL-first SOAP, WAR | 1 | 02 | `Not started` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10 | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Not started` | | |

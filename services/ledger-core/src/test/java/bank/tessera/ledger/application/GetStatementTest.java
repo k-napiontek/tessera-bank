@@ -44,7 +44,7 @@ class GetStatementTest {
         ledger = new InMemoryLedger();
         references = new InMemoryLedger.SequentialReferences();
         OpenAccount openAccount =
-                new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, FIXED);
+                new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
         openAccount.open(open(CUSTOMER, AccountType.LIABILITY));
         openAccount.open(open(BANK, AccountType.ASSET));
         getStatement = new GetStatement(ledger.accounts, ledger.readModel, ledger.unitOfWork);

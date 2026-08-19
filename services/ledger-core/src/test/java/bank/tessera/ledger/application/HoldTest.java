@@ -57,7 +57,7 @@ class HoldTest {
     void setUp() {
         ledger = new InMemoryLedger();
         OpenAccount openAccount =
-                new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, FIXED);
+                new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
         openAccount.open(open(ALICE, PLN));
         openAccount.open(open(BOB, PLN));
         openAccount.open(open(CAROL, PLN));
@@ -72,10 +72,11 @@ class HoldTest {
 
         InMemoryLedger.SequentialReferences references = new InMemoryLedger.SequentialReferences();
         transfer = new Transfer(
-                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork, FIXED);
-        placeHold = new PlaceHold(ledger.accounts, ledger.holds, references, ledger.unitOfWork, FIXED);
-        captureHold = new CaptureHold(ledger.holds, transfer, ledger.unitOfWork, FIXED);
-        releaseHold = new ReleaseHold(ledger.holds, ledger.unitOfWork, FIXED);
+                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork,
+                ledger.auditTrail(FIXED), ledger.transferEvents(), FIXED);
+        placeHold = new PlaceHold(ledger.accounts, ledger.holds, references, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
+        captureHold = new CaptureHold(ledger.holds, transfer, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
+        releaseHold = new ReleaseHold(ledger.holds, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
 
         fund(ALICE, 500_00);
     }

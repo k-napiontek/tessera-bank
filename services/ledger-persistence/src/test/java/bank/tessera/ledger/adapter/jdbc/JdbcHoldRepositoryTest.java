@@ -103,15 +103,36 @@ class JdbcHoldRepositoryTest {
     }
 
     @Test
-    @DisplayName("a released hold rebuilds equal to the original")
+    @DisplayName("a released hold rebuilds equal to the original, and says when it was released")
     void aReleasedHoldRoundTrips() {
+        Instant releasedAt = Instant.parse("2026-08-18T05:00:00Z");
         Hold released = Hold.place(
                         HoldRef.of("HL202608180000000004"), ACCOUNT, Money.of(30_00, PLN), PLACED_AT, null)
-                .release(Instant.parse("2026-08-18T05:00:00Z"));
+                .release(releasedAt);
         repository.save(released);
 
-        assertThat(repository.findByReference(released.reference()).orElseThrow()).isEqualTo(released);
+        Hold found = repository.findByReference(released.reference()).orElseThrow();
+
+        assertThat(found).isEqualTo(released);
+        // Follow-up F-21. Until WP-09 this adapter passed placed_at into release() because the
+        // aggregate discarded it anyway, and the test that stood here proved only that the value
+        // could not matter. It matters now: the column holds the instant and this is what proves the
+        // round trip carries it.
+        assertThat(found.transitionedAt()).contains(releasedAt);
+        assertThat(found.placedAt()).isEqualTo(PLACED_AT);
     }
+
+    @Test
+    @DisplayName("a hold that is still placed stores no transition instant")
+    void aPlacedHoldStoresNoTransitionInstant() {
+        Hold placed = Hold.place(
+                HoldRef.of("HL202608180000000010"), ACCOUNT, Money.of(15_00, PLN), PLACED_AT, null);
+        repository.save(placed);
+
+        assertThat(repository.findByReference(placed.reference()).orElseThrow().transitionedAt())
+                .isEmpty();
+    }
+
 
     @Test
     @DisplayName("only holds that still reduce available balance are active")
@@ -140,16 +161,20 @@ class JdbcHoldRepositoryTest {
     @DisplayName("saving a captured hold updates the placed row rather than duplicating it")
     void capturingUpdatesInPlace() {
         HoldRef reference = HoldRef.of("HL202608180000000007");
+        Instant capturedAt = Instant.parse("2026-08-18T07:00:00Z");
         Hold placed = Hold.place(reference, ACCOUNT, Money.of(60_00, PLN), PLACED_AT, null);
         repository.save(placed);
-        repository.save(placed.capture(
-                EntryRef.of("TB202608180000000001"), Instant.parse("2026-08-18T07:00:00Z")));
+        repository.save(placed.capture(EntryRef.of("TB202608180000000001"), capturedAt));
 
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM hold WHERE reference = :ref",
                         Map.of("ref", reference.value()), Integer.class))
                 .isEqualTo(1);
-        assertThat(repository.findByReference(reference).orElseThrow().status())
-                .isEqualTo(HoldStatus.CAPTURED);
+        Hold found = repository.findByReference(reference).orElseThrow();
+        assertThat(found.status()).isEqualTo(HoldStatus.CAPTURED);
+        // The upsert has to carry the transition instant across too. Leaving transitioned_at out of
+        // the DO UPDATE clause would leave the row null against a CAPTURED status, which the V6
+        // constraint refuses - so this assertion and that constraint say the same thing twice.
+        assertThat(found.transitionedAt()).contains(capturedAt);
     }
 }

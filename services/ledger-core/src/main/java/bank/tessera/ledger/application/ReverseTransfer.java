@@ -7,6 +7,7 @@ import bank.tessera.ledger.domain.EntryRef;
 import bank.tessera.ledger.domain.JournalEntry;
 import bank.tessera.ledger.domain.Posting;
 import bank.tessera.ledger.port.AccountRepository;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.ReferenceGenerator;
@@ -14,6 +15,7 @@ import bank.tessera.ledger.port.UnitOfWork;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -34,6 +36,8 @@ public final class ReverseTransfer {
     private final LedgerReadModel readModel;
     private final ReferenceGenerator references;
     private final UnitOfWork unitOfWork;
+    private final AuditTrail audit;
+    private final TransferEvents events;
     private final Clock clock;
 
     public ReverseTransfer(
@@ -42,12 +46,16 @@ public final class ReverseTransfer {
             LedgerReadModel readModel,
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
+            AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.entries = Objects.requireNonNull(entries, "entries");
         this.readModel = Objects.requireNonNull(readModel, "readModel");
         this.references = Objects.requireNonNull(references, "references");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -97,13 +105,31 @@ public final class ReverseTransfer {
                 readModel.recordEntryReference(reference, command.reference());
             }
 
-            return TransferView.of(
+            // The reason is recorded because a reversal is the one operation whose "why" an auditor
+            // will ask about first, and the contract already forbids the field from being empty.
+            audit.record(
+                    AuditAction.TRANSFER_REVERSED,
+                    reference.value(),
+                    Map.of(),
+                    Map.of(
+                            "reversesTransferRef", command.original().value(),
+                            "reason", command.reason(),
+                            "valueDate", valueDate.toString()));
+
+            TransferView posted = TransferView.of(
                     appended,
                     readModel.entryPostedAt(reference)
                             .orElseThrow(() -> new IllegalStateException(
                                     "Entry " + reference + " was appended but has no posting instant.")),
                     null,
                     command.reference());
+
+            // A reversal is a transfer, and consumers hear about it on the same channel with
+            // reversesTransferRef set - which is exactly what the AsyncAPI document says that field
+            // is for. A separate event type would make every consumer handle two shapes to learn the
+            // same fact.
+            events.publish(posted);
+            return posted;
         });
     }
 

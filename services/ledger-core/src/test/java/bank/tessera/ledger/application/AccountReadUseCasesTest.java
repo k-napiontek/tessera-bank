@@ -47,7 +47,7 @@ class AccountReadUseCasesTest {
         ledger = new InMemoryLedger();
         references = new InMemoryLedger.SequentialReferences();
         OpenAccount openAccount =
-                new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, FIXED);
+                new OpenAccount(ledger.accounts, ledger.readModel, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
         openAccount.open(open(ALICE, LocalDate.of(2026, 3, 1)));
         openAccount.open(open(BOB, LocalDate.of(2026, 3, 2)));
 

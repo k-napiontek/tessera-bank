@@ -1,5 +1,6 @@
 package bank.tessera.ledger.api.idempotency;
 
+import bank.tessera.ledger.api.correlation.CorrelationId;
 import bank.tessera.ledger.api.problem.ProblemType;
 import bank.tessera.ledger.api.problem.ProblemWriter;
 import bank.tessera.ledger.port.IdempotencyConflictException;
@@ -124,6 +125,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         }
 
         response.reset();
+        CorrelationId.applyTo(response);
         response.setStatus(HttpStatus.OK.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
