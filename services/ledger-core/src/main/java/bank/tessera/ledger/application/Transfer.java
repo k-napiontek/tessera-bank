@@ -88,6 +88,14 @@ public final class Transfer {
         LocalDate valueDate =
                 command.valueDate() == null ? LocalDate.now(clock) : command.valueDate();
 
+        // Existence is checked before the lock is taken, not after. UnitOfWork.inTransactionLocking
+        // refuses to lock an account that does not exist, and it refuses with the only vocabulary a
+        // locking port has - which would reach a caller as "conflict" when the truth is "no such
+        // account". Accounts are never deleted, so nothing can make this check stale; if that ever
+        // changes the lock still refuses and the transaction still aborts.
+        require(command.debitAccount());
+        require(command.creditAccount());
+
         return unitOfWork.inTransactionLocking(
                 List.of(command.debitAccount(), command.creditAccount()), () -> {
                     Account debit = require(command.debitAccount());
