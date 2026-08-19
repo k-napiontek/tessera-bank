@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1013-fraud-scoring` |
 | **Stratum** | 4 - Python 3.12, ~2025 |
 | **Depends on** | WP-09 |
-| **Status** | `In progress` |
+| **Status** | `Done` |
 
 ## Objective
 
