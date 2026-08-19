@@ -124,7 +124,7 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Nine of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
+Ten of eighteen work packages are `Done`. [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the
 authority; this is the shape of it.
 
 | Stratum | What exists |
@@ -132,20 +132,22 @@ authority; this is the shape of it.
 | **Contracts** | All four families: COBOL copybooks with a column map, canonical XSD, customer-master WSDL, ledger-core OpenAPI, Kafka AsyncAPI - all derived from [`canonical-data-model.md`](docs/architecture/canonical-data-model.md) and validated by `contracts/validate.sh` |
 | **0 - `mainframe/`** | `ACCTPOST.CBL`, the balanced-line match-merge, with six rejection reasons and balancing control totals. A COMP-3 encoder and a deterministic synthetic data generator. |
 | **3 - `services/`** | The ledger, end to end: the `ledger-core` domain (`Money`, `Account`, `JournalEntry`, `Balance`, `Hold`, pure Java 17 with no framework on its compile classpath), PostgreSQL persistence with deterministic lock ordering, a REST API with required idempotency and RFC 9457 problems, an append-only hash-chained audit trail, a transactional outbox relayed to Kafka, and metrics, structured JSON logging and health probes. |
-| **1, 2, 4** | Nothing yet. `legacy/`, `integration/`, `edge/` and `batch/` hold READMEs only. |
+| **4 - `edge/`** | `api-gateway` in Go: bearer-token authentication with the algorithm pinned, coarse authorisation by scope, a route table checked against the OpenAPI document in both directions, per-caller rate limiting, correlation ids shared with the ledger, structured JSON logs, Prometheus metrics on a second port, and a proxy whose retry is bounded and only ever replays what is safe to replay. |
+| **1, 2** | Nothing yet. `legacy/`, `integration/` and `batch/` hold READMEs only. |
 
-The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, and the overnight
-COBOL cycle runs with `make eod`. Nothing joins them yet - the legacy, integration and edge strata
-hold READMEs only, so there is no path from a customer request to the mainframe and no deployable
-estate. What exists is the contracts, the mainframe batch core and the ledger, which is the tier
-everything else is built against.
+The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL, with the gateway in
+front of it (`go -C edge/api-gateway run ./cmd/gateway`), and the overnight COBOL cycle runs with
+`make eod`. The two halves still do not join: nothing carries a posting from the ledger to the
+mainframe, because the integration and legacy strata hold READMEs only. What exists is the contracts,
+the mainframe batch core, the ledger that everything else is built against, and the edge in front
+of it.
 
 ```bash
 make test     # every tier that has something to run
 make status   # what is done and what comes next
 ```
 
-Running the Java tier needs a JDK 17; the mainframe tier needs GnuCOBOL. See
+Running the Java tier needs a JDK 17, the mainframe tier needs GnuCOBOL, and the edge tier needs Go. See
 [`CLAUDE.md`](CLAUDE.md) for the per-stratum commands.
 
 ## Licence and intent
