@@ -8,6 +8,7 @@ import bank.tessera.ledger.adapter.jdbc.JdbcJournalEntryRepository;
 import bank.tessera.ledger.adapter.jdbc.JdbcLedgerReadModel;
 import bank.tessera.ledger.adapter.jdbc.JdbcReferenceGenerator;
 import bank.tessera.ledger.adapter.jdbc.JdbcUnitOfWork;
+import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
 import bank.tessera.ledger.application.CaptureHold;
 import bank.tessera.ledger.application.GetAccount;
 import bank.tessera.ledger.application.GetBalance;
@@ -190,6 +191,13 @@ public class LedgerConfiguration {
     @Bean
     ReleaseHold releaseHold(HoldRepository holds, UnitOfWork unitOfWork, Clock clock) {
         return new ReleaseHold(holds, unitOfWork, clock);
+    }
+
+    @Bean
+    CorrelationIdFilter correlationIdFilter() {
+        // Ordered ahead of the idempotency filter by the Ordered interface it implements, so that a
+        // request rejected before any controller runs still carries an id.
+        return new CorrelationIdFilter();
     }
 
     @Bean
