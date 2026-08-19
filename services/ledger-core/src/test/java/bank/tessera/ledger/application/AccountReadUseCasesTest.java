@@ -133,7 +133,7 @@ class AccountReadUseCasesTest {
 
         TransferView view = getTransfer.byReference(reference).orElseThrow();
 
-        assertThat(view.reference()).isEqualTo(reference);
+        assertThat(view.transferReference()).isEqualTo(reference);
         assertThat(view.status()).isEqualTo(TransferStatus.POSTED);
         assertThat(view.reversedBy()).isEmpty();
         assertThat(view.entry().postings()).hasSize(2);

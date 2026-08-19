@@ -34,8 +34,11 @@ public final class GetTransfer {
                     .entryPostedAt(reference)
                     .orElseThrow(() -> new IllegalStateException(
                             "Entry " + reference + " exists but has no posting instant."));
-            return Optional.of(
-                    TransferView.of(found.get(), postedAt, readModel.reversedBy(reference).orElse(null)));
+            return Optional.of(TransferView.of(
+                    found.get(),
+                    postedAt,
+                    readModel.reversedBy(reference).orElse(null),
+                    readModel.entryReference(reference).orElse(null)));
         });
     }
 }

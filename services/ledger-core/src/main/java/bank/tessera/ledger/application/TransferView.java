@@ -19,26 +19,34 @@ public final class TransferView {
     private final JournalEntry entry;
     private final Instant postedAt;
     private final EntryRef reversedBy;
+    private final String reference;
 
-    private TransferView(JournalEntry entry, Instant postedAt, EntryRef reversedBy) {
+    private TransferView(JournalEntry entry, Instant postedAt, EntryRef reversedBy, String reference) {
         this.entry = entry;
         this.postedAt = postedAt;
         this.reversedBy = reversedBy;
+        this.reference = reference;
     }
 
-    /** @param reversedBy the entry reversing this one, or null if none has been posted */
-    public static TransferView of(JournalEntry entry, Instant postedAt, EntryRef reversedBy) {
+    /**
+     * @param reversedBy the entry reversing this one, or null if none has been posted
+     * @param reference remittance information, or null
+     */
+    public static TransferView of(
+            JournalEntry entry, Instant postedAt, EntryRef reversedBy, String reference) {
         return new TransferView(
                 Objects.requireNonNull(entry, "entry"),
                 Objects.requireNonNull(postedAt, "postedAt"),
-                reversedBy);
+                reversedBy,
+                reference);
     }
 
     public JournalEntry entry() {
         return entry;
     }
 
-    public EntryRef reference() {
+    /** The estate-wide reference the contract calls {@code transferRef}. */
+    public EntryRef transferReference() {
         return entry.reference();
     }
 
@@ -50,8 +58,36 @@ public final class TransferView {
         return Optional.ofNullable(reversedBy);
     }
 
+    /** Remittance information, which the contract calls {@code reference}. */
+    public Optional<String> remittanceReference() {
+        return Optional.ofNullable(reference);
+    }
+
     public TransferStatus status() {
         return reversedBy == null ? TransferStatus.POSTED : TransferStatus.REVERSED;
+    }
+
+    /** The debit leg's account, which the contract calls {@code debitAccountRef}. */
+    public bank.tessera.ledger.domain.AccountRef debitAccount() {
+        return entry.postings().stream()
+                .filter(bank.tessera.ledger.domain.Posting::isDebit)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Entry " + entry.reference() + " has no debit leg."))
+                .account();
+    }
+
+    /** The credit leg's account, which the contract calls {@code creditAccountRef}. */
+    public bank.tessera.ledger.domain.AccountRef creditAccount() {
+        return entry.postings().stream()
+                .filter(posting -> !posting.isDebit())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Entry " + entry.reference() + " has no credit leg."))
+                .account();
+    }
+
+    /** The amount both legs carry. An entry that balances has exactly one. */
+    public bank.tessera.ledger.domain.Money amount() {
+        return entry.totalDebits();
     }
 
     @Override
