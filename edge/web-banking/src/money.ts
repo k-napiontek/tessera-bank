@@ -170,30 +170,48 @@ interface ReviverContext {
  * `BigInt` reads exactly. Where a runtime does not offer it, an unsafe integer is refused rather
  * than accepted rounded - detection is weaker than exactness, and both beat silence.
  */
+function exactMinorUnits(key: string, value: unknown, context: ReviverContext | undefined): bigint {
+  const source = context?.source;
+  if (typeof source === 'string') {
+    if (!/^-?\d+$/.test(source)) {
+      throw new Error(`'${key}' must be a whole count of minor units, got ${source}`);
+    }
+    return BigInt(source);
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw new Error(
+      `'${key}' cannot be read exactly by this runtime; minor units must be whole and within 2^53 here`,
+    );
+  }
+  return BigInt(value);
+}
+
 export function minorUnitsFromJson(body: string, key: string): bigint {
   let found: bigint | undefined;
   JSON.parse(body, (revivedKey: string, value: unknown, context?: ReviverContext): unknown => {
-    if (revivedKey !== key) {
-      return value;
+    if (revivedKey === key) {
+      found = exactMinorUnits(key, value, context);
     }
-    const source = context?.source;
-    if (typeof source === 'string') {
-      if (!/^-?\d+$/.test(source)) {
-        throw new Error(`'${key}' must be a whole count of minor units, got ${source}`);
-      }
-      found = BigInt(source);
-      return value;
-    }
-    if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-      throw new Error(
-        `'${key}' cannot be read exactly by this runtime; minor units must be whole and within 2^53 here`,
-      );
-    }
-    found = BigInt(value);
     return value;
   });
   if (found === undefined) {
     throw new Error(`no '${key}' in the body`);
   }
   return found;
+}
+
+/**
+ * Parse a whole response body, replacing every amount with an exact `bigint`.
+ *
+ * The reviver is the only place a JSON number can be intercepted before it has been narrowed to a
+ * double, so it is the only place this conversion can happen at all. Every amount in the estate's
+ * contract sits under the key `amountMinor`, which is what makes one predicate enough.
+ */
+export function parseJsonWithMinorUnits(
+  body: string,
+  isAmountKey: (key: string) => boolean,
+): unknown {
+  return JSON.parse(body, (key: string, value: unknown, context?: ReviverContext): unknown =>
+    isAmountKey(key) ? exactMinorUnits(key, value, context) : value,
+  );
 }

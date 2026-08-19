@@ -6,6 +6,7 @@ import {
   isSameCurrency,
   minorUnitsFromDecimal,
   minorUnitsFromJson,
+  parseJsonWithMinorUnits,
   money,
   negate,
   scaleOf,
@@ -119,5 +120,40 @@ describe('reading an amount off the wire', () => {
 
   it('refuses a fractional amount - minor units are whole by definition', () => {
     expect(() => minorUnitsFromJson('{"amountMinor":1.5}', 'amountMinor')).toThrow();
+  });
+});
+
+describe('reading a whole body', () => {
+  it('replaces every amount in it with an exact bigint, however deeply nested', () => {
+    const body = JSON.stringify({
+      openingBalance: { amountMinor: 100000, currency: 'PLN' },
+      movements: [{ amount: { amountMinor: 5000, currency: 'PLN' } }],
+    });
+
+    const parsed = parseJsonWithMinorUnits(body, (key) => key === 'amountMinor') as {
+      openingBalance: { amountMinor: unknown };
+      movements: { amount: { amountMinor: unknown } }[];
+    };
+
+    expect(parsed.openingBalance.amountMinor).toBe(100000n);
+    expect(parsed.movements[0]?.amount.amountMinor).toBe(5000n);
+  });
+
+  it('takes an int64 amount from its source text rather than from the rounded double', () => {
+    const body = '{"amount":{"amountMinor":9223372036854775807,"currency":"PLN"}}';
+
+    const parsed = parseJsonWithMinorUnits(body, (key) => key === 'amountMinor') as {
+      amount: { amountMinor: unknown };
+    };
+
+    expect(parsed.amount.amountMinor).toBe(9223372036854775807n);
+  });
+
+  it('leaves every other number alone', () => {
+    const parsed = parseJsonWithMinorUnits('{"legNo":1}', (key) => key === 'amountMinor') as {
+      legNo: unknown;
+    };
+
+    expect(parsed.legNo).toBe(1);
   });
 });
