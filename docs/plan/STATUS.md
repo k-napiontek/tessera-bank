@@ -9,10 +9,14 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-17 - `reporting` (Python)** is the next unblocked package, and it sits off the critical path
-> as WP-13 did. **WP-14** (`web-banking`, React) is unblocked too, now that WP-12 is done. The
-> critical path itself is still stopped at **WP-10**, which is **blocked on tooling**: it needs JDK 8
-> and only `openjdk@17` and `openjdk@26` are installed. See F-02 and F-10.
+> **WP-17 - `reporting` (Python)** is `In progress`, taken ahead of WP-14 by the repository owner
+> although WP-14 is the lower number: both are unblocked, and reporting sits off the critical path as
+> WP-13 did. Its task list was detailed on 2026-08-19 and three decisions recorded with it - the
+> ledger position is an `audit_record.seq` watermark, the regulatory extract is fixed-width with a
+> header and trailer, and its declared format lives in `contracts/`. **WP-14** (`web-banking`, React)
+> is unblocked and next after it. The critical path itself is still stopped at **WP-10**, which is
+> **blocked on tooling**: it needs JDK 8 and only `openjdk`, `openjdk@17` and `openjdk@26` are
+> installed. See F-02 and F-10.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
 > its task list and have it reviewed first.
@@ -62,7 +66,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Not started` | | |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10 | `Not started` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
-| [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Not started` | | |
+| [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `In progress` | | |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 
 ## Critical path
