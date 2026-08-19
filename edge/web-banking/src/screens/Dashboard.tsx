@@ -16,6 +16,7 @@ import { compare, subtract, toPlainString } from '../money';
 import { useRequest } from '../useRequest';
 import { statementPath } from '../routes';
 import { Amount } from './Amount';
+import { BalanceMeter } from './BalanceMeter';
 
 function explain(error: unknown): string {
   if (error instanceof ProblemError) {
@@ -72,24 +73,26 @@ function AccountBalances({ account }: { account: Account }): React.JSX.Element {
       )}
 
       {/*
-        Two figures, always, and labelled. Showing only "available" would be the friendlier design
-        and would leave a customer unable to explain their own statement; showing only "booked"
-        would tell them they can spend money a hold has already committed.
+        Two figures, always, and labelled. Available leads because it is the number that answers
+        "what can I spend"; booked follows because a customer who cannot see it cannot explain
+        their own statement. Showing either alone is the defect REQ-UI-003 names.
       */}
-      <dl className="balances">
-        <div className="balance">
-          <dt>Booked</dt>
-          <dd>
-            <Amount value={account.bookedBalance} />
-          </dd>
-        </div>
+      <dl className="balances balances-lead">
         <div className="balance balance-available">
           <dt>Available</dt>
           <dd>
             <Amount value={account.availableBalance} />
           </dd>
         </div>
+        <div className="balance">
+          <dt>Booked</dt>
+          <dd>
+            <Amount value={account.bookedBalance} />
+          </dd>
+        </div>
       </dl>
+
+      <BalanceMeter booked={account.bookedBalance} available={account.availableBalance} />
 
       {differ && (
         <p className="note">

@@ -1,6 +1,6 @@
 # web-banking
 
-**Stratum 4** | **TypeScript + React + Vite** | **Built by WP-14**
+**Stratum 4** | **TypeScript + React + Vite** | **Built by WP-14, dressed by WP-19**
 
 The customer application: accounts, balances, statements and internal transfers. Everything it does
 goes through [`edge/api-gateway`](../api-gateway); it holds no address for the ledger and could not
@@ -79,6 +79,66 @@ console, not the DOM after sign-in. Storage is readable by every script the page
 outlives the tab; React state dies with the page, which for a bearer token is the correct lifetime.
 Four tests hold that line.
 
+## Design
+
+Built by WP-19, mobile first, in the visual language of Polish retail banking - because a customer
+who already knows what a bank looks like should not have to spend attention learning this one. The
+palette is read off PKO Bank Polski's own properties rather than recalled: `#003574` is the navy
+iPKO puts on its primary action, `#CA171D` its red, `#DB912C` the amber `pkobp.pl` puts on a call to
+action. None of PKO's mark, name or wordmark is reproduced; the palette is the reference and the
+identity is Tessera's.
+
+**No component library, no CSS framework, no icon package, no font service.** WP-14's rule was that
+a dependency is justified rather than avoided and that four screens do not justify one; WP-19 added
+nothing, and `package.json` is byte-identical to the one WP-14 left. The typeface is two `woff2`
+files served from this application's own origin - a page holding a bearer token should not be
+telling `fonts.googleapis.com` which banking screen a customer is on.
+
+### One navigation, moved rather than duplicated
+
+Under 640px it is a bar fixed to the bottom of the viewport, where a thumb reaches. Between 640 and
+1024 it is a row under the app bar. At 1024 and above it is a rail down the left. All three are the
+same `<nav>`, repositioned by a media query, because two would give the page two tab orders and
+announce every destination twice - and a media query is not something a screen reader consults.
+
+### The colours are computed, not judged
+
+`src/styles/contrast.test.ts` reads `src/styles/tokens.css`, computes WCAG relative luminance for
+every declared colour, and fails if a declared pair drops below 4.5:1 for text or 3:1 for a control
+edge. Every token must appear in a pair or in a list of exemptions **with a stated reason**, so a
+colour nobody thought about fails the build rather than shipping.
+
+Same control as `money.source.test.ts`, aimed at a different failure. A stylesheet does not crash.
+It ships a colour that looked fine to whoever picked it and that a reader with low vision cannot
+make out, and nothing anywhere reports it. It is why `--amber-500` fills a shape and never carries a
+word: PKO's call-to-action amber reaches 2.6:1 on white, and `--amber-800` exists because of it.
+
+### The balance meter
+
+REQ-UI-003 says an available balance is never presented as spendable when held, and the card has
+always discharged that in a sentence. The meter shows the same thing as a proportion - the share of
+the booked balance a hold has already committed - and it is an addition to the sentence rather than
+a replacement for it. It renders nothing when the two balances agree, nothing when the account is
+overdrawn and there is no positive whole to take a share of, and it carries an accessible name
+stating the held amount, because a picture only a sighted reader can interpret would discharge the
+requirement for some readers and not others.
+
+It is the only ornament in the application. Everything else is flat: one hairline, one elevation on
+the app bar, one 150ms transition, and `prefers-reduced-motion` turns that off.
+
+### What the movements table does not do on a phone
+
+It does not become a stack of `div`s. Four columns and a twenty-character reference do not fit a
+390px screen - the table needs 470px and the phone offers 358 - and the usual responsive-table trick
+costs the table role in the accessibility tree. So the table keeps its columns, its headers and its
+semantics, and is given a labelled, focusable region to scroll inside. The page itself never scrolls
+sideways at any width.
+
+### One palette
+
+The `prefers-color-scheme: dark` block WP-14 carried was removed rather than extended. PKO's own
+interface is light only, and a second palette nobody looks at is a second palette nobody maintains.
+
 ## Environment
 
 | Variable | Default | Meaning |
@@ -130,4 +190,7 @@ only what has to be seen on a screen.
 | `src/api/` | The typed client, and the RFC 9457 reader that understands both producers' problem types. |
 | `src/session/` | The token and the account references, held in memory for the life of the tab. |
 | `src/screens/` | Dashboard, statement, and the transfer journey with its five outcomes. |
+| `src/shell/` | The app bar, the one navigation, and the mark. |
+| `src/styles/` | Tokens, base, shell and components - and the test that holds the colours to WCAG. |
+| `src/fonts/` | The typeface, its licence, and why it is committed rather than fetched. |
 | `scripts/` | Development fixtures: a token minter and the live walkthrough. |

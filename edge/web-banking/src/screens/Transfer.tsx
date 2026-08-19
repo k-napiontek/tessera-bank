@@ -15,6 +15,8 @@ import type { Account, TransferRequest } from '../api/types';
 import { minorUnitsFromDecimal, money, toPlainString } from '../money';
 import { useRequest } from '../useRequest';
 import { Amount } from './Amount';
+import type { Stage } from './Steps';
+import { Steps } from './Steps';
 import type { Attempt, Draft } from './transferAttempt';
 import { EMPTY_DRAFT, keyFor } from './transferAttempt';
 
@@ -38,6 +40,25 @@ function buildRequest(draft: Draft, currency: string): TransferRequest {
     amount: money(minorUnits, currency),
     ...(reference === '' ? {} : { reference }),
   };
+}
+
+/**
+ * Which of the three visible stages an attempt is in.
+ *
+ * Five internal states, three the customer needs to distinguish. `submitting` is still the confirm
+ * step because nothing has been decided yet, and all three outcomes - posted, rejected, unknown -
+ * are the result, because each one is an answer the journey ended on.
+ */
+function stageOf(stage: Attempt['stage']): Stage {
+  switch (stage) {
+    case 'editing':
+      return 'details';
+    case 'confirming':
+    case 'submitting':
+      return 'confirm';
+    default:
+      return 'result';
+  }
 }
 
 export function Transfer(): React.JSX.Element {
@@ -88,10 +109,11 @@ export function Transfer(): React.JSX.Element {
 
   return (
     <section className="transfer">
-      <p className="card-links">
+      <p className="back">
         <Link to="/">Back to your accounts</Link>
       </p>
       <h2>Make a transfer</h2>
+      <Steps stage={stageOf(attempt.stage)} />
 
       {attempt.stage === 'editing' && (
         <TransferForm
@@ -144,7 +166,7 @@ export function Transfer(): React.JSX.Element {
       )}
 
       {attempt.stage === 'posted' && (
-        <div className="panel" role="status">
+        <div className="panel panel-posted" role="status">
           <h3>Sent</h3>
           <p>
             <Amount value={attempt.transfer.amount} /> went to{' '}
@@ -158,7 +180,7 @@ export function Transfer(): React.JSX.Element {
       )}
 
       {attempt.stage === 'rejected' && (
-        <div className="panel">
+        <div className="panel panel-rejected">
           <h3>Not sent</h3>
           <p className="error" role="alert">
             {describeProblem(attempt.problem)}
@@ -171,25 +193,27 @@ export function Transfer(): React.JSX.Element {
           {attempt.problem.correlationId !== undefined && (
             <p className="muted mono">Reference for support: {attempt.problem.correlationId}</p>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              // The same request under the same key. The ledger records no failure, so this is a
-              // first attempt as far as it is concerned, and a retry as far as the customer is.
-              void submit(attempt.draft, attempt.request, attempt.idempotencyKey);
-            }}
-          >
-            Try again
-          </button>{' '}
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              setAttempt({ stage: 'editing', draft: attempt.draft });
-            }}
-          >
-            Change the details
-          </button>
+          <div className="actions">
+            <button
+              type="button"
+              onClick={() => {
+                // The same request under the same key. The ledger records no failure, so this is a
+                // first attempt as far as it is concerned, and a retry as far as the customer is.
+                void submit(attempt.draft, attempt.request, attempt.idempotencyKey);
+              }}
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setAttempt({ stage: 'editing', draft: attempt.draft });
+              }}
+            >
+              Change the details
+            </button>
+          </div>
         </div>
       )}
 
@@ -272,12 +296,14 @@ function Confirmation({
           </div>
         )}
       </dl>
-      <button type="button" onClick={onSend}>
-        Send
-      </button>{' '}
-      <button type="button" className="secondary" onClick={onBack}>
-        Back
-      </button>
+      <div className="actions">
+        <button type="button" onClick={onSend}>
+          Send
+        </button>
+        <button type="button" className="secondary" onClick={onBack}>
+          Back
+        </button>
+      </div>
     </div>
   );
 }
@@ -308,6 +334,7 @@ function TransferForm({
       <label htmlFor="transfer-from">From</label>
       <select
         id="transfer-from"
+        className="ref-input"
         value={draft.debitAccountRef}
         onChange={(event) => {
           onChange({ ...draft, debitAccountRef: event.target.value });
@@ -323,6 +350,7 @@ function TransferForm({
       <label htmlFor="transfer-to">To</label>
       <input
         id="transfer-to"
+        className="ref-input"
         value={draft.creditAccountRef}
         autoComplete="off"
         spellCheck={false}

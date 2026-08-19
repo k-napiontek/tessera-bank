@@ -1,0 +1,213 @@
+/*
+ * The frame, and the three shapes it takes.
+ *
+ * Under 640px the navigation is a bar fixed to the bottom of the viewport, where a thumb reaches.
+ * Between 640 and 1024 it is a row under the app bar. At 1024 and above it is a rail down the left,
+ * beside the content rather than over it.
+ *
+ * All three are the same element. `:has(> .nav)` is what keeps the signed-out screen honest: with
+ * no session there is no navigation, and the grid must not reserve a column for a rail that is not
+ * there.
+ */
+
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+/* ---- The bar ------------------------------------------------------------ */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--navy-700);
+  color: var(--ink-inverse);
+  box-shadow: var(--shadow-bar);
+}
+
+.appbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  height: var(--bar-height);
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 var(--s-4);
+}
+
+/* Navy on navy is no ring at all. */
+.appbar :focus-visible {
+  outline-color: var(--ink-inverse);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ink-inverse);
+  font-size: var(--t-lg);
+  letter-spacing: -0.01em;
+}
+
+.brand-mark {
+  flex: none;
+}
+
+.appbar-action {
+  min-height: 2.25rem;
+  padding: var(--s-1) var(--s-4);
+  background: transparent;
+  color: var(--ink-inverse);
+  border-color: rgb(255 255 255 / 45%);
+  font-size: var(--t-md);
+}
+
+.appbar-action:hover:not([disabled]) {
+  background: rgb(255 255 255 / 12%);
+  color: var(--ink-inverse);
+}
+
+/* ---- The navigation ----------------------------------------------------- */
+
+.nav {
+  display: flex;
+  background: var(--surface);
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  flex-direction: column;
+  padding: var(--s-2) var(--s-2);
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.nav-item[aria-current='page'] {
+  color: var(--navy-700);
+}
+
+.nav-item:hover {
+  color: var(--navy-700);
+  background: var(--navy-050);
+}
+
+/* Mobile: fixed to the bottom, clear of the home indicator. */
+@media (max-width: 39.999rem) {
+  .nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 20;
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav-item {
+    min-height: 3.25rem;
+  }
+
+  /* The last row of a long statement must not be trapped under the bar. */
+  .content {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Tablet: a row under the bar, in the flow. */
+@media (min-width: 40rem) and (max-width: 63.999rem) {
+  .shell:has(> .nav) {
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .nav {
+    position: sticky;
+    top: var(--bar-height);
+    z-index: 10;
+    gap: var(--s-2);
+    max-width: var(--content-max);
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 var(--s-4);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .nav-item {
+    flex: none;
+    flex-direction: row;
+    padding: var(--s-3) var(--s-4);
+    font-size: var(--t-md);
+    border-bottom: 3px solid transparent;
+  }
+
+  .nav-item[aria-current='page'] {
+    border-bottom-color: var(--navy-700);
+  }
+}
+
+/* Desktop: a rail beside the content. */
+@media (min-width: 64rem) {
+  .shell:has(> .nav) {
+    grid-template-columns: var(--rail-width) 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .shell:has(> .nav) > .appbar {
+    grid-column: 1 / -1;
+  }
+
+  .shell:has(> .nav) > .content {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .nav {
+    grid-column: 1;
+    grid-row: 2;
+    position: sticky;
+    top: var(--bar-height);
+    align-self: start;
+    /* Full height, so the rule beside the content runs the length of the page rather than stopping
+       under the last destination. */
+    height: calc(100dvh - var(--bar-height));
+    flex-direction: column;
+    gap: var(--s-1);
+    padding: var(--s-5) var(--s-3);
+    border-right: 1px solid var(--line);
+  }
+
+  .nav-item {
+    flex: none;
+    flex-direction: row;
+    justify-content: start;
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-4);
+    border-radius: var(--r-md);
+    font-size: var(--t-base);
+  }
+
+  .nav-item[aria-current='page'] {
+    background: var(--navy-050);
+  }
+}
+
+/* ---- The screen --------------------------------------------------------- */
+
+.content {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--s-5) var(--s-4) var(--s-7);
+}
+
+@media (min-width: 64rem) {
+  .content {
+    padding: var(--s-6) var(--s-6) var(--s-8);
+  }
+}
