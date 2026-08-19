@@ -384,7 +384,10 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        Bearer token issued by `edge/api-gateway` after it has authenticated the customer. The
+        Bearer token presented by the customer, authenticated at `edge/api-gateway` and forwarded
+        here unchanged. The gateway validates the signature, the algorithm, the expiry, the issuer
+        and the audience, and rejects the request at the edge if any of them fails; it issues no
+        token of its own, because minting one would make the gateway an identity provider. The
         ledger validates the token and reads the account references it authorises; it never sees a
         credential and never holds customer identity.
 
