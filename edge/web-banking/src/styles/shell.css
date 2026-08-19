@@ -173,6 +173,9 @@
     position: sticky;
     top: var(--bar-height);
     align-self: start;
+    /* Full height, so the rule beside the content runs the length of the page rather than stopping
+       under the last destination. */
+    height: calc(100dvh - var(--bar-height));
     flex-direction: column;
     gap: var(--s-1);
     padding: var(--s-5) var(--s-3);

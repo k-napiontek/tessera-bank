@@ -21,6 +21,13 @@
   padding: var(--s-5);
 }
 
+/* Cards in a row are the same height, so the link that leaves each one sits on a common line
+   rather than wherever that account's holds happened to leave it. */
+.card {
+  display: flex;
+  flex-direction: column;
+}
+
 .cards {
   display: grid;
   gap: var(--s-4);
@@ -39,6 +46,10 @@
 .card-links {
   margin: var(--s-4) 0 0;
   font-size: var(--t-md);
+}
+
+.card > .card-links {
+  margin-top: auto;
 }
 
 /* ---- Money -------------------------------------------------------------- */
@@ -119,6 +130,8 @@
 
 .badge {
   display: inline-block;
+  /* The card is a flex column, so without this the pill stretches to the card's width. */
+  align-self: start;
   margin: 0 0 var(--s-3);
   padding: 0.125rem var(--s-3);
   border-radius: var(--r-pill);
@@ -250,4 +263,70 @@ form button {
   margin: 0;
   text-align: right;
   font-weight: 500;
+}
+
+/* ---- The balance meter -------------------------------------------------- */
+
+/*
+ * Two segments read against each other rather than against the page, which is why `--amber-500`
+ * may be used here and nowhere near a word: it clears 3:1 against `--navy-700` and reaches 2.6:1
+ * on white. contrast.test.ts holds both halves of that.
+ */
+.meter {
+  display: flex;
+  height: 0.5rem;
+  margin: var(--s-3) 0 0;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--line);
+}
+
+.meter-available {
+  background: var(--navy-700);
+  transition: width 150ms ease;
+}
+
+.meter-held {
+  flex: 1;
+  background: var(--amber-500);
+}
+
+/* ---- A card that leads with one figure ---------------------------------- */
+
+.balances-lead {
+  display: block;
+}
+
+.balances-lead .balance-available dd {
+  margin-top: 0;
+  font-size: var(--t-3xl);
+  line-height: 1.15;
+}
+
+/* The code stays beside the figure - money.ts keeps the two together for the same reason - but at
+   this size it must not compete with it. */
+.balances-lead .balance-available .amount-currency {
+  font-size: 0.42em;
+}
+
+/* Booked is quieter than available and never absent. Distinguishable, not hidden. */
+.balances-lead .balance:not(.balance-available) {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.balances-lead .balance:not(.balance-available) dt {
+  font-size: var(--t-md);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.balances-lead .balance:not(.balance-available) dd {
+  margin: 0;
+  font-size: var(--t-md);
+  font-weight: 500;
+  color: var(--ink-muted);
 }
