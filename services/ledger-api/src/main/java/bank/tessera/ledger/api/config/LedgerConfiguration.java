@@ -2,7 +2,9 @@ package bank.tessera.ledger.api.config;
 
 import bank.tessera.ledger.adapter.jdbc.AccountLocks;
 import bank.tessera.ledger.adapter.jdbc.JdbcAccountRepository;
+import bank.tessera.ledger.adapter.jdbc.LedgerEventJson;
 import bank.tessera.ledger.adapter.jdbc.JdbcAuditLog;
+import bank.tessera.ledger.adapter.jdbc.JdbcEventOutbox;
 import bank.tessera.ledger.adapter.jdbc.JdbcHoldRepository;
 import bank.tessera.ledger.adapter.jdbc.JdbcIdempotencyStore;
 import bank.tessera.ledger.adapter.jdbc.JdbcJournalEntryRepository;
@@ -13,6 +15,7 @@ import bank.tessera.ledger.api.audit.HttpAuditContext;
 import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
 import bank.tessera.ledger.application.AuditTrail;
 import bank.tessera.ledger.application.CaptureHold;
+import bank.tessera.ledger.application.TransferEvents;
 import bank.tessera.ledger.application.GetAccount;
 import bank.tessera.ledger.application.GetBalance;
 import bank.tessera.ledger.application.GetStatement;
@@ -29,6 +32,7 @@ import bank.tessera.ledger.application.Transfer;
 import bank.tessera.ledger.port.AccountRepository;
 import bank.tessera.ledger.port.AuditContext;
 import bank.tessera.ledger.port.AuditLog;
+import bank.tessera.ledger.port.EventOutbox;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.IdempotencyStore;
 import bank.tessera.ledger.port.JournalEntryRepository;
@@ -121,6 +125,19 @@ public class LedgerConfiguration {
     }
 
     @Bean
+    EventOutbox eventOutbox(NamedParameterJdbcTemplate jdbc) {
+        // Its own ObjectMapper, not the application's. The application's serves the REST contract and
+        // this one serves the AsyncAPI contract; sharing one means a setting changed for one silently
+        // changes the other, and the change surfaces as a consumer failing to parse days later.
+        return new JdbcEventOutbox(jdbc, LedgerEventJson.mapper());
+    }
+
+    @Bean
+    TransferEvents transferEvents(EventOutbox outbox, AuditContext auditContext) {
+        return new TransferEvents(outbox, auditContext);
+    }
+
+    @Bean
     IdempotencyStore idempotencyStore(NamedParameterJdbcTemplate jdbc) {
         return new JdbcIdempotencyStore(jdbc);
     }
@@ -182,8 +199,9 @@ public class LedgerConfiguration {
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
             AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
-        return new Transfer(accounts, entries, readModel, references, unitOfWork, audit, clock);
+        return new Transfer(accounts, entries, readModel, references, unitOfWork, audit, events, clock);
     }
 
     @Bean
@@ -194,8 +212,10 @@ public class LedgerConfiguration {
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
             AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
-        return new ReverseTransfer(accounts, entries, readModel, references, unitOfWork, audit, clock);
+        return new ReverseTransfer(
+                accounts, entries, readModel, references, unitOfWork, audit, events, clock);
     }
 
     @Bean

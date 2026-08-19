@@ -71,9 +71,11 @@ class ReverseTransferTest {
 
         InMemoryLedger.SequentialReferences references = new InMemoryLedger.SequentialReferences();
         transfer = new Transfer(
-                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
+                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork,
+                ledger.auditTrail(FIXED), ledger.transferEvents(), FIXED);
         reverseTransfer = new ReverseTransfer(
-                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
+                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork,
+                ledger.auditTrail(FIXED), ledger.transferEvents(), FIXED);
         getTransfer = new GetTransfer(ledger.entries, ledger.readModel, ledger.unitOfWork);
 
         fund(ALICE, 500_00);

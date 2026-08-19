@@ -60,6 +60,7 @@ class TransferTest {
                 new InMemoryLedger.SequentialReferences(),
                 ledger.unitOfWork,
                 ledger.auditTrail(FIXED),
+                ledger.transferEvents(),
                 FIXED);
     }
 
@@ -160,6 +161,7 @@ class TransferTest {
                 new InMemoryLedger.SequentialReferences(),
                 fresh.unitOfWork,
                 fresh.auditTrail(FIXED),
+                fresh.transferEvents(),
                 FIXED);
 
         overdrawable.execute(new Transfer.Command(ALICE, BOB, Money.of(50_00, PLN), null, null));

@@ -15,12 +15,14 @@ import bank.tessera.ledger.port.AccountRepository;
 import bank.tessera.ledger.port.AuditContext;
 import bank.tessera.ledger.port.AuditEntry;
 import bank.tessera.ledger.port.AuditLog;
+import bank.tessera.ledger.port.EventOutbox;
 import bank.tessera.ledger.port.HoldRepository;
 import bank.tessera.ledger.port.JournalEntryRepository;
 import bank.tessera.ledger.port.LedgerReadModel;
 import bank.tessera.ledger.port.Movement;
 import bank.tessera.ledger.port.ReferenceGenerator;
 import bank.tessera.ledger.port.StatementPage;
+import bank.tessera.ledger.port.TransferPostedEvent;
 import bank.tessera.ledger.port.UnitOfWork;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -64,9 +66,20 @@ final class InMemoryLedger {
     /** The context ledger-api will supply from the MDC, fixed here so hashes are reproducible. */
     static final String CORRELATION_ID = "5c2f0b1e-0000-4000-8000-000000000001";
 
+    /** Every event enqueued, in order. Nothing here rolls back, so a test asserting that a failed
+     * use case enqueued nothing is asserting that it never called publish at all. */
+    final List<TransferPostedEvent> outboxEvents = new ArrayList<>();
+
+    final EventOutbox outbox = outboxEvents::add;
+
     /** The audit trail every money-moving use case now requires. */
     AuditTrail auditTrail(java.time.Clock clock) {
         return new AuditTrail(auditLog, auditContext, clock);
+    }
+
+    /** The outbox every posting use case now requires. */
+    TransferEvents transferEvents() {
+        return new TransferEvents(outbox, auditContext);
     }
 
     final AuditContext auditContext = new AuditContext() {

@@ -37,6 +37,7 @@ public final class ReverseTransfer {
     private final ReferenceGenerator references;
     private final UnitOfWork unitOfWork;
     private final AuditTrail audit;
+    private final TransferEvents events;
     private final Clock clock;
 
     public ReverseTransfer(
@@ -46,6 +47,7 @@ public final class ReverseTransfer {
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
             AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.entries = Objects.requireNonNull(entries, "entries");
@@ -53,6 +55,7 @@ public final class ReverseTransfer {
         this.references = Objects.requireNonNull(references, "references");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -113,13 +116,20 @@ public final class ReverseTransfer {
                             "reason", command.reason(),
                             "valueDate", valueDate.toString()));
 
-            return TransferView.of(
+            TransferView posted = TransferView.of(
                     appended,
                     readModel.entryPostedAt(reference)
                             .orElseThrow(() -> new IllegalStateException(
                                     "Entry " + reference + " was appended but has no posting instant.")),
                     null,
                     command.reference());
+
+            // A reversal is a transfer, and consumers hear about it on the same channel with
+            // reversesTransferRef set - which is exactly what the AsyncAPI document says that field
+            // is for. A separate event type would make every consumer handle two shapes to learn the
+            // same fact.
+            events.publish(posted);
+            return posted;
         });
     }
 

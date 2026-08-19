@@ -13,6 +13,7 @@ import bank.tessera.ledger.domain.OverdraftNotPermittedException;
 import bank.tessera.ledger.domain.OverdraftPolicy;
 import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.port.AuditEntry;
+import bank.tessera.ledger.port.TransferPostedEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -59,6 +60,7 @@ class AuditTrailTest {
                 references,
                 ledger.unitOfWork,
                 ledger.auditTrail(FIXED),
+                ledger.transferEvents(),
                 FIXED);
         reverseTransfer = new ReverseTransfer(
                 ledger.accounts,
@@ -67,6 +69,7 @@ class AuditTrailTest {
                 references,
                 ledger.unitOfWork,
                 ledger.auditTrail(FIXED),
+                ledger.transferEvents(),
                 FIXED);
         placeHold = new PlaceHold(
                 ledger.accounts, ledger.holds, references, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
@@ -77,6 +80,7 @@ class AuditTrailTest {
         open(BOB, AccountType.LIABILITY);
         transfer.execute(new Transfer.Command(VAULT, ALICE, Money.of(500_00, PLN), null, null));
         ledger.auditEntries.clear();
+        ledger.outboxEvents.clear();
     }
 
     private void open(AccountRef reference, AccountType type) {
@@ -168,6 +172,51 @@ class AuditTrailTest {
                 // F-21's instant. Before WP-09 the aggregate discarded it and this row could only
                 // have said when the hold was placed, which is not what an auditor asked.
                 .containsEntry("transitionedAt", NOW.toString());
+    }
+
+    @Test
+    @DisplayName("a posted transfer enqueues exactly one event, shaped by the AsyncAPI contract")
+    void aPostedTransferIsEnqueued() {
+        var posted = transfer.execute(new Transfer.Command(ALICE, BOB, Money.of(40_00, PLN), null, "INV-1"));
+
+        assertThat(ledger.outboxEvents).hasSize(1);
+        TransferPostedEvent event = ledger.outboxEvents.get(0);
+        assertThat(event.transferRef()).isEqualTo(posted.transferReference().value());
+        assertThat(event.debitAccountRef()).isEqualTo(ALICE.value());
+        assertThat(event.creditAccountRef()).isEqualTo(BOB.value());
+        assertThat(event.amount()).isEqualTo(Money.of(40_00, PLN));
+        assertThat(event.correlationId()).isEqualTo(InMemoryLedger.CORRELATION_ID);
+        assertThat(event.reversesTransferRef()).isNull();
+        assertThat(event.movements()).hasSize(2);
+        assertThat(event.movements().get(0).legNo()).isEqualTo(1);
+        assertThat(event.movements().get(0).direction()).isEqualTo("DEBIT");
+        assertThat(event.movements().get(0).movementRef())
+                .isEqualTo(posted.transferReference().value() + "-01");
+        assertThat(event.movements().get(1).direction()).isEqualTo("CREDIT");
+    }
+
+    @Test
+    @DisplayName("a rejected transfer enqueues nothing")
+    void aRejectedTransferIsNotEnqueued() {
+        assertThatThrownBy(() -> transfer.execute(
+                        new Transfer.Command(ALICE, BOB, Money.of(10_000_00, PLN), null, null)))
+                .isInstanceOf(OverdraftNotPermittedException.class);
+
+        assertThat(ledger.outboxEvents).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a reversal is announced on the same channel, naming what it reverses")
+    void aReversalIsEnqueued() {
+        var posted = transfer.execute(new Transfer.Command(ALICE, BOB, Money.of(10_00, PLN), null, null));
+        ledger.outboxEvents.clear();
+
+        reverseTransfer.execute(new ReverseTransfer.Command(
+                posted.transferReference(), "duplicate instruction", null));
+
+        assertThat(ledger.outboxEvents).hasSize(1);
+        assertThat(ledger.outboxEvents.get(0).reversesTransferRef())
+                .isEqualTo(posted.transferReference().value());
     }
 
     @Test

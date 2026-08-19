@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import bank.tessera.ledger.application.AuditTrail;
+import bank.tessera.ledger.application.TransferEvents;
 import bank.tessera.ledger.application.OpenAccount;
 import bank.tessera.ledger.application.ReverseTransfer;
 import bank.tessera.ledger.application.Transfer;
@@ -65,10 +66,11 @@ class JdbcReversalTest {
 
         AuditTrail audit = auditTrail(jdbc);
         openAccount = new OpenAccount(accounts, readModel, unitOfWork, audit, Clock.systemUTC());
-        transfer =
-                new Transfer(accounts, entries, readModel, references, unitOfWork, audit, Clock.systemUTC());
+        TransferEvents events = transferEvents(jdbc);
+        transfer = new Transfer(
+                accounts, entries, readModel, references, unitOfWork, audit, events, Clock.systemUTC());
         reverseTransfer = new ReverseTransfer(
-                accounts, entries, readModel, references, unitOfWork, audit, Clock.systemUTC());
+                accounts, entries, readModel, references, unitOfWork, audit, events, Clock.systemUTC());
 
         openAccount.open(new OpenAccount.Command(
                 VAULT, CustomerRef.of("CU0000000000"), AccountType.ASSET, PLN, null,
@@ -188,17 +190,28 @@ class JdbcReversalTest {
     private static AuditTrail auditTrail(NamedParameterJdbcTemplate jdbc) {
         return new AuditTrail(
                 new JdbcAuditLog(jdbc, new com.fasterxml.jackson.databind.ObjectMapper()),
-                new AuditContext() {
-                    @Override
-                    public String actor() {
-                        return "test";
-                    }
-
-                    @Override
-                    public java.util.Optional<String> correlationId() {
-                        return java.util.Optional.empty();
-                    }
-                },
+                testContext(),
                 Clock.systemUTC());
+    }
+
+    /** No inbound request here, so no correlation id - which the audit row records as absent. */
+    private static AuditContext testContext() {
+        return new AuditContext() {
+            @Override
+            public String actor() {
+                return "test";
+            }
+
+            @Override
+            public java.util.Optional<String> correlationId() {
+                return java.util.Optional.empty();
+            }
+        };
+    }
+
+    /** A real outbox, against the same database, so events are written where a relay would find them. */
+    private static TransferEvents transferEvents(NamedParameterJdbcTemplate jdbc) {
+        return new TransferEvents(
+                new JdbcEventOutbox(jdbc, LedgerEventJson.mapper()), testContext());
     }
 }

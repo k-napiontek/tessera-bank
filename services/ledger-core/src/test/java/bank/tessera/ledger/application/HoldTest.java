@@ -72,7 +72,8 @@ class HoldTest {
 
         InMemoryLedger.SequentialReferences references = new InMemoryLedger.SequentialReferences();
         transfer = new Transfer(
-                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
+                ledger.accounts, ledger.entries, ledger.readModel, references, ledger.unitOfWork,
+                ledger.auditTrail(FIXED), ledger.transferEvents(), FIXED);
         placeHold = new PlaceHold(ledger.accounts, ledger.holds, references, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
         captureHold = new CaptureHold(ledger.holds, transfer, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);
         releaseHold = new ReleaseHold(ledger.holds, ledger.unitOfWork, ledger.auditTrail(FIXED), FIXED);

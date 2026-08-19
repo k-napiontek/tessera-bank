@@ -50,6 +50,7 @@ public final class Transfer {
     private final ReferenceGenerator references;
     private final UnitOfWork unitOfWork;
     private final AuditTrail audit;
+    private final TransferEvents events;
     private final Clock clock;
 
     public Transfer(
@@ -59,6 +60,7 @@ public final class Transfer {
             ReferenceGenerator references,
             UnitOfWork unitOfWork,
             AuditTrail audit,
+            TransferEvents events,
             Clock clock) {
         this.accounts = Objects.requireNonNull(accounts, "accounts");
         this.entries = Objects.requireNonNull(entries, "entries");
@@ -66,6 +68,7 @@ public final class Transfer {
         this.references = Objects.requireNonNull(references, "references");
         this.unitOfWork = Objects.requireNonNull(unitOfWork, "unitOfWork");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.events = Objects.requireNonNull(events, "events");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -143,13 +146,19 @@ public final class Transfer {
                                     "currency", command.amount().currency().code(),
                                     "valueDate", valueDate.toString()));
 
-                    return TransferView.of(
+                    TransferView posted = TransferView.of(
                             entry,
                             readModel.entryPostedAt(reference)
                                     .orElseThrow(() -> new IllegalStateException(
                                             "Entry " + reference + " was appended but has no posting instant.")),
                             null,
                             command.reference());
+
+                    // The same transaction as the postings. That is the whole of the outbox pattern:
+                    // an event that describes a transfer that did not commit cannot exist, because
+                    // the row carrying it would not have committed either.
+                    events.publish(posted);
+                    return posted;
                 });
     }
 
