@@ -36,6 +36,7 @@ var floatIsJustified = map[string]string{
 	"internal/bankday/curve.go":         "an intensity is events per second at an instant, and the shape it comes from is a ratio between hours - neither is a count and neither is money",
 	"internal/arrivals/arrivals.go":     "a Poisson process is defined over continuous time - an interarrival gap is a real number of seconds and thinning compares an intensity ratio against a uniform draw",
 	"internal/population/population.go": "the log-normal amount draw and the weighted picks - a distribution is continuous. The float ends at drawMinor, which hands back int64 minor units and nothing else",
+	"internal/model/model.go":           "weights, multipliers and the diurnal curve arrive from the model as JSON numbers; the one money field in the document is decoded as int64 and stays one",
 }
 
 // Calls that have no business anywhere in this module, whatever they are applied to.
