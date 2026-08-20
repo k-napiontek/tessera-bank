@@ -1,0 +1,131 @@
+/*
+ * The house style, such as it is. Written in 2011 and touched twice since.
+ *
+ * No framework, no reset, no variables. Tables have borders because the data is tabular and an
+ * operator reads it eight hours a day; the font is the one every workstation in the building has.
+ * This is not meant to be pretty and making it pretty would be a change nobody asked for.
+ */
+body {
+    font-family: Verdana, Arial, sans-serif;
+    font-size: 11px;
+    color: #222;
+    background: #f4f4f0;
+    margin: 0;
+}
+
+#banner {
+    background: #123a5e;
+    color: #fff;
+    padding: 6px 10px;
+    border-bottom: 3px solid #8b1a1a;
+}
+
+#banner h1 {
+    font-size: 14px;
+    margin: 0;
+    display: inline;
+}
+
+#banner .env {
+    float: right;
+    font-size: 10px;
+    padding-top: 2px;
+}
+
+#content {
+    padding: 10px;
+}
+
+table.grid {
+    border-collapse: collapse;
+    background: #fff;
+    width: 100%;
+}
+
+table.grid th,
+table.grid td {
+    border: 1px solid #b0b0b0;
+    padding: 3px 6px;
+    text-align: left;
+    vertical-align: top;
+}
+
+table.grid th {
+    background: #dfe6ee;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+table.grid tr.alt td {
+    background: #f7f7f4;
+}
+
+td.num {
+    text-align: right;
+    font-family: "Courier New", monospace;
+    white-space: nowrap;
+}
+
+td.neg {
+    color: #8b1a1a;
+}
+
+.cls {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.cls-VALUE_DRIFT { color: #8b1a1a; }
+.cls-MISSING_ON_MASTER { color: #8a5a00; }
+.cls-MISSING_IN_LEDGER { color: #8b1a1a; }
+/* Timing is expected. It is listed so it is visibly not drift, and it is not coloured like one. */
+.cls-TIMING { color: #4a4a4a; font-weight: normal; }
+
+fieldset.totals {
+    border: 1px solid #b0b0b0;
+    background: #fff;
+    margin-bottom: 10px;
+    padding: 6px 10px;
+}
+
+fieldset.totals legend {
+    font-weight: bold;
+}
+
+fieldset.totals span {
+    display: inline-block;
+    margin-right: 18px;
+}
+
+.cut {
+    font-size: 10px;
+    color: #555;
+    margin-top: 6px;
+}
+
+.notice {
+    border: 1px solid #8a5a00;
+    background: #fff8e0;
+    padding: 8px 10px;
+}
+
+.none {
+    border: 1px solid #2c6b2c;
+    background: #eefaee;
+    padding: 8px 10px;
+}
+
+.acted {
+    color: #2c6b2c;
+    white-space: nowrap;
+}
+
+form.act {
+    display: inline;
+}
+
+form.act input[type=text] {
+    width: 220px;
+    font-family: Verdana, Arial, sans-serif;
+    font-size: 11px;
+}
