@@ -26,6 +26,18 @@
   <name>customer-master</name>
   <description>Customer and account metadata, exposed over WSDL-first SOAP.</description>
 
+  <properties>
+    <!--
+      The contracts live at the repository root and the WSDL imports the canonical XSD as
+      ../xsd/canonical-v1.xsd - a path relative to the WSDL's own location. So wsimport is pointed at
+      the contract IN PLACE. Copying the WSDL somewhere convenient without its sibling directory
+      breaks the import, and the error names a schema location rather than the copy that caused it.
+
+      Same idiom as services/ledger-api, which passes tessera.contracts.dir to its contract tests.
+    -->
+    <tessera.contracts.dir>${project.basedir}/../../contracts</tessera.contracts.dir>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
@@ -52,6 +64,97 @@
 
   <build>
     <finalName>customer-master</finalName>
+
+    <plugins>
+      <!--
+        WSDL-first, which is the whole discipline of this tier: the contract is authored by hand and
+        the Java is generated from it. Nothing generated is committed - GeneratedSourcesTest asserts
+        that - so the only way for the endpoint and the contract to disagree is for the build to fail.
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>jaxws-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>generate-from-wsdl</id>
+            <goals>
+              <goal>wsimport</goal>
+            </goals>
+            <configuration>
+              <wsdlDirectory>${tessera.contracts.dir}/wsdl</wsdlDirectory>
+              <wsdlFiles>
+                <wsdlFile>customer-master-v1.wsdl</wsdlFile>
+              </wsdlFiles>
+              <!-- One package for both namespaces. The alternative is two external binding files
+                   whose schemaLocation is five directories of relative path away from the schema
+                   they bind, which breaks silently the first time anything moves. -->
+              <packageName>bank.tessera.customer.ws</packageName>
+              <sourceDestDir>${project.build.directory}/generated-sources/wsimport</sourceDestDir>
+              <keep>true</keep>
+              <!-- Generate only. The generator's own javac answers to nothing this build controls,
+                   and BytecodeVersionTest holds every class in target/classes to Java 8. -->
+              <xnocompile>true</xnocompile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Two compilations, because the estate's -Werror gate must not be weakened to accommodate a
+        code generator.
+
+        wsimport emits exactly one warning: ServiceFaultMessage extends Exception and declares no
+        serialVersionUID, which is [serial]. That warning is unfixable without editing generated
+        code, and switching -Werror off for the module would take the gate away from the ~2000 lines
+        a person wrote in order to accommodate 20 files nobody did.
+
+        So the generated tree compiles first, in process-sources, with [serial] alone suppressed;
+        the hand-written tree compiles in the usual phase under the parent's unmodified flags and
+        finds the generated classes already in target/classes. The two never overlap, which is why
+        the endpoint lives in bank.tessera.customer.endpoint and the generated code in .ws.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>compile-generated-sources</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>bank/tessera/customer/ws/**</include>
+              </includes>
+              <compilerArgs>
+                <arg>-Xlint:all</arg>
+                <arg>-Xlint:-serial</arg>
+                <arg>-Werror</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <excludes>
+                <exclude>bank/tessera/customer/ws/**</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 
 </project>
