@@ -38,7 +38,7 @@ Updated by the executing session at the start and end of every work package, per
 > what makes the strangler fig safe, and it is now genuinely possible because a transfer really does
 > reach both. WP-16 is frame-only too.
 >
-> **WP-11b is done and merged** ([#51](https://github.com/k-napiontek/tessera-bank/pull/51)), and
+> **WP-11b is done and merged** ([#51](https://github.com/k-napiontek/tessera-bank/pull/51), `075595b`), and
 > **one transfer now crosses all four eras.** A payment published as a 2023 Kafka event becomes
 > canonical XML by XSLT, reaches a 2011 SOAP endpoint deployed as its own WAR on a real Tomcat 8.5
 > over real Oracle, is encoded into two COMP-3 packed-decimal records in a fixed-width file, and is
@@ -200,7 +200,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `Done` | [#37](https://github.com/k-napiontek/tessera-bank/pull/37) | `58ac367` |
 | [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Done` | [#45](https://github.com/k-napiontek/tessera-bank/pull/45) | `8fd6704` |
 | [11a](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP | 2 | 09, 10b | `Done` | [#49](https://github.com/k-napiontek/tessera-bank/pull/49) | `1ae5d05` |
-| [11b](wp/WP-11-esb-adapter.md) | `esb-adapter` - COMP-3 encoding, movement file, end-to-end cycle | 2 | 11a, 05 | `Done` | [#51](https://github.com/k-napiontek/tessera-bank/pull/51) | |
+| [11b](wp/WP-11-esb-adapter.md) | `esb-adapter` - COMP-3 encoding, movement file, end-to-end cycle | 2 | 11a, 05 | `Done` | [#51](https://github.com/k-napiontek/tessera-bank/pull/51) | `075595b` |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `020cee2` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `8f38ced` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `ccaa851` |
