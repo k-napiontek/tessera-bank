@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  backoffice - the internal operations screen.
+
+  Stratum 1, vintage ~2011: Java 8, Servlet 3.0, JSP and JSTL, jQuery, Maven 3, packaged as a WAR
+  for Tomcat 8.5. Those versions are load-bearing and are not to be raised - see the legacy-strata
+  rule in CLAUDE.md and ADR 0002.
+
+  A SECOND WAR beside customer-master rather than pages inside it. An operator screen and the SOAP
+  endpoint the integration tier depends on should not share a deployment: a change to a table layout
+  would otherwise redeploy the service that carries every transfer into stratum 1. Two WARs on one
+  Tomcat is what a 2011 bank actually ran.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>bank.tessera</groupId>
+    <artifactId>tessera-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../platform/parent-pom/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>backoffice</artifactId>
+  <packaging>war</packaging>
+
+  <name>backoffice</name>
+  <description>Operator screens for reconciliation breaks and the overnight cycle's rejects.</description>
+
+  <properties>
+    <!-- The copybook contracts, read in place. REJREC's offsets come from the contracts checker
+         rather than from a second hand count in this module. -->
+    <tessera.contracts.dir>${project.basedir}/../../contracts</tessera.contracts.dir>
+  </properties>
+
+  <dependencies>
+    <!--
+      customer-master's DAO and domain types, as the classes jar that module attaches. A WAR is not
+      a usable dependency, and the alternative to this jar is a second implementation of how the
+      bank reads an account - the drift batch/recon exists to detect, manufactured on purpose.
+    -->
+    <dependency>
+      <groupId>bank.tessera</groupId>
+      <artifactId>customer-master</artifactId>
+      <version>${project.version}</version>
+      <classifier>classes</classifier>
+    </dependency>
+
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc8</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- JSTL, so the JSPs loop and escape without a scriptlet. Packaged into WEB-INF/lib because
+         Tomcat is a servlet container and ships no JSTL of its own. -->
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>jstl</artifactId>
+    </dependency>
+
+    <!-- Jackson 1.x, to read the break report batch/recon writes. See the parent POM for why the
+         major version is 1 and not 2. -->
+    <dependency>
+      <groupId>org.codehaus.jackson</groupId>
+      <artifactId>jackson-mapper-asl</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Cargo's Java API, to boot a real Tomcat 8.5 from the deployment test, as customer-master's
+         own test does. Driven from the test rather than the POM because the Oracle it is pointed at
+         is itself a container whose port is only known once it has started. -->
+    <dependency>
+      <groupId>org.codehaus.cargo</groupId>
+      <artifactId>cargo-core-uberjar</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>backoffice</finalName>
+  </build>
+
+</project>

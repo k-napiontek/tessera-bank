@@ -12,7 +12,7 @@
         build-mainframe build-legacy build-integration build-services build-edge build-batch \
         test-contracts test-mainframe test-legacy test-integration test-services test-edge \
         test-gateway test-fraud test-web \
-        test-batch test-reporting test-recon \
+        test-batch test-reporting test-recon test-customer-master test-backoffice \
         lint-contracts lint-edge lint-batch build-web lint-web jdk8 jdk17 docker go uv node
 
 # ---------------------------------------------------------------------------------------------
@@ -137,9 +137,19 @@ build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 # Packaging a WAR must not need a database. Left to run the test phase, `package` starts Oracle and
 # this target quietly acquires a Docker prerequisite it does not declare - so it skips tests, and
 # `test-legacy` is the one target that runs them.
-build-legacy: jdk8 ## Build the Java 8 tier - customer-master as a WAR
-	@JAVA_HOME="$(JAVA8)" mvn --quiet -DskipTests -f legacy/customer-master/pom.xml package
-	@echo "OK    customer-master packages as a WAR"
+build-legacy: jdk8 ## Build the Java 8 tier - two WARs, customer-master and backoffice
+# customer-master is INSTALLED rather than packaged: backoffice depends on the classes jar it
+# attaches, and a jar in target/ is not on another module's compile classpath. There is no
+# aggregator POM at this stratum - each module names the corporate parent - so the ordering is here.
+#
+# The corporate parent is installed first. A module finds it by relativePath when building itself,
+# but resolving customer-master's descriptor OUT of the repository needs the parent to be in there
+# too - which is the difference between "my parent" and "a dependency's parent", and it fails
+# naming tessera-parent rather than the module that asked for it.
+	@JAVA_HOME="$(JAVA8)" mvn --quiet -N -f platform/parent-pom/pom.xml install
+	@JAVA_HOME="$(JAVA8)" mvn --quiet -DskipTests -f legacy/customer-master/pom.xml install
+	@JAVA_HOME="$(JAVA8)" mvn --quiet -DskipTests -f legacy/backoffice/pom.xml package
+	@echo "OK    customer-master and backoffice package as WARs"
 
 build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
@@ -199,8 +209,16 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 # container, because surefire and failsafe are separate JVMs, and a ~10MB Tomcat download the first
 # time.
 # ---------------------------------------------------------------------------------------------
-test-legacy: jdk8 docker ## customer-master on real Oracle, and the WAR on a real Tomcat 8.5
-	@JAVA_HOME="$(JAVA8)" mvn -f legacy/customer-master/pom.xml verify
+test-legacy: test-customer-master test-backoffice ## Both stratum 1 modules
+
+test-customer-master: jdk8 docker ## customer-master on real Oracle, and the WAR on a real Tomcat 8.5
+	@JAVA_HOME="$(JAVA8)" mvn --quiet -N -f platform/parent-pom/pom.xml install
+	@JAVA_HOME="$(JAVA8)" mvn -f legacy/customer-master/pom.xml install
+
+# backoffice depends on customer-master's attached classes jar, so the module above must have been
+# installed first - which is why test-customer-master runs `install` rather than `verify`.
+test-backoffice: jdk8 docker ## backoffice, deployed as its own WAR on a real Tomcat 8.5
+	@JAVA_HOME="$(JAVA8)" mvn -f legacy/backoffice/pom.xml verify
 
 # ---------------------------------------------------------------------------------------------
 # Stratum 2 shares stratum 1's JDK and none of its tooling: Java 8 with Spring Boot 2.7.18, which
