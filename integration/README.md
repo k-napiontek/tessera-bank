@@ -8,7 +8,7 @@ The layer that made modernisation possible without touching the core, and the la
 
 | Directory | Holds |
 |---|---|
-| `esb-adapter/` | Kafka to XSLT to SOAP, and COMP-3 fixed-width output for the mainframe |
+| `esb-adapter/` | Kafka to XSLT to SOAP, and COMP-3 fixed-width output for the mainframe. **The SOAP hop is built (WP-11a)**; COMP-3 and the movement file are WP-11b |
 
 ## Constraints
 
