@@ -13,6 +13,7 @@ Every interface in the estate, defined before it is implemented, in the contract
 | `openapi/` | ~2023 | OpenAPI 3.1 | `services/`, `edge/` |
 | `asyncapi/` | ~2023 | AsyncAPI 3.0 (Kafka) | `services/`, `integration/`, `edge/` |
 | `reporting/` | ~2025 | Fixed-width outbound file formats | `batch/reporting`, and whoever receives the submission |
+| `recon/` | ~2026 | The reconciliation break report | `batch/recon` writes it, `legacy/backoffice` renders it |
 
 ## The source
 
