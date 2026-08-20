@@ -30,9 +30,31 @@ WAR does not exist until `package`. Needs Docker, and network on the first run.
 
 `src/main/resources/db/migration/` holds the versioned scripts, applied in the order
 `scripts.list` gives. `V1` is the schema, `V2` is `PKG_ACCOUNT` (reads), `V3` is `PKG_POSTING`
-(applying a posted transfer). There is no SQL in the Java at all: the DAO calls a procedure and maps
-what comes back, which is exactly why migrating this component off Oracle is hard. That difficulty is
-the point - see [TD-005](../../docs/technical-debt.md).
+(applying a posted transfer), `V4` is the operator audit trail's tables and `V5` is `PKG_OPERATOR`
+with the trigger that makes the trail append-only. There is no SQL in the Java at all: the DAO calls
+a procedure and maps what comes back, which is exactly why migrating this component off Oracle is
+hard. That difficulty is the point - see [TD-005](../../docs/technical-debt.md).
+
+**One convention holds across all five scripts: plain DDL and PL/SQL never share a `/`-delimited
+chunk.** `SqlScript` is robust either way, but this estate has three other readers of these files
+and one of them was not - a trigger declared after a `CREATE TABLE` in the same chunk was split on
+its own semicolons and took a different stratum's whole test suite down with `ORA-00900`. Adding a
+package or a trigger means adding a script, not appending to one. See **F-61** in `STATUS.md`.
+
+`V4` and `V5` exist because stratum 1 had no audit trail at all until WP-15, and `backoffice` is the
+first component here that lets a person change something. `operator_audit` cannot be updated or
+deleted - a trigger raises `ORA-20010` - and every row is written by `PKG_OPERATOR` inside the same
+transaction as the change it describes.
+
+## Reused by `backoffice`
+
+`maven-jar-plugin` attaches a `classes` artefact alongside the WAR so that
+[`legacy/backoffice`](../backoffice/README.md) can depend on the DAO and the domain types rather
+than reimplement them. The SOAP endpoint package is excluded from it: the back office has no
+business holding a copy of the web service, and a jar that carried it would let a second module
+start answering the contract. A second implementation of account lookup is precisely the drift the
+estate's reconciliation exists to detect, so building one here to avoid a POM change would have been
+the expensive kind of convenience.
 
 ## The SOAP endpoint
 
