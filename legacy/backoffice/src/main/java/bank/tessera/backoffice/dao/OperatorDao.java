@@ -153,7 +153,12 @@ public final class OperatorDao {
         if (code == NOTE_REQUIRED) {
             return new OperatorException(code, "an annotation needs a note", problem);
         }
-        return new OperatorException(code, "the customer master refused the action", problem);
+        // Not a refusal: the database failed rather than declined. The message is carried because
+        // this one ends up in a log for whoever is on call, and "refused the action" on its own has
+        // sent more than one engineer looking for a business rule that was never involved.
+        return new OperatorException(code,
+                "the customer master could not complete the action: " + problem.getMessage(),
+                problem);
     }
 
     /** CCYYMMDD, the form the whole estate writes a business date in. */

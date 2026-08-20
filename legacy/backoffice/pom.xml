@@ -103,6 +103,34 @@
 
   <build>
     <finalName>backoffice</finalName>
+
+    <plugins>
+      <!--
+        The deployment test. Same shape as customer-master's: the WAR is built first and the test
+        deploys the artefact rather than a directory, because what is being proved is that the thing
+        the build produces starts.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>deployment-test</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+            <tessera.war>${project.build.directory}/${project.build.finalName}.war</tessera.war>
+            <tessera.tomcat.work>${project.build.directory}/tomcat</tessera.tomcat.work>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 
 </project>
