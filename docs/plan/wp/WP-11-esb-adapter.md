@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1011-esb-soap-hop` (11a), `feat/TB-1011-esb-comp3-hop` (11b) |
 | **Stratum** | 2 - Java 8 + Spring Boot 2.7.18, ~2019 |
 | **Depends on** | WP-09, WP-10b |
-| **Status** | `Not started` - see `STATUS.md` for the per-half status |
+| **Status** | `Done` - both halves merged; see `STATUS.md` |
 
 ## Objective
 
@@ -185,13 +185,13 @@ Branch `feat/TB-1011-esb-comp3-hop`. Seven tasks.
 
 The half that satisfies each box is named, because two pull requests cannot both tick all five.
 
-- [ ] A transfer event produces a movement record that `ACCTPOST` reads and applies correctly. *(11b)*
-- [ ] COMP-3 encoding matches the mainframe fixtures byte for byte, including negatives and zero. *(11b)*
-- [ ] A redelivered event produces no duplicate movement record. *(11a for the consumer, 11b for the file)*
-- [ ] A transformation failure lands in the dead-letter path with enough context to diagnose it. *(11a; 11b adds the encoding failure)*
-- [ ] Runs on JDK 8 with Spring Boot 2.7.18. *(11a)*
-- [ ] The SOAP request is understood by a really-deployed `customer-master`, not by a stub. *(11a)*
-- [ ] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
+- [x] A transfer event produces a movement record that `ACCTPOST` reads and applies correctly. *(11b)*
+- [x] COMP-3 encoding matches the mainframe fixtures byte for byte, including negatives and zero. *(11b)*
+- [x] A redelivered event produces no duplicate movement record. *(11a for the consumer, 11b for the file)*
+- [x] A transformation failure lands in the dead-letter path with enough context to diagnose it. *(11a; 11b adds the encoding failure)*
+- [x] Runs on JDK 8 with Spring Boot 2.7.18. *(11a)*
+- [x] The SOAP request is understood by a really-deployed `customer-master`, not by a stub. *(11a)*
+- [x] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
 
 ## Verification
 

@@ -132,6 +132,44 @@ never the right answer to "the cycle failed" - a failed cycle applied nothing, s
 is re-seeded from the input master each time and the run timestamp comes from the business date, not
 the clock. If two runs differ, something is wrong; report it.
 
+## The movement file did not arrive, or is short
+
+The file comes from `integration/esb-adapter`, which appends two records per transfer as the ledger's
+events reach it. Two failures there are visible from here and neither of them abends anything on this
+side.
+
+**The file is missing or has no records for a transfer you expected.** Look for dead letters on
+`tessera.esb.transfer-posted.dlt.v1`. The `failedStage` field says which era refused the message, and
+it is the first thing to read because it decides who is paged:
+
+| `failedStage` | What it means | Who |
+|---|---|---|
+| `DEQUEUE`, `TRANSFORM` | the event could not be read or turned into canonical XML | the ledger team, with the integration tier |
+| `SOAP` | the system of record refused it or was unreachable | Customer Master support |
+| `ENCODE` | the movement cannot be represented at stratum 0 - almost always a currency whose ISO 4217 scale is not 2, which `PIC S9(13)V99 COMP-3` cannot hold | the integration tier; the transfer needs a business decision, not a retry |
+| `WRITE` | the movement file could not be appended to | platform, then Core Banking Operations |
+
+A dead letter carries the original message verbatim and never repeats the remittance reference in
+its `reason`. Nothing is replayed automatically: replaying a poison message on a timer turns one bad
+record into an outage every five minutes.
+
+**`STEP010` abends with RC 12 and the movement file is not a multiple of 120 bytes.** Something
+truncated it after the integration tier wrote it - the adapter refuses to append to a file in that
+state rather than making it worse, so it did not do this. Do **not** repair the file by hand: get the
+tier to re-deliver it, and keep the damaged one for the incident record.
+
+```bash
+# is it a whole number of records?
+python3 -c "import os,sys; n=os.path.getsize(sys.argv[1]); print(n, n%120)" MOVEMENT.DAT
+```
+
+**A transfer appears once in the file even though it was delivered twice.** That is correct. The
+adapter looks for `MOV-TRANSFER-REF` in the file before appending, under a lock - see
+[ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md). `ACCTPOST`
+itself never looks at the transfer reference, so a duplicate that did get written would be applied
+twice and reported by nothing. If you ever see two pairs sharing one reference, raise it as an
+incident rather than deleting one.
+
 ## Rejects
 
 `REJECTS.DAT` holds every movement that could not be applied, each carrying the original movement

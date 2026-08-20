@@ -8,7 +8,7 @@ The layer that made modernisation possible without touching the core, and the la
 
 | Directory | Holds |
 |---|---|
-| `esb-adapter/` | Kafka to XSLT to SOAP, and COMP-3 fixed-width output for the mainframe. **The SOAP hop is built (WP-11a)**; COMP-3 and the movement file are WP-11b |
+| `esb-adapter/` | Kafka to XSLT to SOAP to COMP-3. **Complete**: WP-11a built the 2019-to-2011 hop, WP-11b the 2011-to-1995 one |
 
 ## Constraints
 
@@ -18,6 +18,21 @@ The layer that made modernisation possible without touching the core, and the la
   understanding of the format. Positive values end `0x0C`, negative `0x0D`.
 - Delivery is at-least-once, so duplicate handling must be idempotent and tested with an actual
   redelivery.
+- **This tier does not sort the movement file.** `STEP010` of the overnight cycle does, and that is
+  the entire reason that step exists.
+- Nothing is written to the movement file unless the SOAP call succeeded. The two hops are ordered,
+  not parallel, and the work package was split on that line.
+
+## The one transfer that crosses everything
+
+`FourEraTransferIT` is the only test in this repository that takes a single transfer through every
+era: a Kafka event becomes canonical XML, then a SOAP call into a really-deployed `customer-master`
+on Tomcat 8.5 over real Oracle, then two COMP-3 records in a fixed-width file, then a real GnuCOBOL
+overnight cycle that applies them to the account master. It asserts the balance moved by the same
+amount in 2011 and in 1995.
+
+That is what the [master plan's section 3](../docs/plan/master-plan.md) describes, and until WP-11b
+nothing had done it.
 
 ## Do not modernise
 
