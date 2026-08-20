@@ -112,13 +112,21 @@ components:
       description: |
         The original message and why it did not get through. Everything an operator needs to decide
         whether to fix and replay, or to escalate.
-      required: [transferRef, failedStage, reason, failedAt, originalPayload]
+      required: [failedStage, reason, failedAt, originalPayload]
       additionalProperties: false
       properties:
         transferRef:
           type: string
           pattern: '^TB[0-9]{18}$'
-          description: Lifted out of the original payload so it can be searched without parsing it.
+          description: |
+            Lifted out of the original message so it can be searched without parsing the payload -
+            from the Kafka key, or from the payload when the key is unusable.
+
+            **Optional, and that is deliberate.** A message can arrive with no usable key and a body
+            that cannot be parsed, which is precisely the case a dead-letter channel exists for. A
+            schema requiring this field would make the worst messages the only ones that could not be
+            recorded. When it is absent, the message is identified by its topic, partition and
+            offset in the log line written beside it.
         failedStage:
           type: string
           description: |

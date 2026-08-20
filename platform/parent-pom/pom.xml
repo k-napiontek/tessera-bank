@@ -80,6 +80,11 @@
       centrally pinned; its reach stops at the module that asks for it.
     -->
     <spring-boot.version>2.7.18</spring-boot.version>
+
+    <!-- The same JSON Schema implementation services/ledger-api validates its OpenAPI contract
+         with. A contract test that uses a different validator from the rest of the estate is a
+         test that can disagree with the estate about what the contract means. -->
+    <json-schema-validator.version>1.5.1</json-schema-validator.version>
   </properties>
 
   <dependencyManagement>
@@ -143,6 +148,13 @@
         <groupId>org.codehaus.cargo</groupId>
         <artifactId>cargo-core-uberjar</artifactId>
         <version>${cargo.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.networknt</groupId>
+        <artifactId>json-schema-validator</artifactId>
+        <version>${json-schema-validator.version}</version>
         <scope>test</scope>
       </dependency>
     </dependencies>
