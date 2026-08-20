@@ -2,7 +2,7 @@
 
 > **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02 to WP-09, WP-10a, WP-10b, WP-12, WP-13, WP-14, WP-17 and WP-19. Every work package adds its own as
+> WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-12, WP-13, WP-14, WP-17 and WP-19. Every work package adds its own as
 > part of the Definition of Done, and WP-18 verifies that none is missing.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
@@ -564,3 +564,30 @@ real Tomcat 8.5 and call it over HTTP.
 | **REQ-INT-001** Every interface is defined by a contract before implementation | WP-02 | The first implementation in this repository generated *from* its contract rather than checked against it afterwards. `SoapResponseConformanceTest` builds a validator from the WSDL's own inline schema, handed to the schema factory with the WSDL's location as its base URI so the `../xsd/` import resolves to the real file, and validates every response against it - including what `AccountMapper` actually produces, not only objects the test assembled | Met at this tier |
 | **REQ-INT-004** Duplicate delivery does not duplicate a movement | WP-11 | The receiving half, now reachable over the wire. A redelivery of an identical `NotifyTransferPosted` answers `alreadyApplied=true` and moves no money | `CustomerMasterEndpointNotifyTest` and `CustomerMasterDeploymentIT` both send the message twice and assert the balance moved once. Proved to have teeth by mutation: hard-coding `alreadyApplied` to false failed exactly the redelivery assertion | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | The claim that identity does not cross the wire, asserted rather than read off the schema. Every family name, given name and national identifier in the fixture is checked absent from a successful answer **and** from a fault - the fault path explicitly, because an error path is the second most common place personal data escapes a system, which is why the WSDL says so where the fault is defined | `CustomerMasterEndpointReadTest.aSuccessfulAnswerCarriesNoIdentity` and `.aFaultCarriesNoIdentity` | Met at this tier |
+
+
+---
+
+## WP-11a - esb-adapter: the event, the transformation and the SOAP hop
+
+Ticket TB-1011. Stratum 2, Java 8 on Spring Boot 2.7.18. 39 tests, of which 4 bring up a real Kafka,
+a real Oracle and a real Tomcat 8.5 carrying `customer-master`'s own WAR.
+
+WP-11 is **split in the plan** on the era boundary each half crosses. This half is 2019 to 2011;
+**REQ-INT-003**, which is about the mainframe's own format, belongs to WP-11b and is untouched here.
+
+### Owned by WP-11a
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-INT-004** Duplicate delivery does not duplicate a movement | **No de-duplication in this component, deliberately.** `NotifyTransferPosted` is idempotent on `transferRef` because the system of record claims the transfer with a unique constraint and answers `alreadyApplied`; the adapter treats that as success. A second record kept here would be a second source of truth about the bank's money, able to disagree with the first - which is the drift `batch/recon` exists to detect, manufactured on purpose. WP-11b needs its own answer, because a file has no unique constraint | `TransferBridgeIT.aRedeliveredEventMovesTheMoneyOnlyOnce` publishes the identical event twice against the really-deployed system of record and asserts the balance moved once; `TransferPostedListenerTest.aRedeliveryIsHandledAgainRatherThanSuppressed` pins the design by asserting the handler is called both times rather than the second being swallowed | **Met in part - a file has no unique constraint, so WP-11b completes it for the movement record** |
+| **REQ-INT-005** Undeliverable messages are captured, not lost | Exactly two answers, and the distinction is the whole control. A **permanent** failure - malformed payload, schema violation, business fault - is recorded on the dead-letter channel and the offset acknowledged, so one bad message cannot block every transfer behind it. A **transient** failure is not acknowledged at all: the broker redelivers and the partition waits, which is what ordering costs and what WP-09 chose on the other side of this topic. An exception nobody classified counts as transient, because a bug in this component is not a reason to discard a payment. The channel is declared in `contracts/asyncapi/esb-adapter-events.yaml`, which this component owns | `TransferPostedListenerTest` covers all four routes including the unclassified one; `DeadLetterRecorderTest` validates the payload **against the contract itself**, read from `contracts/` at test time, and was demonstrated to fail by removing one required field; `TransferBridgeIT` proves a real dead letter reaches a real topic | **Met** |
+
+### Contributed by WP-11a, verified by the owning package
+
+| Requirement | Owner | What WP-11a contributes | Status |
+|---|---|---|---|
+| **REQ-CM-002** The interface is contract-first SOAP | WP-10 | The other side of the proof. `customer-master` generated its server interface from `customer-master-v1.wsdl`; this module generates a **client** from the same document, and neither is authoritative. Until WP-11a nothing had ever called that endpoint except a test written beside it | `TransferBridgeIT` calls the really-deployed WAR over HTTP with the generated client and asserts the balances in Oracle moved. A stub would have verified what this component says and never that the far end understands it | Met at this tier |
+| **REQ-INT-001** Every interface is defined by a contract before implementation | WP-02 | Three contracts in one hop, none of them written by the code that uses them: the event is shaped by `ledger-events.yaml`, the transformation's output by `canonical-v1.xsd`, and the call by `customer-master-v1.wsdl`. The dead-letter channel was added to `contracts/` **before** the code that writes to it, in its own commit | `CanonicalTransformerTest` validates the transformation's output against the canonical schema and refuses an event one field short; `GeneratedCodeTest` fails the build if generated code is committed | Met at this tier |
+| **REQ-EST-001** Stratum 1 is authentically dated in style and stack | WP-10 | Re-verified from the outside. The endpoint stratum 1 publishes is now consumed by a different module with a different toolchain, which is the only way to find out whether a 2011 SOAP service is genuinely callable rather than merely deployable | `TransferBridgeIT` | Met at this tier |
+| **REQ-DP-001** All test data is synthetic | WP-03 | Test fixtures only, and the same shapes stratum 1 uses - `TESSERA-0001`, `SYN-0000000001`. The dead-letter path is also held to it from the other direction: the failure reason may never repeat the remittance reference, because a dead-letter topic is retained and widely readable | `DeadLetterRecorderTest.theReasonNeverRepeatsTheRemittanceReference` strips `originalPayload` and asserts the reference appears nowhere else in the record | Met at this tier |

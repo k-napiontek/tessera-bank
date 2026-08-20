@@ -1,0 +1,170 @@
+# Kafka event contracts owned by integration/esb-adapter.
+#
+# A separate document from ledger-events.yaml, deliberately. That one is the LEDGER's contract: it is
+# framed from the point of view of the producer and describes what services/ledger-core sends and
+# receives. What this component does with a message it cannot process is not a ledger event, and
+# putting it there would make the producer's contract change every time a consumer added a failure
+# mode.
+#
+# F-34 and F-51 both record the same gap from the other direction - the gateway answers with eight
+# problem types no contract carries, and customer-master raises four fault codes of which one is
+# declared. Both conclude that an error surface should be a contract artefact rather than a README
+# one. This is the first place in the estate to act on that rather than record it again.
+#
+# It re-declares nothing from ledger-events.yaml. The original message is carried as an opaque
+# string, because the reason a message is here may be that it could not be parsed - and a schema
+# that required it to be a well-formed TransferPostedPayload could not describe that case at all.
+asyncapi: 3.0.0
+
+info:
+  title: Tessera Bank ESB adapter events
+  version: 1.0.0
+  description: |
+    ## What this document is for
+
+    `integration/esb-adapter` consumes `tessera.ledger.transfer-posted.v1` and carries each transfer
+    across two era boundaries: to `customer-master` over SOAP, and into a fixed-width COMP-3 record
+    for the overnight COBOL cycle. A message can fail on either hop, and a message that fails must
+    not be silently dropped and must not block the partition behind it forever.
+
+    This document declares where such a message goes.
+
+    ## A dead letter is a fact, not an event
+
+    Everything on the ledger's channels describes something that **happened to the bank**. Nothing
+    here does. A dead letter describes something that happened to *this component*, and its audience
+    is an operator rather than another business system - which is why it carries the original payload
+    unchanged plus the reason, and why no other component is expected to subscribe to it.
+
+    It is retained rather than replayed automatically. Replaying a poison message on a timer is how
+    one bad record becomes an outage every five minutes.
+
+    ## Data protection
+
+    The original payload is carried **verbatim**, which means it may contain the remittance
+    reference - the one field a paying customer controls, classified restricted-if-misused. The
+    failure reason must never repeat it. See `docs/ways-of-working/data-classification.md`.
+
+  license:
+    name: MIT
+    url: https://github.com/k-napiontek/tessera-bank/blob/main/LICENSE
+  contact:
+    name: Tessera Bank engineering
+    url: https://github.com/k-napiontek/tessera-bank
+
+servers:
+  kafka:
+    host: kafka.tesserabank.internal:9093
+    protocol: kafka-secure
+    description: |
+      Broker addresses are supplied per environment by the platform repositories, not by this
+      contract. The host below is the shape, not a real endpoint.
+
+channels:
+  transferPostedDeadLetter:
+    address: tessera.esb.transfer-posted.dlt.v1
+    title: Transfer-posted dead letter
+    description: |
+      One message per transfer this component could not carry across. The key is the original
+      message's key - `transferRef` - so a transfer's dead letters keep their order relative to each
+      other and to nothing else.
+
+      The topic name says `esb` rather than `ledger` because the failure belongs to this component.
+      A second consumer of the same ledger topic gets its own dead-letter channel; it does not share
+      this one, since "could not be processed" means something different in each.
+    messages:
+      transferPostedDeadLetter:
+        $ref: '#/components/messages/TransferPostedDeadLetter'
+    bindings:
+      kafka:
+        topic: tessera.esb.transfer-posted.dlt.v1
+        partitions: 12
+        replicas: 3
+
+operations:
+  publishTransferPostedDeadLetter:
+    action: send
+    channel:
+      $ref: '#/channels/transferPostedDeadLetter'
+    summary: Record a transfer-posted message this component could not carry across.
+
+components:
+
+  messages:
+    TransferPostedDeadLetter:
+      name: TransferPostedDeadLetter
+      title: Transfer-posted dead letter
+      summary: A transfer-posted message that could not be transformed or delivered.
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/DeadLetterPayload'
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: '`transferRef` of the original message, unchanged.'
+            pattern: '^TB[0-9]{18}$'
+
+  schemas:
+
+    DeadLetterPayload:
+      type: object
+      description: |
+        The original message and why it did not get through. Everything an operator needs to decide
+        whether to fix and replay, or to escalate.
+      required: [failedStage, reason, failedAt, originalPayload]
+      additionalProperties: false
+      properties:
+        transferRef:
+          type: string
+          pattern: '^TB[0-9]{18}$'
+          description: |
+            Lifted out of the original message so it can be searched without parsing the payload -
+            from the Kafka key, or from the payload when the key is unusable.
+
+            **Optional, and that is deliberate.** A message can arrive with no usable key and a body
+            that cannot be parsed, which is precisely the case a dead-letter channel exists for. A
+            schema requiring this field would make the worst messages the only ones that could not be
+            recorded. When it is absent, the message is identified by its topic, partition and
+            offset in the log line written beside it.
+        failedStage:
+          type: string
+          description: |
+            Which hop refused it. The stages are eras, not steps: TRANSFORM is 2019 becoming 2011,
+            SOAP is the call into the system of record, ENCODE is 2011 becoming 1995. An operator
+            reads this first, because it decides who is paged.
+          enum: [DEQUEUE, TRANSFORM, SOAP, ENCODE, WRITE]
+        reason:
+          type: string
+          maxLength: 500
+          description: |
+            What went wrong, in words, written by this component. **Never the original payload and
+            never a remittance reference** - a dead-letter topic is retained and widely readable,
+            which is exactly the combination that turns a diagnostic into a disclosure.
+        faultCode:
+          type: string
+          maxLength: 64
+          description: |
+            Present when the far end named one. `customer-master` raises ACCT_NOT_FOUND,
+            ACCT_CURRENCY_MISMATCH, AMOUNT_NOT_POSITIVE and SAME_ACCOUNT - of which its WSDL declares
+            only the first, which is F-51.
+        failedAt:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+          minimum: 1
+          description: How many deliveries were tried before this message was set aside.
+        correlationId:
+          type: string
+          format: uuid
+          description: |
+            Carried through from the original message, so a dead letter joins up with the ledger's
+            logs and the gateway's for the same customer request.
+        originalPayload:
+          type: string
+          description: |
+            The original message body, **verbatim and unparsed**. A string rather than an object on
+            purpose: the reason this message is here may be that it could not be parsed, and a
+            schema that requires it to be well-formed JSON cannot describe that case.
+          maxLength: 65536

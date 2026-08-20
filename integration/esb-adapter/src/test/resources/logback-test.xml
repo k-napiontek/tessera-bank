@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Test logging. Testcontainers and the Docker client are chatty at DEBUG - the wire log prints every
+  byte of every HTTP exchange with the daemon - and a suite whose output is 30 000 lines of protocol
+  is a suite nobody reads the failures in.
+-->
+<configuration>
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="com.github.dockerjava" level="WARN"/>
+  <logger name="org.testcontainers" level="INFO"/>
+  <logger name="org.apache.kafka" level="WARN"/>
+  <logger name="org.codehaus.cargo" level="INFO"/>
+
+  <!-- This component's own log lines are the point of the exercise. -->
+  <logger name="bank.tessera.esb" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+</configuration>
