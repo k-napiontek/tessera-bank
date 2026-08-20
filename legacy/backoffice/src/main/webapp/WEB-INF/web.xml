@@ -43,6 +43,15 @@
     <url-pattern>/breaks</url-pattern>
   </servlet-mapping>
 
+  <servlet>
+    <servlet-name>rejects</servlet-name>
+    <servlet-class>bank.tessera.backoffice.web.RejectsServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>rejects</servlet-name>
+    <url-pattern>/rejects</url-pattern>
+  </servlet-mapping>
+
   <welcome-file-list>
     <welcome-file>index.jsp</welcome-file>
   </welcome-file-list>

@@ -8,5 +8,7 @@
     <c:out value="${pageContext.request.remoteUser}"/>
     &nbsp;|&nbsp;
     <a href="<c:url value='/breaks'/>" style="color:#fff">Recon breaks</a>
+    &nbsp;|&nbsp;
+    <a href="<c:url value='/rejects'/>" style="color:#fff">Rejects</a>
   </span>
 </div>
