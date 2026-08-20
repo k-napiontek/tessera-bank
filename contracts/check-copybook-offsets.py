@@ -9,9 +9,18 @@ test rather than a restatement.
 It fails when a field is added, removed, reordered, resized, or given a different picture, and when
 a record no longer occupies its stated number of bytes.
 
+    python3 contracts/check-copybook-offsets.py                 # check, printing the layouts
+    python3 contracts/check-copybook-offsets.py --json MOVEREC   # one record's layout, as data
+
+The --json view exists so that a reader in another language can assert its own field offsets against
+this script's view of the copybook rather than counting characters by hand. It comes from the same
+computation as the printed table - one function, two renderings - so the two cannot drift apart.
+WP-11b's Java writer of MOVEREC is the first consumer.
+
 Standard library only, so it runs from a clean checkout with nothing installed.
 """
 
+import json
 import math
 import pathlib
 import re
@@ -104,7 +113,38 @@ def parse(path: pathlib.Path):
     return fields
 
 
-def check(record: str, spec: dict) -> list:
+def layout(spec: dict) -> list:
+    """Field name, 1-based inclusive start and end, size and picture, in file order.
+
+    The one place offsets are computed. The printed table and the --json view both render this, so a
+    consumer that reads either is reading the same arithmetic.
+    """
+    rows = []
+    offset = 1
+    for name, pic in spec["fields"]:
+        size = picture_size(pic)
+        rows.append((name, offset, offset + size - 1, size, pic))
+        offset += size
+    return rows
+
+
+def as_json(record: str) -> str:
+    """One record's layout as data, for a reader that is not Python."""
+    rows = layout(EXPECTED[record])
+    return json.dumps(
+        {
+            "record": record,
+            "length": EXPECTED[record]["length"],
+            "fields": [
+                {"name": name, "start": start, "end": end, "size": size, "picture": pic}
+                for name, start, end, size, pic in rows
+            ],
+        },
+        indent=2,
+    )
+
+
+def check(record: str, spec: dict, show: bool = True) -> list:
     path = COPYBOOKS / f"{record}.CPY"
     problems = []
 
@@ -119,19 +159,15 @@ def check(record: str, spec: dict) -> list:
             f"{record}: {len(actual)} fields in the copybook, {len(expected)} in the model"
         )
 
-    offset = 1
-    rows = []
-    for i, (name, pic) in enumerate(expected):
+    rows = layout(spec)
+    for i, (name, _start, _end, _size, pic) in enumerate(rows):
         got = actual[i] if i < len(actual) else ("<missing>", "<missing>")
-        size = picture_size(pic)
-        rows.append((name, offset, offset + size - 1, size, pic))
         if got != (name, pic):
             problems.append(
                 f"{record} field {i + 1}: model says {name} {pic}, copybook says {got[0]} {got[1]}"
             )
-        offset += size
 
-    total = offset - 1
+    total = rows[-1][2] if rows else 0
     if total != spec["length"]:
         problems.append(
             f"{record}: fields occupy {total} bytes, the model states {spec['length']}"
@@ -147,10 +183,11 @@ def check(record: str, spec: dict) -> list:
                 f"{record}.{field} is {size} bytes but embeds {embedded}, which is {want}"
             )
 
-    width = max(len(r[0]) for r in rows)
-    print(f"\n{record}  -  {total} bytes")
-    for name, start, end, size, pic in rows:
-        print(f"  {name:<{width}}  {start:>4}-{end:<4} {size:>4}  {pic}")
+    if show:
+        width = max(len(r[0]) for r in rows)
+        print(f"\n{record}  -  {total} bytes")
+        for name, start, end, size, pic in rows:
+            print(f"  {name:<{width}}  {start:>4}-{end:<4} {size:>4}  {pic}")
 
     return problems
 
@@ -158,14 +195,44 @@ def check(record: str, spec: dict) -> list:
 def self_test() -> list:
     """The size rule itself, checked against the worked examples in the model."""
     cases = [("PIC S9(13)V99 COMP-3", 8), ("PIC X(16)", 16), ("PIC 9(14)", 14)]
-    return [
+    problems = [
         f"picture_size({pic!r}) returned {picture_size(pic)}, expected {want}"
         for pic, want in cases
         if picture_size(pic) != want
     ]
 
+    # And the arithmetic that turns sizes into offsets, against the one placement the model works
+    # out longhand: MOV-AMOUNT is the packed field, and it starts where thirteen display bytes and
+    # a two-byte leg number and a sixteen-byte account reference have already been spent.
+    amount = next(row for row in layout(EXPECTED["MOVEREC"]) if row[0] == "MOV-AMOUNT")
+    if (amount[1], amount[2], amount[3]) != (43, 50, 8):
+        problems.append(
+            f"MOVEREC.MOV-AMOUNT computed at {amount[1]}-{amount[2]} ({amount[3]} bytes),"
+            " the model says 43-50 (8 bytes)"
+        )
+
+    return problems
+
 
 def main() -> int:
+    if len(sys.argv) > 1:
+        if sys.argv[1] != "--json" or len(sys.argv) != 3:
+            print(f"usage: {pathlib.Path(sys.argv[0]).name} [--json RECORD]", file=sys.stderr)
+            print(f"       RECORD is one of {', '.join(EXPECTED)}", file=sys.stderr)
+            return 2
+        record = sys.argv[2]
+        if record not in EXPECTED:
+            print(f"no such record {record}; known: {', '.join(EXPECTED)}", file=sys.stderr)
+            return 2
+        # The check still runs, so --json can never report a layout the copybook has drifted from.
+        problems = self_test() + check(record, EXPECTED[record], show=False)
+        if problems:
+            for problem in problems:
+                print(f"FAIL  {problem}", file=sys.stderr)
+            return 1
+        print(as_json(record))
+        return 0
+
     print(f"Checking {COPYBOOKS.relative_to(REPO)} against {MODEL}")
 
     problems = self_test()
