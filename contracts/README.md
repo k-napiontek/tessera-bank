@@ -18,12 +18,16 @@ Every interface in the estate, defined before it is implemented, in the contract
 
 ## The source
 
-All four families derive from one document:
+The four **era** families - `copybook/`, `wsdl/` and `xsd/`, `openapi/`, `asyncapi/` - derive from
+one document:
 [`docs/architecture/canonical-data-model.md`](../docs/architecture/canonical-data-model.md).
 
 It defines `Money`, `Account`, `Movement`, `Transfer`, `Hold` and `FraudDecision` once, and shows
 each field's representation in all four eras side by side. Every field in every contract here traces
 back to it, and no contract invents a concept of its own.
+
+The three that follow them - `reporting/`, `recon/` and `workload/` - are not era contracts. Each
+crosses the strata rather than joining two of them, and each says so in its own README.
 
 ## The rules
 
