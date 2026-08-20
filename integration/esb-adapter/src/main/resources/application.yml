@@ -32,3 +32,8 @@ tessera:
     # Supplied per environment by the platform repositories. The default is the development address
     # the WSDL itself advertises.
     customer-master-endpoint: http://localhost:8080/customer-master/services/CustomerMasterService
+    # Where the movement records are appended for tonight's COBOL cycle to read. A deployment decides
+    # the real path - it is a shared volume the batch scheduler also mounts - and the default below is
+    # where mainframe/jcl/run-eod.sh looks when it is given no --movements argument, so the local
+    # walkthrough works with nothing configured.
+    movement-file: mainframe/data/out/MOVEMENT.DAT
