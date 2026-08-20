@@ -16,8 +16,22 @@ lines rather than two hundred.
 | Coordinates | `bank.tessera:tessera-parent:1.0.0-SNAPSHOT`, packaging `pom` |
 | Compiler | `-Xlint:all -Werror`, source and target from `tessera.java.level` |
 | Toolchain gate | `maven-enforcer-plugin` refuses any JDK outside `tessera.jdk.range` |
-| Test tooling | JUnit 4.13.2, Testcontainers 1.19.8, `ojdbc8` 21.11.0.0, SLF4J 1.7.36 |
+| Test tooling | JUnit 4.13.2, Testcontainers 1.19.8, `ojdbc8` 21.11.0.0, SLF4J 1.7.36, Cargo 1.10.15 |
+| Runtime | JAX-WS RI 2.2.10, Servlet API 3.0.1 |
 | Plugins | compiler, surefire, failsafe, war, jar, install, resources, clean, `jaxws`, `cargo-maven3`, `build-helper` |
+
+## Two pins worth explaining
+
+**`cargo.version` is one property, used twice.** The `cargo-maven3-plugin` and the
+`cargo-core-uberjar` dependency that a deployment test drives it through are the same release of the
+same project. Two properties would let a container that boots Tomcat and the library that configures
+it drift a release apart, and that fails as a `NoSuchMethodError` a long way from its cause.
+
+**`jaxws-rt` is pinned to 2.2.10 and the minor version is load-bearing.** JDK 8 carries the JAX-WS
+2.2 API in `rt.jar`, on the bootclasspath, where no webapp classloader can override it. A 2.3
+runtime in `WEB-INF/lib` therefore runs its implementation against 2.2's interfaces and fails at
+deployment with a `LinkageError` naming neither version. 2.2.10 is also what a 2011 estate shipped,
+so the correct answer and the period-correct one agree here - they do not always.
 
 ## The level is per module, not per estate
 

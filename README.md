@@ -124,8 +124,8 @@ Runtime prerequisites per tier are documented in
 
 ## Status
 
-Fifteen of the plan's twenty-six rows are `Done` - WP-10 counts twice, being split into a schema half
-and a SOAP half - and stratum 1 is under way. Six of the eleven that remain are the **workload
+Sixteen of the plan's twenty-six rows are `Done` - WP-10 counts twice, being split into a schema half
+and a SOAP half - and **stratum 1 is complete**. Six of the eleven that remain are the **workload
 strand**, WP-20 to WP-25, added to the plan before any of it was built.
 [`docs/plan/STATUS.md`](docs/plan/STATUS.md) is the authority; this is the shape of it.
 
@@ -136,7 +136,7 @@ strand**, WP-20 to WP-25, added to the plan before any of it was built.
 | **3 - `services/`** | The ledger, end to end: the `ledger-core` domain (`Money`, `Account`, `JournalEntry`, `Balance`, `Hold`, pure Java 17 with no framework on its compile classpath), PostgreSQL persistence with deterministic lock ordering, a REST API with required idempotency and RFC 9457 problems, an append-only hash-chained audit trail, a transactional outbox relayed to Kafka, and metrics, structured JSON logging and health probes. |
 | **4 - `edge/`** | `api-gateway` in Go: bearer-token authentication with the algorithm pinned, coarse authorisation by scope, a route table checked against the OpenAPI document in both directions, per-caller rate limiting, correlation ids shared with the ledger, structured JSON logs, Prometheus metrics on a second port, and a proxy whose retry is bounded and only ever replays what is safe to replay. `fraud-scoring` in Python: consumes the ledger's transfer events, scores them against an explainable rule set whose every rule is a pure function of one event, and publishes a decision - reproducible from a recorded version that covers the thresholds as well as the code. `web-banking` in TypeScript and React: the customer application, mobile first, showing booked and available as two figures with the held share drawn between them, paging a statement whose every page is checked to foot, and making a transfer under one idempotency key per attempt that every retry reuses. Money is a `bigint` read from the source text of the JSON number. Its colours are held to WCAG by a test that parses the token sheet, and it adds no dependency to do any of it. |
 | **`batch/`** | `reporting` in Python: daily position, movement summary and a fixed-width regulatory extract, generated from the ledger and **reproducible** - a rerun for a past date at the recorded position produces byte-identical output, because a report is cut at an audit sequence rather than at a timestamp. Control totals reconcile to the ledger independently. |
-| **1 - `legacy/`** | `customer-master`, the system of record, half-built: a Java 8 Maven module whose build refuses any other JDK, an Oracle-dialect schema, and the business logic in PL/SQL packages where a 2011 team put it - reads, and applying a posted transfer idempotently. Tested against **real Oracle 23ai Free** in a container, because a compatibility mode runs no PL/SQL and would have tested a pretence. The WSDL-first SOAP endpoint and the WAR on Tomcat 8.5 are WP-10b. |
+| **1 - `legacy/`** | `customer-master`, the system of record, complete: a Java 8 Maven module whose build refuses any other JDK, an Oracle-dialect schema, and the business logic in PL/SQL packages where a 2011 team put it. Tested against **real Oracle 23ai Free** in a container, because a compatibility mode runs no PL/SQL and would have tested a pretence. On top of it, a **WSDL-first JAX-WS endpoint** - SOAP 1.1, document/literal wrapped, generated from the authored contract and never the reverse, with every response validated against the canonical XSD. Packaged as a WAR and **really deployed to a real Tomcat 8.5** by its own test, which calls all three operations over HTTP with a generated client and asserts that the contract the container publishes is the one that was authored. |
 | **2 - `integration/`** | Nothing yet. `integration/` holds READMEs only. |
 | **Workload** | Nothing yet. WP-20 to WP-25 declare a bank's day as a contract in `contracts/workload/`, a Go driver that executes it at volume, a production-shaped ledger to execute it against, an SLO catalogue with a recorded baseline, and failure injection. The estate has never been under load, which is what makes every metric in it a number that has only ever been zero. |
 
@@ -144,8 +144,9 @@ The ledger runs: `./gradlew :services:ledger-api:bootRun` against any PostgreSQL
 front of it (`go -C edge/api-gateway run ./cmd/gateway`) and `fraud-scoring` consuming what it
 publishes; `reporting` cuts the day's figures off the same database; the overnight COBOL cycle runs
 with `make eod`. The two halves still do not join: nothing carries a posting from the ledger to the
-mainframe, because that bridge is `integration/esb-adapter` and it is not built. Stratum 1 now has
-the system of record's data and its business logic, but no interface yet for the bridge to call.
+mainframe, because that bridge is `integration/esb-adapter` and it is not built. Stratum 1 is now
+finished and waiting for it - the system of record answers SOAP over HTTP from a WAR on Tomcat 8.5,
+and `NotifyTransferPosted` is the operation the bridge will call.
 
 ```bash
 make test     # every tier that has something to run

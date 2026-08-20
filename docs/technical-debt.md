@@ -67,7 +67,14 @@ it, because moving requires upgrading the JDK and the frameworks above it simult
 **Why accepted.** As TD-001.
 
 **Compensating controls.** As TD-001. The container itself is never committed here - only the WAR
-targeting it.
+targeting it, which keeps [ADR 0001](governance/adr/0001-source-only-repository.md) intact.
+
+Since WP-10b the claim is tested rather than asserted. `CustomerMasterDeploymentIT` fetches
+**Tomcat 8.5.100** - the final release of the line, from the Apache archive rather than a mirror,
+because an end-of-life version is not on a mirror - into `target/` at test time, deploys the WAR to
+it and calls the endpoint over HTTP. Nothing container-shaped is committed and nothing survives a
+`mvn clean`, so "the WAR deploys to Tomcat 8.5" stops being something inferred from a successful
+`mvn package`. The first run needs network; afterwards the archive is cached under `target/`.
 
 ### TD-004 - SOAP and JAX-WS for the customer-master interface
 
@@ -81,6 +88,20 @@ targeting it.
 **Why accepted.** SOAP is not a vulnerability, it is a generation. Banks run enormous SOAP estates
 and integration engineers are expected to work with them. Replacing it with REST would delete a skill
 the repository is meant to exercise.
+
+The 2011 reasoning is now recorded rather than asserted:
+[ADR 0013](governance/adr/0013-contract-first-soap-for-the-customer-master.md), back-dated, argues
+the case as it stood - heterogeneous consumers, a contract a change board can review, message-level
+security on the roadmap, and no schema language for JSON that any toolchain of the era could
+validate against. Those arguments were correct when they were made, which is the point: legacy is
+usually the residue of good decisions in a different context.
+
+**Compensating controls.** The contract is authored first and the implementation is generated from
+it, so the two cannot drift: `GeneratedCodeTest` fails the build if generated code is committed,
+`SoapResponseConformanceTest` validates every response against `contracts/xsd/canonical-v1.xsd`, and
+`CustomerMasterDeploymentIT` asserts that the contract the running container publishes is the one
+that was authored. The gap that remains is **F-51** - the fault element is in the contract and three
+of the four fault codes are not.
 
 ### TD-005 - Oracle SQL dialect without an Oracle database
 
