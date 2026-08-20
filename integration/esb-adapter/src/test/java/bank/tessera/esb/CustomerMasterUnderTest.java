@@ -183,7 +183,7 @@ final class CustomerMasterUnderTest {
             if (block.isEmpty()) {
                 continue;
             }
-            if (block.toUpperCase().startsWith("CREATE OR REPLACE PACKAGE")) {
+            if (opensAPlSqlBlock(block.split("\n", 2)[0].trim())) {
                 statements.add(block);
             } else {
                 for (String plain : block.split(";")) {
@@ -194,6 +194,28 @@ final class CustomerMasterUnderTest {
             }
         }
         return statements;
+    }
+
+    /**
+     * A statement whose semicolons belong to it rather than terminate it. Deliberately the same
+     * five openers, spelled the same way, as {@code SqlScript.opensAPlSqlBlock} at stratum 1 - the
+     * authority this helper was copied from. The copy knew only about packages, so WP-15's audit
+     * migration, which adds a trigger, split it on its own semicolons and Oracle answered
+     * {@code ORA-00900} naming a fragment nobody wrote. F-61 predicted exactly this.
+     */
+    private static boolean opensAPlSqlBlock(String firstLine) {
+        String upper = firstLine.toUpperCase();
+        if (upper.startsWith("BEGIN") || upper.startsWith("DECLARE")) {
+            return true;
+        }
+        if (!upper.startsWith("CREATE")) {
+            return false;
+        }
+        return upper.contains(" PACKAGE ")
+                || upper.contains(" PROCEDURE ")
+                || upper.contains(" FUNCTION ")
+                || upper.contains(" TRIGGER ")
+                || upper.contains(" TYPE ");
     }
 
     /** Only whole-line comments. A -- inside a PL/SQL body is that body's business. */
