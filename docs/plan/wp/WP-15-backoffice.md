@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1015-backoffice` |
 | **Stratum** | 1 - JSP + jQuery, ~2011 |
 | **Depends on** | WP-10 |
-| **Status** | `Not started` - detailed, see `STATUS.md` |
+| **Status** | `Done` - see `STATUS.md` |
 
 ## Objective
 
@@ -81,7 +81,7 @@ Four decisions are taken here rather than discovered mid-branch.
    and `test-legacy` runs both modules. **`customer-master` gains a `classes` jar attachment** so the
    DAO and the domain types are reusable - the alternative is a second implementation of account
    lookup, which is exactly what this estate's reconciliation exists to catch.
-2. **The audit trail.** `V4__audit.sql` in `customer-master`'s migrations: who acted, what they acted
+2. **The audit trail.** `V4__audit.sql` and `V5__pkg_operator.sql` in `customer-master`'s migrations: who acted, what they acted
    on, when, and what changed. Oracle dialect with the writing done in a package body, as WP-10a did,
    because a 2011 team put it there and because an audit row written by application code is one an
    application bug can skip. **Append-only** - no `UPDATE`, no `DELETE`, enforced by a trigger, the
@@ -126,10 +126,19 @@ places (F-61). Sharing it is the same package-sized change F-66 describes for th
 
 ## Definition of Done
 
-- [ ] Reconciliation breaks and rejects are listed with drill-down.
-- [ ] Operator actions are recorded in the audit trail with the acting user.
-- [ ] The pages render inside the existing WAR on Tomcat 8.5.
-- [ ] No modern frontend tooling has been introduced.
+- [x] Reconciliation breaks and rejects are listed with drill-down. `BreaksServlet` renders the
+      totals block and the breaks ascending by account reference, and one break opens with both
+      balances, the difference and the cut it was taken at; `RejectsServlet` lists the night's
+      rejects with the reason code, the reason text and the movement decoded out of the embedded
+      `MOVEREC`.
+- [x] Operator actions are recorded in the audit trail with the acting user. `PKG_OPERATOR` writes
+      the `operator_audit` row in the same transaction as the change, and `BackofficeDeploymentIT`
+      reads the row back out of Oracle rather than off the screen that wrote it.
+- [x] The pages render as their own WAR on the same Tomcat 8.5 as `customer-master` - the shape the
+      repository owner chose, replacing this box's original "inside the existing WAR". Six
+      deployment tests run against a Tomcat 8.5 installed by Cargo over a real Oracle.
+- [x] No modern frontend tooling has been introduced. JSP, JSTL and a vendored jQuery 1.7.2. No
+      npm, no bundler, no build step of any kind for the front end.
 
 ## Verification
 
