@@ -166,7 +166,8 @@ class Comp3Test {
         return raw;
     }
 
-    private static void generateTheFixtures() throws IOException, InterruptedException {
+    /** Shared with {@link MovementRecordTest}: both are held to the generator's own bytes. */
+    static void generateTheFixtures() throws IOException, InterruptedException {
         Process generator = new ProcessBuilder(
                 "python3", "mainframe/data/generate.py", "--seed", "42")
                 .directory(new File("../.."))
