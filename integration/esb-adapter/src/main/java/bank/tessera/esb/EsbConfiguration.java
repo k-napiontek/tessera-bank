@@ -43,9 +43,15 @@ public class EsbConfiguration {
     }
 
     @Bean
+    public MovementFileWriter movementFileWriter(
+            @Value("${tessera.esb.movement-file}") String movementFile) {
+        return new MovementFileWriter(new File(movementFile));
+    }
+
+    @Bean
     public TransferHandler transferHandler(CanonicalTransformer transformer,
-            CustomerMasterClient customerMaster) {
-        return new TransferBridge(transformer, customerMaster);
+            CustomerMasterClient customerMaster, MovementFileWriter movementFile) {
+        return new TransferBridge(transformer, customerMaster, movementFile);
     }
 
     @Bean

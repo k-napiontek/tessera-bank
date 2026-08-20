@@ -75,3 +75,4 @@ date for a real one.
 | [0011](0011-oracle-substitute-for-stratum-1.md) | Stratum 1 runs real Oracle in a container, not an Oracle-compatible substitute | Accepted | 2026-08-19 |
 | [0012](0012-slo-catalogue-boundary.md) | Declare the service level objective here, and page from somewhere else | Accepted | 2026-08-20 |
 | [0013](0013-contract-first-soap-for-the-customer-master.md) | Expose the customer master as a contract-first SOAP service | Accepted | 2011-06-09 (back-dated) |
+| [0014](0014-the-movement-file-is-its-own-unique-constraint.md) | The movement file is its own unique constraint | Accepted | 2019-04-11 (back-dated) |

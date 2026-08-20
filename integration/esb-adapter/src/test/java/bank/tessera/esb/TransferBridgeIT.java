@@ -64,11 +64,24 @@ class TransferBridgeIT {
 
     private static CustomerMasterUnderTest customerMaster;
 
+    /**
+     * Under target/, never under mainframe/data/out/. The overnight cycle's own fixtures are shared
+     * with every other tier's tests, and a suite that appends to them is a suite that changes what
+     * the next run of `make eod` does.
+     */
+    private static final File MOVEMENT_FILE = new File("target/it-movements/MOVEMENT.DAT");
+
     @Autowired
     private KafkaTemplate<String, String> kafka;
 
     @BeforeAll
     static void bringUpTheEstate() throws Exception {
+        if (MOVEMENT_FILE.exists() && !MOVEMENT_FILE.delete()) {
+            throw new IllegalStateException("cannot clear " + MOVEMENT_FILE);
+        }
+        if (!MOVEMENT_FILE.getParentFile().isDirectory() && !MOVEMENT_FILE.getParentFile().mkdirs()) {
+            throw new IllegalStateException("cannot create " + MOVEMENT_FILE.getParentFile());
+        }
         KAFKA.start();
         customerMaster = CustomerMasterUnderTest.start(new File("target/customer-master"));
         seedTwoAccounts();
@@ -87,6 +100,7 @@ class TransferBridgeIT {
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("tessera.esb.customer-master-endpoint", () -> customerMaster.endpoint());
         registry.add("tessera.contracts.dir", () -> new File("../../contracts").getAbsolutePath());
+        registry.add("tessera.esb.movement-file", () -> MOVEMENT_FILE.getAbsolutePath());
     }
 
     /**

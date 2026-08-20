@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1011-esb-soap-hop` (11a), `feat/TB-1011-esb-comp3-hop` (11b) |
 | **Stratum** | 2 - Java 8 + Spring Boot 2.7.18, ~2019 |
 | **Depends on** | WP-09, WP-10b |
-| **Status** | `Not started` - see `STATUS.md` for the per-half status |
+| **Status** | `Done` - both halves merged; see `STATUS.md` |
 
 ## Objective
 
@@ -185,26 +185,31 @@ Branch `feat/TB-1011-esb-comp3-hop`. Seven tasks.
 
 The half that satisfies each box is named, because two pull requests cannot both tick all five.
 
-- [ ] A transfer event produces a movement record that `ACCTPOST` reads and applies correctly. *(11b)*
-- [ ] COMP-3 encoding matches the mainframe fixtures byte for byte, including negatives and zero. *(11b)*
-- [ ] A redelivered event produces no duplicate movement record. *(11a for the consumer, 11b for the file)*
-- [ ] A transformation failure lands in the dead-letter path with enough context to diagnose it. *(11a; 11b adds the encoding failure)*
-- [ ] Runs on JDK 8 with Spring Boot 2.7.18. *(11a)*
-- [ ] The SOAP request is understood by a really-deployed `customer-master`, not by a stub. *(11a)*
-- [ ] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
+- [x] A transfer event produces a movement record that `ACCTPOST` reads and applies correctly. *(11b)*
+- [x] COMP-3 encoding matches the mainframe fixtures byte for byte, including negatives and zero. *(11b)*
+- [x] A redelivered event produces no duplicate movement record. *(11a for the consumer, 11b for the file)*
+- [x] A transformation failure lands in the dead-letter path with enough context to diagnose it. *(11a; 11b adds the encoding failure)*
+- [x] Runs on JDK 8 with Spring Boot 2.7.18. *(11a)*
+- [x] The SOAP request is understood by a really-deployed `customer-master`, not by a stub. *(11a)*
+- [x] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
 
 ## Verification
 
 ```bash
 make jdk8                                        # names the JDK 8 this tier will use
-make test-esb                                    # the module: Kafka, XSLT, SOAP, and (11b) COMP-3
+make test-integration                            # the module: Kafka, XSLT, SOAP, and (11b) COMP-3
 make test-legacy                                 # the far end of the SOAP hop is still green
 make eod                                         # the overnight cycle still runs (11b)
 bash contracts/validate.sh                       # the contracts still agree with the model
 make test                                        # every other tier still green
 ```
 
-Needs Docker: real Kafka, real Oracle and a real Tomcat 8.5 all start during this suite.
+Needs Docker: real Kafka, real Oracle and a real Tomcat 8.5 all start during this suite. 11b's
+four-era run adds GnuCOBOL and python3, because it executes the WP-05 cycle for real.
+
+The target is `make test-integration`, not `make test-esb`. Task 3 of 11a named the latter; the
+module that landed follows the tier naming every other stratum uses - `test-legacy`,
+`test-services`, `test-integration` - and this block is corrected to the command that exists.
 
 End-to-end, and it is 11b's claim rather than 11a's: publish a transfer event, confirm the SOAP call
 reaches `customer-master`, confirm the movement file gains a record, then run the WP-05 EOD cycle and
