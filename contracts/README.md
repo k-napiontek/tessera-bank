@@ -14,6 +14,7 @@ Every interface in the estate, defined before it is implemented, in the contract
 | `asyncapi/` | ~2023 | AsyncAPI 3.0 (Kafka) | `services/`, `integration/`, `edge/` |
 | `reporting/` | ~2025 | Fixed-width outbound file formats | `batch/reporting`, and whoever receives the submission |
 | `recon/` | ~2026 | The reconciliation break report | `batch/recon` writes it, `legacy/backoffice` renders it |
+| `workload/` | ~2026 | The bank day as a versioned demand model | `workload/` drives the modern spine from it, WP-25 the older strata |
 
 ## The source
 
@@ -41,9 +42,10 @@ bash contracts/validate.sh
 
 Runs XML well-formedness, the OpenAPI and AsyncAPI linters,
 [`check-copybook-offsets.py`](check-copybook-offsets.py), which asserts that every copybook field
-still sits where the canonical model says it does, and
+still sits where the canonical model says it does,
 [`check-extract-layout.py`](check-extract-layout.py), which asserts the same of the outbound
-regulatory extract.
+regulatory extract, and [`check-workload-model.py`](check-workload-model.py), which validates the
+committed workload model against its schema and then checks the arithmetic a schema cannot express.
 
 A green run proves each contract is well-formed. It does **not** prove the four agree with each
 other - only reading them beside the canonical model proves that.
