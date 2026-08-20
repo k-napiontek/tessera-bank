@@ -117,7 +117,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Done` | [#22](https://github.com/k-napiontek/tessera-bank/pull/22) | `4dae229` |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d450de4`, `53f5831` |
 | [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `Done` | [#37](https://github.com/k-napiontek/tessera-bank/pull/37) | `d6051d8` |
-| [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Not started` | | |
+| [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `In progress` | | |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10b | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
