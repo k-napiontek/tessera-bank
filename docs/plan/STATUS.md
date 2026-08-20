@@ -13,8 +13,8 @@ Updated by the executing session at the start and end of every work package, per
 > which the decision log records as the mechanism for work outside the plan. It is a presentation
 > pass over `edge/web-banking` - tokens, a responsive shell, a palette in the visual language of
 > Polish retail banking - and it changed no behaviour: the gate was that all 123 tests WP-14 left
-> behind stay green, and they did, unedited. It sits off the critical path, as WP-14 does. **WP-10b remains the next package on
-> the plan proper.**
+> behind stay green, and they did, unedited. It sits off the critical path, as WP-14 does. WP-10b was
+> the next package on the plan proper at the time, and has since been taken and merged.
 >
 > **A workload strand is now in the plan, WP-20 to WP-25, and none of it is built**
 > ([#43](https://github.com/k-napiontek/tessera-bank/pull/43), `5af9b4a`). The estate has
