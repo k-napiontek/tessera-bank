@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  esb-adapter - the bridge between eras.
+
+  Stratum 2, vintage ~2019: Java 8, Spring Boot 2.7.18. That pairing is the whole point of this tier.
+  Boot 2.7 is the last line that supports Java 8, so an estate on Java 8 is on Boot 2.7, and moving
+  either one means moving both plus everything above them - which is exactly why nobody does. Those
+  versions are load-bearing and are not to be raised; see the legacy-strata rule in CLAUDE.md and
+  ADR 0002.
+
+  It inherits the CORPORATE parent, not spring-boot-starter-parent. That is the realistic
+  arrangement - a bank's platform team outranks a framework - and the price is that the Boot BOM has
+  to be imported by hand below and the Boot plugin version named in the parent.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>bank.tessera</groupId>
+    <artifactId>tessera-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../platform/parent-pom/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>esb-adapter</artifactId>
+  <packaging>jar</packaging>
+
+  <name>esb-adapter</name>
+  <description>Kafka to XSLT to SOAP to COMP-3: the bridge between the ledger and the mainframe.</description>
+
+  <properties>
+    <!-- The WSDL and the canonical schema are read from the repository root, in place. The WSDL
+         imports the schema as ../xsd/canonical-v1.xsd, so a copy without its sibling directory
+         breaks generation with an error naming the schema rather than the copy. -->
+    <tessera.contracts.dir>${project.basedir}/../../contracts</tessera.contracts.dir>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Declared BEFORE the Boot BOM, because the first declaration wins. Cargo 1.10 calls
+        commons-lang3 APIs that arrived in 3.14 and Boot 2.7's BOM pins 3.12 - so without this the
+        deployment test dies at the first container start with NoClassDefFoundError on a class
+        nothing in this module mentions. Test-scope tooling forcing a floor on a shared library is
+        the ordinary shape of a version conflict in an estate this old.
+      -->
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>${commons-lang3.version}</version>
+      </dependency>
+
+      <!--
+        Imported here rather than in the corporate parent, deliberately. At parent level it would
+        manage junit, slf4j and jackson for legacy/customer-master as well - a 2011 tier that has
+        never heard of Spring - and a 2019 framework's preferred versions would quietly become
+        stratum 1's. The version itself is pinned in the parent; only its reach is local.
+      -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <!-- The intermediate document on the way from JSON to canonical XML. XSLT consumes XML and the
+         event is JSON, so something has to bridge the two - and it is this, never a StringBuilder.
+         Managed by the Boot BOM, so it is not a new third-party dependency. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-xml</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>kafka</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- The dead-letter payload is a contract this module owns, so it is validated against that
+         contract rather than against this module's opinion of it. Same validator as ledger-api. -->
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      The far end of the SOAP hop, for real: the deployment test boots customer-master's WAR on a
+      real Tomcat 8.5 against a real Oracle and calls it.
+
+      A stub would verify what this component SAYS and never that the system of record understands
+      it - and two independently generated clients meeting is the entire risk this hop carries.
+      These are test-scope only; nothing about stratum 1 is on this module's compile classpath, and
+      the WAR is located as a file rather than as a Maven dependency, because depending on it would
+      mean changing stratum 1's build, which WP-11's Out of scope forbids.
+    -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc8</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.codehaus.cargo</groupId>
+      <artifactId>cargo-core-uberjar</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        The SOAP client, generated from the same WSDL customer-master generated its server interface
+        from. That is the point of a contract: two components, two independent generations, and
+        neither one deciding what the interface is.
+
+        No jaxws-rt dependency here, unlike the WAR at stratum 1. JDK 8 carries a JAX-WS runtime of
+        its own and it is enough to call a service; what Tomcat lacks is the ability to publish one.
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>jaxws-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>generate-from-wsdl</id>
+            <goals>
+              <goal>wsimport</goal>
+            </goals>
+            <configuration>
+              <wsdlDirectory>${tessera.contracts.dir}/wsdl</wsdlDirectory>
+              <wsdlFiles>
+                <wsdlFile>customer-master-v1.wsdl</wsdlFile>
+              </wsdlFiles>
+              <packageName>bank.tessera.esb.ws</packageName>
+              <sourceDestDir>${project.build.directory}/generated-sources/wsimport</sourceDestDir>
+              <keep>true</keep>
+              <xnocompile>true</xnocompile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Two compilations, for the reason stratum 1 records: wsimport emits one unfixable [serial]
+        warning - the generated fault class extends Exception without a serialVersionUID - and the
+        estate's -Werror gate must not be weakened for hand-written code to accommodate a generator.
+        The generated tree compiles first, in process-sources, with [serial] alone suppressed.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>compile-generated-sources</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>bank/tessera/esb/ws/**</include>
+              </includes>
+              <compilerArgs>
+                <arg>-Xlint:all</arg>
+                <arg>-Xlint:-serial</arg>
+                <arg>-Werror</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <excludes>
+                <exclude>bank/tessera/esb/ws/**</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <!--
+        The end-to-end test runs here rather than in surefire because of what it costs: a Kafka, an
+        Oracle and a Tomcat 8.5 with customer-master's WAR on it. Keeping it out of the test phase
+        leaves `mvn test` fast enough to run constantly, while `mvn verify` - which is what
+        `make test-integration` runs - still proves the hop for real.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>bridge-test</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <!--
+            target/classes, not the project artifact. spring-boot-maven-plugin:repackage rewrites
+            the jar into an executable one whose classes live under BOOT-INF/classes, and failsafe
+            puts the project artifact on the classpath ahead of the output directory - so the
+            application's own classes vanish and JUnit reports only "failed to discover tests",
+            naming nothing. One line, and an hour if it is not known.
+          -->
+          <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
