@@ -32,7 +32,9 @@ const moduleRoot = "../.."
 //
 // An entry arrives in the same commit as the file it excuses, and TestEveryJustifiedFileStillExists
 // removes it again if that file ever goes away.
-var floatIsJustified = map[string]string{}
+var floatIsJustified = map[string]string{
+	"internal/bankday/curve.go": "an intensity is events per second at an instant, and the shape it comes from is a ratio between hours - neither is a count and neither is money",
+}
 
 // Named float conversions that have no business anywhere in this module.
 var forbiddenCalls = map[string]string{
