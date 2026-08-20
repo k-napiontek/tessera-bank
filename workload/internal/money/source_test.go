@@ -33,7 +33,8 @@ const moduleRoot = "../.."
 // An entry arrives in the same commit as the file it excuses, and TestEveryJustifiedFileStillExists
 // removes it again if that file ever goes away.
 var floatIsJustified = map[string]string{
-	"internal/bankday/curve.go": "an intensity is events per second at an instant, and the shape it comes from is a ratio between hours - neither is a count and neither is money",
+	"internal/bankday/curve.go":     "an intensity is events per second at an instant, and the shape it comes from is a ratio between hours - neither is a count and neither is money",
+	"internal/arrivals/arrivals.go": "a Poisson process is defined over continuous time - an interarrival gap is a real number of seconds and thinning compares an intensity ratio against a uniform draw",
 }
 
 // Named float conversions that have no business anywhere in this module.
