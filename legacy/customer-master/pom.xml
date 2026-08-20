@@ -189,6 +189,40 @@
         after the copy. WEB-INF/wsdl is where the RI looks for the documents it publishes, so both
         have to sit inside it - which is why the path reads WEB-INF/wsdl/wsdl and is not a typo.
       -->
+      <!--
+        Attach the compiled classes as a jar alongside the WAR.
+
+        `legacy/backoffice` is a second WAR on the same Tomcat and it needs this module's DAO and
+        domain types. A WAR is not a usable dependency - Maven will not put one on another module's
+        compile classpath - so the choice is to publish a classes jar or to write account lookup a
+        second time. A second implementation of how this bank reads an account is precisely the
+        drift `batch/recon` exists to detect, so it is not a real choice.
+
+        The jar carries the whole module including the endpoint, which is more than backoffice needs.
+        Splitting the DAO into its own module would be tidier and would change customer-master's
+        artefact layout for the benefit of a consumer that did not exist when it was built - the
+        kind of retrofit a 2011 estate did exactly this way instead.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-classes</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>classes</classifier>
+              <excludes>
+                <exclude>bank/tessera/customer/ws/**</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>

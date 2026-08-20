@@ -29,6 +29,59 @@ Updated by the executing session at the start and end of every work package, per
 > a measured number, not a hunch"*. It sits **off the critical path and beside the plan, not in
 > front of it**.
 >
+> **WP-15 is done and merged** ([#57](https://github.com/k-napiontek/tessera-bank/pull/57)), and
+> **the estate finally has a screen somebody works from rather than one somebody demonstrates.**
+> `legacy/backoffice` is JSP, JSTL and jQuery 1.7.2 on Java 8 - a second WAR beside
+> `customer-master` on the same Tomcat 8.5 - and it is deliberately unfashionable: server-rendered,
+> tables with borders, no bundler, no npm, no build step of any kind for the front end. It lists the
+> reconciliation breaks `batch/recon` wrote that morning and the rejects the overnight cycle wrote
+> that night, and it lets an operator acknowledge the one and annotate the other.
+>
+> **Its In scope contradicted two READMEs and the repository owner resolved it**: `backoffice` is
+> **its own WAR**, not pages inside `customer-master`'s. The file said "inside the `customer-master`
+> WAR" while `legacy/README.md`, `legacy/backoffice/README.md` and the branch name all described a
+> separate module. The wording is corrected rather than left to be found halfway through. The shape
+> is also the defensible one - an operator screen and the SOAP endpoint the ESB depends on should
+> not redeploy together - and the cost was named up front and then paid: `customer-master` attaches
+> a classes jar so the DAO is reused rather than reimplemented, and the Cargo scaffolding is copied
+> a third time (F-61).
+>
+> **Stratum 1 had no audit trail and now has one.** `V1__schema.sql` held `customer`, `account` and
+> `applied_transfer` and nothing else, so REQ-OPS-004 - operator actions are attributable and
+> audited - had had nothing to write to since WP-10a, and nothing noticed, because until this
+> package no stratum 1 code mutated anything a person initiated. `operator_audit` is **append-only,
+> enforced by a trigger** rather than by convention, and the row is written by `PKG_OPERATOR` in the
+> same transaction as the change it describes. Tests prove both halves: an `UPDATE` and a `DELETE`
+> are each refused by Oracle, and a rolled-back action takes its audit row with it.
+>
+> **The screen reads the break report as a file and never touches the ledger.** That is what
+> `contracts/recon/break-report-v1.md` was written for. Giving a 2011 monolith a PostgreSQL
+> connection would route around the layering the estate exists to demonstrate. And because the
+> Constraints forbid single-page behaviour, the **server** parses the JSON rather than handing the
+> file to jQuery - which needs a 2011-era parser pinned in the parent POM, and is the honest cost of
+> "server-rendered" rather than a shortcut around it.
+>
+> **A `TIMING` break is listed and offers no action.** The classification exists to say *expected*,
+> and a screen that invites an operator to work one undoes what [ADR 0015](../governance/adr/0015-the-cut-off-is-the-movement-file.md)
+> was for. The refusal is not only cosmetic - `PKG_OPERATOR` rejects an acknowledgement of a
+> `TIMING` break outright, so hiding the button and meaning it are the same thing here.
+>
+> **Two traps, both silent, both caught by a test rather than by reading.** Oracle's empty string
+> **is** NULL, so the obvious guard against a blank annotation - `LENGTH(TRIM(p_note)) = 0` - never
+> fires: `TRIM('   ')` is NULL, `LENGTH(NULL)` is NULL, and `NULL = 0` is NULL rather than TRUE. It
+> is written `TRIM(p_note) IS NULL` instead. And the copy of stratum 1's Oracle script splitter that
+> stratum 2's tests carry knew only about package bodies, so this package's append-only trigger was
+> split on its own semicolons and Oracle answered `ORA-00900` naming a fragment nobody wrote.
+> **F-61 predicted that in those words**, and it is updated from *will rot* to *has rotted*.
+>
+> **One deliberate scope exception, by explicit instruction of the repository owner.** The splitter
+> fix lands on this branch, in `integration/esb-adapter`, which is outside WP-15's declared scope -
+> normally a follow-up rather than a commit. It was taken because it invents nothing: it aligns a
+> copy with the authority it was copied from, spelling the five PL/SQL openers exactly as
+> `SqlScript.opensAPlSqlBlock` does. The migration was also split into `V4__audit.sql` (plain DDL)
+> and `V5__pkg_operator.sql` (the PL/SQL), matching V2 and V3's one-package-per-file convention, so
+> that every reader in the estate splits these scripts the same way and not only the careful one.
+>
 > **WP-16 is done and merged** ([#54](https://github.com/k-napiontek/tessera-bank/pull/54), `d4dceea`), and
 > **the two cores are now checked against each other.** Every
 > other package in this estate moves money between the eras; this is the one that proves the eras
@@ -64,32 +117,6 @@ Updated by the executing session at the start and end of every work package, per
 > handle and no path, so REQ-REC-003 - breaks are never auto-corrected - is enforced by the shape of
 > the code: a change that wanted to auto-heal would have to add a writer to that module first.
 >
-> **WP-15 is next, detailed and in progress**, `legacy/backoffice` on stratum 1, JSP and jQuery -
-> and it now has something real to render, which is the whole reason WP-16 went first.
->
-> **Its In scope contradicted two READMEs and the repository owner resolved it**: `backoffice` is
-> **its own WAR**, not pages inside `customer-master`'s. The file said "inside the `customer-master`
-> WAR" while `legacy/README.md`, `legacy/backoffice/README.md` and the branch name all described a
-> separate module. The wording is corrected rather than left to be found halfway through. The shape
-> is also the defensible one - an operator screen and the SOAP endpoint the ESB depends on should
-> not redeploy together - and the cost is named up front: `customer-master` attaches a classes jar so
-> the DAO is reused rather than reimplemented, and the Cargo scaffolding is copied a third time
-> (F-61).
->
-> **Stratum 1 has no audit trail, and this package builds it.** `V1__schema.sql` holds `customer`,
-> `account` and `applied_transfer` and nothing else, so REQ-OPS-004 - operator actions are
-> attributable and audited - has had nothing to write to since WP-10a. Append-only, enforced by a
-> trigger, written inside the same transaction as the change it records. The package's own
-> Constraints are unambiguous about why: an internal tool that mutates state without an audit record
-> is exactly the finding an auditor writes up.
->
-> **The screen reads the break report as a file and never touches the ledger.** That is what
-> `contracts/recon/break-report-v1.md` was written for. Giving a 2011 monolith a PostgreSQL
-> connection would route around the layering the estate exists to demonstrate. And because the
-> Constraints forbid single-page behaviour, the **server** parses the JSON rather than handing the
-> file to jQuery - which needs a 2011-era parser pinned in the parent POM, and is the honest cost of
-> "server-rendered" rather than a shortcut around it.
->
 > **The order was a decision rather than a formality, because WP-15 and WP-16 were framed to depend
 > on each other.** WP-15's break list needs breaks only WP-16 produces; WP-16's "surfaced to
 > `backoffice`" needs a screen only WP-15 builds. The dependency table hid it - WP-15 is recorded as
@@ -97,10 +124,6 @@ Updated by the executing session at the start and end of every work package, per
 > second package something real to render, so WP-16 gives up the `backoffice` box in its own
 > Definition of Done and the seam between them becomes a **contract artefact**, `break-report-v1`,
 > written before anything emits one.
->
-> **WP-15 follows**, `legacy/backoffice` on stratum 1, JSP and jQuery. It is still frame-only, so a
-> session picking it up fills in its task list and has it reviewed before writing code - F-02, and
-> the `/work-package` skill halts on it.
 >
 > **WP-11b is done and merged** ([#51](https://github.com/k-napiontek/tessera-bank/pull/51), `075595b`), and
 > **one transfer now crosses all four eras.** A payment published as a 2023 Kafka event becomes
@@ -268,7 +291,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `020cee2` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `8f38ced` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `ccaa851` |
-| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `In progress` | | |
+| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `Done` | [#57](https://github.com/k-napiontek/tessera-bank/pull/57) | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `d4dceea` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `364f7b9` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
@@ -315,7 +338,7 @@ becomes its own change when picked up.
 | # | Raised in | Description | Status |
 |---|---|---|---|
 | F-01 | WP-01 | `git init` has not been run, so the branch-protection hook is inert. | **Closed** - repository initialised on `main` with a baseline commit, 2026-08-17 |
-| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, the last of which has since been executed. **WP-18 still carries frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
+| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, both of which have since been executed. **WP-18 still carries frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
 | F-03 | WP-01 | `quality/` holds no linter rule files yet. Each is added by the work package that first needs it, so the rules land with code to check. | Open |
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
@@ -374,12 +397,13 @@ becomes its own change when picked up.
 | F-58 | WP-10b | **`NotifyTransferPosted` does not cross-check the movements against the transfer they claim to be legs of.** The endpoint reads one thing from them - the value date, which is a property of a leg and not of a transfer - and takes the accounts, the amount and the currency from the `tb:Transfer`. So a message whose two `tb:Movement` elements name different accounts, a different amount, a different transferRef or two debits is applied exactly as if they agreed. The schema cannot catch it: it enforces two movements, not two movements that mean the same thing as the transfer around them. Refusing such a message needs a fault code, the WSDL declares none that fits, and inventing one would widen F-51 from a recorded gap into a second one - so it was recorded rather than taken. The estate's own principle argues for the check: a core does not trust its feeds, and WP-11 is the feed. | Open |
 | F-59 | WP-10b | **Crypto-shredding is described in the GDPR data map and not built.** `gdpr-data-map.md` names it as the preferred resolution to the erasure problem, and nothing in this repository encrypts an identity column or manages a key. The document says so in its own banner rather than implying otherwise, which is the honest position but not a closed one: the estate's claim is that erasure is *possible* without destroying the accounting record, and the mechanism that would make it possible does not exist. It needs a key per subject, a key store, a destruction procedure that is itself audited, and an answer for backups taken before the destruction - none of which is a WP-10b-sized change, and the retention period it would run against is the regulatory question F-28 already records. | Open |
 | F-60 | WP-11a | **`requestedAt` is sent as `postedAt`, because the ledger's event carries no request timestamp.** `tb:Transfer` makes `requestedAt` mandatory and `TransferPostedPayload` has only `postedAt`, so the integration tier cannot know when the customer asked. It sends `postedAt` - the tightest upper bound it can defend, since a transfer is requested no later than it is posted - and that is a substitution rather than a fact. A consumer comparing the two will find them always equal, and `customer-master` stores neither, so nothing notices today. The fix is in another package's contract either way: the event gains `requestedAt` (WP-02 plus WP-09) or the schema stops requiring it (WP-02, which would also affect stratum 1). WP-11's Out of scope forbids changing either from an ESB branch, so the substitution is stated in the stylesheet, in the README and in a test that asserts the two timestamps are equal - so the day the event gains a real one, that test fails and names what has to change. | Open |
-| F-61 | WP-11a | **Two pieces of test scaffolding are now duplicated between strata 1 and 2.** The ESB's end-to-end test boots Tomcat through Cargo and applies stratum 1's SQL scripts, and stratum 1's own tests do both already. Sharing them would mean either publishing stratum 1's test classes as an artefact or making stratum 2's build depend on stratum 1's - and WP-11's Out of scope is explicit that this package adapts what it sits between without modifying it, which rules out changing `customer-master`'s POM to attach a classes jar. Copied test scaffolding was the cheaper mistake, and the copy of the Oracle script splitter is the part that will rot: it re-implements the `/`-terminator rule that `SqlScript` already encodes, and the two can now disagree about a package body. **Worse after WP-11b**: `FourEraTransferIT` boots the same Cargo/Tomcat/Oracle scaffolding a second time within stratum 2 itself, so the copy is now made twice inside one module as well as once across two. Sharing it between the two test classes is a small change and is the obvious first step; sharing it across strata is still the one Out of scope forbids from here. | Open |
+| F-61 | WP-11a | **Two pieces of test scaffolding are now duplicated between strata 1 and 2.** The ESB's end-to-end test boots Tomcat through Cargo and applies stratum 1's SQL scripts, and stratum 1's own tests do both already. Sharing them would mean either publishing stratum 1's test classes as an artefact or making stratum 2's build depend on stratum 1's - and WP-11's Out of scope is explicit that this package adapts what it sits between without modifying it, which rules out changing `customer-master`'s POM to attach a classes jar. Copied test scaffolding was the cheaper mistake, and the copy of the Oracle script splitter is the part that will rot: it re-implements the `/`-terminator rule that `SqlScript` already encodes, and the two can now disagree about a package body. **Worse after WP-11b**: `FourEraTransferIT` boots the same Cargo/Tomcat/Oracle scaffolding a second time within stratum 2 itself, so the copy is now made twice inside one module as well as once across two. Sharing it between the two test classes is a small change and is the obvious first step; sharing it across strata is still the one Out of scope forbids from here. **It rotted in WP-15, exactly as predicted and in the predicted place.** The audit migration adds an append-only trigger; the copy recognised only `CREATE OR REPLACE PACKAGE`, split the trigger on its own semicolons, and stratum 2's whole integration suite failed with `ORA-00900` naming a fragment nobody wrote - a package away from the change that caused it. WP-15 aligned the copy with `SqlScript.opensAPlSqlBlock` as a declared scope exception, and split `V4__audit.sql` so no script in `customer-master` mixes plain DDL with a PL/SQL block. Both are mitigations. The duplication itself is untouched and will rot again the next time the authority learns something the copy does not. **Now in three places**, after WP-15's `backoffice` module copied the same two helpers a third time. | Open |
 | F-62 | WP-11b | **The movement file's duplicate check is linear in the size of the file.** Before appending, `MovementFileWriter` reads `MOV-TRANSFER-REF` out of every record already there - a seek at a 120-byte stride rather than a parse, and correct for a bank day's volume, which is what [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md) commits to. It is **unmeasured at any other volume**, and the ADR says so rather than implying otherwise. The answer if it ever matters is an index beside the file, not a store inside the adapter - but the estate's rule for this kind of change is F-27's: worth revisiting only with a measured number, not a hunch. WP-21 and WP-23 are where the number comes from. | Open |
 | F-63 | WP-11b | **`run-eod.sh --help` documents two of its seven arguments.** `usage()` prints the header comment, which names only `--business-date` and `--steps`; `--master`, `--movements`, `--work`, `--run-ts` and `--rerun` are all implemented and none is mentioned. WP-11b's four-era test depends on three of them and found this by reading the source, which is not how an operator at 03:00 finds it - and `--rerun` in particular is the one flag the runbook warns about. Stratum 0's file, owned by WP-05, so not fixed from an integration branch. | Open |
 | F-64 | WP-11b | **Five of the six requirement ids in `canonical-data-model.md`'s traceability table name a different requirement than the catalogue does.** The catalogue in this matrix is the authority - `CLAUDE.md` records the fourteen collisions that made it so - and that document disagrees with it: it gives REQ-LED-001 as "Money is minor units plus an ISO 4217 code" where the catalogue says "Journal entries always balance", REQ-LED-003 as "Double-entry postings are balanced and immutable" where the catalogue says "Money is exact and currency-aware" (the two look **swapped**), REQ-LED-002 and REQ-DP-002 as different requirements entirely, and REQ-MF-001 as "Packed-decimal amounts are byte-identical across tiers" where the catalogue says "Record layouts are defined once and shared". Only REQ-INT-006 agrees. This is the F-11 defect exactly, in the one document F-11's fix did not sweep - and it is live rather than cosmetic: WP-11b nearly copied the model's wording for REQ-MF-001 into this matrix, which would have put two different sentences under one id in the authority itself. `canonical-data-model.md` is WP-02's. | Open |
 | F-65 | WP-16 | **WP-15 and WP-16 were framed to depend on each other, and the dependency table hides it.** WP-15's In scope promises a "reconciliation break list with drill-down" and its DoD requires breaks to appear in `backoffice`; WP-16's In scope promised break records "surfaced to `backoffice`" and its DoD required the same thing from the other side. Neither can be first without giving up one of its own acceptance criteria, yet the table records WP-15 as depending on WP-10 alone and WP-16 on WP-05 and WP-11 - so the cycle is invisible to the rule that picks the next package, and a session following that rule would have taken WP-15 and discovered it halfway through. WP-16's detailing resolves the seam **for these two** by making the break report a contract artefact and moving the rendering box to WP-15. What is not fixed is the general defect: nothing checks that the plan's dependency graph matches what the packages actually say they need, and WP-18 is the package that verifies the plan against itself. | Open |
 | F-66 | WP-16 | **The ledger test scaffolding is now duplicated between the two batch jobs.** `batch/recon`'s conftest brings up PostgreSQL, applies the ledger's Flyway migrations and writes the rows the ledger's Java would write - and `batch/reporting`'s does all three already. Sharing it would make one batch job depend on the other, which is the coupling `accounting.py` argues against for the production code: two jobs that must be able to disagree should not import each other. The honest cost is that the fixture's reproduction of `AccountType.signedEffect` now exists twice, and the two can drift apart without anything noticing - the same shape as **F-61** one stratum over. The fix is a third thing neither job owns, which is a package-sized change rather than a branch-sized one. | Open |
+| F-67 | WP-15 | **The operator role has no user store, and the back office is only as attributable as the realm behind it.** `web.xml` declares a `BASIC` security constraint over `/breaks`, `/rejects` and `/action` with role `operator`, and `ActionServlet` writes `getRemoteUser()` into every audit row - so the audit trail's actor is whatever the container authenticated. This repository ships no realm, deliberately: a `tomcat-users.xml` or a JNDI realm is deployment configuration, which [ADR 0001](../governance/adr/0001-source-only-repository.md) puts in the platform repositories rather than here. The deployment test supplies its own users through Cargo, which is the right shape for a test and no evidence at all about production. Two consequences worth naming rather than leaving implied: `BASIC` over plain HTTP sends the credential in reversible encoding on every request, and the audit trail cannot distinguish two people sharing one operator account. WP-15's *Out of scope* is explicit that the authorisation model stops at a simple operator role, so this is a boundary of the package rather than a defect in it. | Open |
 
 ---
 
@@ -489,3 +513,6 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-20 | **Timing differences are reported, never suppressed, and never alerted on.** A reconciliation that hides its expected differences is one nobody can audit: a difference that is invisible cannot be confirmed as understood. But a metric that counts all breaks together would page somebody every morning for those same expected differences, which produces the exact failure the work package's Constraints section names - operators trained to ignore the report. So breaks are counted **by classification**, every classification gets a series even at zero, and the runbook says in as many words which three to alert on and which one never to. |
 | 2026-08-20 | **`backoffice` is its own WAR, and WP-15's *In scope* was wrong rather than ambiguous.** The work package said the JSP pages went inside the `customer-master` WAR; `legacy/README.md`, `legacy/backoffice/README.md` and the branch name `feat/TB-1015-backoffice` all said otherwise, and the directory already existed. The repository owner resolved it in favour of a separate module and the file is corrected. The reasoning that supports it: an operator screen and the SOAP endpoint the integration tier depends on should not share a deployment, and two WARs on one Tomcat is what a 2011 bank actually ran. The price is that `customer-master` must publish a classes jar for its DAO to be reusable - the alternative being a second implementation of account lookup, which is the drift this estate's reconciliation exists to detect. |
 | 2026-08-20 | **Stratum 1 gets its audit trail from WP-15, three packages after it was first promised.** REQ-OPS-004 has been owned by WP-15 since the catalogue was written, and WP-10a built a schema with no audit table in it - so the requirement had nowhere to land and nothing noticed, because no stratum 1 code had mutated anything an operator initiated. The screen is the first thing that does. Append-only by trigger and written in the same transaction as the change, which is the control the ledger's own `audit_record` carries three strata and twelve years away. |
+| 2026-08-20 | **The server parses the break report, not the browser.** The obvious 2011-and-later shortcut is to hand the JSON straight to jQuery and render it client-side, which would need no JSON library at stratum 1 at all. WP-15's Constraints forbid single-page behaviour, so a 2011-era parser - Jackson 1.9.13, the last of the `org.codehaus.jackson` line - is pinned in the parent POM and justified there like every other version. It is a **new dependency at stratum 1, not an upgrade**, which is the one kind of change to a legacy stratum that the repository's rule permits without an ADR. The reader also validates the document against the contract's field list and refuses one that does not match: a screen that renders whatever it is given will one day render last week's file and say nothing. |
+| 2026-08-20 | **A `TIMING` break offers no action, and the refusal lives in the database rather than in the markup.** Hiding the button would satisfy the work package's wording. It would also mean the rule holds only for people using the screen, and the audit trail exists precisely for the case where somebody did not. `PKG_OPERATOR.ACKNOWLEDGE_BREAK` rejects a `TIMING` classification outright, so the screen and the system of record say the same thing. The reasoning is [ADR 0015](../governance/adr/0015-the-cut-off-is-the-movement-file.md)'s: a timing difference is *expected*, and inviting an operator to work one trains them to work all of them. |
+| 2026-08-20 | **WP-15 fixes stratum 2's copy of the Oracle script splitter, as a declared scope exception.** The rule is unambiguous - anything found outside the current package's scope is a follow-up, not a commit - and this branch breaks it once, by explicit instruction of the repository owner. The audit migration adds an append-only trigger; `integration/esb-adapter`'s copied test helper knew only about package bodies, split the trigger on its own semicolons, and took stratum 2's entire integration suite down with `ORA-00900` naming a fragment nobody wrote. The exception was granted because the change **invents nothing**: it spells the five PL/SQL openers exactly as `SqlScript.opensAPlSqlBlock` at stratum 1 already spells them, which is the authority the helper was copied from. Logging it as a follow-up instead would have left `main` red in a tier this package does not own. F-61 is updated from *will rot* to *has rotted*, and the duplication it describes is still there. |

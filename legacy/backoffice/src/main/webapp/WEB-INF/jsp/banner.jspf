@@ -1,0 +1,14 @@
+<%--
+  The banner every screen carries. A JSP fragment rather than a tag file: fragments are what a 2011
+  team used for this, and a tag library for two lines of markup was already over-engineering then.
+--%>
+<div id="banner">
+  <h1>Tessera Bank &mdash; Back Office</h1>
+  <span class="env">
+    <c:out value="${pageContext.request.remoteUser}"/>
+    &nbsp;|&nbsp;
+    <a href="<c:url value='/breaks'/>" style="color:#fff">Recon breaks</a>
+    &nbsp;|&nbsp;
+    <a href="<c:url value='/rejects'/>" style="color:#fff">Rejects</a>
+  </span>
+</div>
