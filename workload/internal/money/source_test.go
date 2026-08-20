@@ -33,8 +33,9 @@ const moduleRoot = "../.."
 // An entry arrives in the same commit as the file it excuses, and TestEveryJustifiedFileStillExists
 // removes it again if that file ever goes away.
 var floatIsJustified = map[string]string{
-	"internal/bankday/curve.go":     "an intensity is events per second at an instant, and the shape it comes from is a ratio between hours - neither is a count and neither is money",
-	"internal/arrivals/arrivals.go": "a Poisson process is defined over continuous time - an interarrival gap is a real number of seconds and thinning compares an intensity ratio against a uniform draw",
+	"internal/bankday/curve.go":         "an intensity is events per second at an instant, and the shape it comes from is a ratio between hours - neither is a count and neither is money",
+	"internal/arrivals/arrivals.go":     "a Poisson process is defined over continuous time - an interarrival gap is a real number of seconds and thinning compares an intensity ratio against a uniform draw",
+	"internal/population/population.go": "the log-normal amount draw and the weighted picks - a distribution is continuous. The float ends at drawMinor, which hands back int64 minor units and nothing else",
 }
 
 // Calls that have no business anywhere in this module, whatever they are applied to.
@@ -59,7 +60,9 @@ var forbiddenOnAmounts = map[string]string{
 //
 // An entry arrives in the same commit as the function it excuses, and
 // TestEveryMoneyExemptionStillNamesARealFunction removes it again if that function is renamed.
-var floatMeetsMoneyIn = map[string]string{}
+var floatMeetsMoneyIn = map[string]string{
+	"internal/population/population.go#drawMinor": "a log-normal draw needs its median as a real number; drawMinor converts back to int64 and clamps before anything leaves it",
+}
 
 type finding struct {
 	where string
