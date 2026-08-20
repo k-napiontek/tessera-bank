@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1020-workload-model` |
 | **Stratum** | 4 - Go, ~2025 |
 | **Depends on** | WP-02 |
-| **Status** | `Not started` |
+| **Status** | `In progress` |
 
 ## Objective
 
@@ -124,7 +124,8 @@ driver cannot drift from the first.
 8. **The run manifest.** Seed, model digest, git SHA, scale, compression and window, written as JSON,
    with a test proving the digest changes when the model changes.
 9. **Toolchain and documentation.** Makefile targets, `workload/README.md` stating plainly that this
-   is a fixture and not a component of the bank, the traceability rows, and ADR 0012.
+   is a fixture and not a component of the bank, the traceability rows, and ADR 0016 - **0012 was
+   taken** by `0012-slo-catalogue-boundary.md`, written when this strand was planned.
 10. **Verification and landing.** The commands below, with real output into the pull request, then
     `STATUS.md`.
 
