@@ -64,10 +64,31 @@ Updated by the executing session at the start and end of every work package, per
 > handle and no path, so REQ-REC-003 - breaks are never auto-corrected - is enforced by the shape of
 > the code: a change that wanted to auto-heal would have to add a writer to that module first.
 >
-> **WP-15 is next**, `legacy/backoffice` on stratum 1, JSP and jQuery - and it now has something real
-> to render, which is the whole reason WP-16 went first. **It is frame-only**, so a session picking
-> it up fills in its task list and has it reviewed before writing code - F-02, and the
-> `/work-package` skill halts on it.
+> **WP-15 is next, detailed and in progress**, `legacy/backoffice` on stratum 1, JSP and jQuery -
+> and it now has something real to render, which is the whole reason WP-16 went first.
+>
+> **Its In scope contradicted two READMEs and the repository owner resolved it**: `backoffice` is
+> **its own WAR**, not pages inside `customer-master`'s. The file said "inside the `customer-master`
+> WAR" while `legacy/README.md`, `legacy/backoffice/README.md` and the branch name all described a
+> separate module. The wording is corrected rather than left to be found halfway through. The shape
+> is also the defensible one - an operator screen and the SOAP endpoint the ESB depends on should
+> not redeploy together - and the cost is named up front: `customer-master` attaches a classes jar so
+> the DAO is reused rather than reimplemented, and the Cargo scaffolding is copied a third time
+> (F-61).
+>
+> **Stratum 1 has no audit trail, and this package builds it.** `V1__schema.sql` holds `customer`,
+> `account` and `applied_transfer` and nothing else, so REQ-OPS-004 - operator actions are
+> attributable and audited - has had nothing to write to since WP-10a. Append-only, enforced by a
+> trigger, written inside the same transaction as the change it records. The package's own
+> Constraints are unambiguous about why: an internal tool that mutates state without an audit record
+> is exactly the finding an auditor writes up.
+>
+> **The screen reads the break report as a file and never touches the ledger.** That is what
+> `contracts/recon/break-report-v1.md` was written for. Giving a 2011 monolith a PostgreSQL
+> connection would route around the layering the estate exists to demonstrate. And because the
+> Constraints forbid single-page behaviour, the **server** parses the JSON rather than handing the
+> file to jQuery - which needs a 2011-era parser pinned in the parent POM, and is the honest cost of
+> "server-rendered" rather than a shortcut around it.
 >
 > **The order was a decision rather than a formality, because WP-15 and WP-16 were framed to depend
 > on each other.** WP-15's break list needs breaks only WP-16 produces; WP-16's "surfaced to
@@ -247,7 +268,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `4562165` |
-| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b | `Not started` | | |
+| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `In progress` | | |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `747803d` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
@@ -294,7 +315,7 @@ becomes its own change when picked up.
 | # | Raised in | Description | Status |
 |---|---|---|---|
 | F-01 | WP-01 | `git init` has not been run, so the branch-protection hook is inert. | **Closed** - repository initialised on `main` with a baseline commit, 2026-08-17 |
-| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **and WP-16**, which has since been executed. **WP-15 and WP-18 still carry frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
+| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, the last of which has since been executed. **WP-18 still carries frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
 | F-03 | WP-01 | `quality/` holds no linter rule files yet. Each is added by the work package that first needs it, so the rules land with code to check. | Open |
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
@@ -466,3 +487,5 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-20 | **The mainframe cut-off is the movement file, not a timestamp.** Five documents in this repository refer to "the cut-off" and none defines it. A clock cannot: the ledger and the overnight cycle share none, and a boundary drawn at a time is irreproducible the moment either side's clock moves - which would break the Constraint that the comparison be reproducible from the same two inputs. The cycle's input is a file, and that file names every transfer it carried in `MOV-TRANSFER-REF`, so **the set of references in the movement file the cycle consumed is the cut-off**. A ledger entry whose reference is in the file must be in the master; one whose reference is not is expected to be absent and is *timing* rather than drift. It is the same file answering a second question, after [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md), and WP-16 records it as ADR 0015. |
 | 2026-08-20 | **A break is not a failed job, and the reconciliation exits 0 when it finds one.** The obvious alternative is to exit non-zero so that a scheduler notices, and it is wrong twice over: every scheduler treats a red job as something to rerun, and rerunning this one is guaranteed to produce the same breaks and waste the morning. Worse, it conflates *the control found a disagreement* - which is the control working - with *the control did not run*, which is the only thing an operator must never miss. Exit 1 is reserved for the second, and the findings live in the report and the metrics where a control's findings belong. |
 | 2026-08-20 | **Timing differences are reported, never suppressed, and never alerted on.** A reconciliation that hides its expected differences is one nobody can audit: a difference that is invisible cannot be confirmed as understood. But a metric that counts all breaks together would page somebody every morning for those same expected differences, which produces the exact failure the work package's Constraints section names - operators trained to ignore the report. So breaks are counted **by classification**, every classification gets a series even at zero, and the runbook says in as many words which three to alert on and which one never to. |
+| 2026-08-20 | **`backoffice` is its own WAR, and WP-15's *In scope* was wrong rather than ambiguous.** The work package said the JSP pages went inside the `customer-master` WAR; `legacy/README.md`, `legacy/backoffice/README.md` and the branch name `feat/TB-1015-backoffice` all said otherwise, and the directory already existed. The repository owner resolved it in favour of a separate module and the file is corrected. The reasoning that supports it: an operator screen and the SOAP endpoint the integration tier depends on should not share a deployment, and two WARs on one Tomcat is what a 2011 bank actually ran. The price is that `customer-master` must publish a classes jar for its DAO to be reusable - the alternative being a second implementation of account lookup, which is the drift this estate's reconciliation exists to detect. |
+| 2026-08-20 | **Stratum 1 gets its audit trail from WP-15, three packages after it was first promised.** REQ-OPS-004 has been owned by WP-15 since the catalogue was written, and WP-10a built a schema with no audit table in it - so the requirement had nowhere to land and nothing noticed, because no stratum 1 code had mutated anything an operator initiated. The screen is the first thing that does. Append-only by trigger and written in the same transaction as the change, which is the control the ledger's own `audit_record` carries three strata and twelve years away. |
