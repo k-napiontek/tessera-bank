@@ -112,6 +112,75 @@
 
   <build>
     <plugins>
+      <!--
+        The SOAP client, generated from the same WSDL customer-master generated its server interface
+        from. That is the point of a contract: two components, two independent generations, and
+        neither one deciding what the interface is.
+
+        No jaxws-rt dependency here, unlike the WAR at stratum 1. JDK 8 carries a JAX-WS runtime of
+        its own and it is enough to call a service; what Tomcat lacks is the ability to publish one.
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>jaxws-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>generate-from-wsdl</id>
+            <goals>
+              <goal>wsimport</goal>
+            </goals>
+            <configuration>
+              <wsdlDirectory>${tessera.contracts.dir}/wsdl</wsdlDirectory>
+              <wsdlFiles>
+                <wsdlFile>customer-master-v1.wsdl</wsdlFile>
+              </wsdlFiles>
+              <packageName>bank.tessera.esb.ws</packageName>
+              <sourceDestDir>${project.build.directory}/generated-sources/wsimport</sourceDestDir>
+              <keep>true</keep>
+              <xnocompile>true</xnocompile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Two compilations, for the reason stratum 1 records: wsimport emits one unfixable [serial]
+        warning - the generated fault class extends Exception without a serialVersionUID - and the
+        estate's -Werror gate must not be weakened for hand-written code to accommodate a generator.
+        The generated tree compiles first, in process-sources, with [serial] alone suppressed.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>compile-generated-sources</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>bank/tessera/esb/ws/**</include>
+              </includes>
+              <compilerArgs>
+                <arg>-Xlint:all</arg>
+                <arg>-Xlint:-serial</arg>
+                <arg>-Werror</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <excludes>
+                <exclude>bank/tessera/esb/ws/**</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
