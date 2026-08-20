@@ -1,6 +1,8 @@
 package bank.tessera.backoffice.web;
 
 import bank.tessera.backoffice.BackofficeConfiguration;
+import bank.tessera.backoffice.dao.OperatorDao;
+import bank.tessera.backoffice.dao.OperatorException;
 import bank.tessera.backoffice.mainframe.Reject;
 import bank.tessera.backoffice.mainframe.RejectFile;
 import java.io.File;
@@ -8,10 +10,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
 
 /**
  * The rejects queue: every movement last night's cycle could not apply.
@@ -54,9 +60,23 @@ public class RejectsServlet extends HttpServlet {
                 List<Reject> rejects = RejectFile.read(file);
                 request.setAttribute("rejects", rejects);
                 request.setAttribute("rejectsFile", file.getName());
+                request.setAttribute("annotations", annotations(businessDate));
             }
         }
         request.getRequestDispatcher(VIEW).forward(request, response);
+    }
+
+    /** Notes already filed against a reject leg, so the screen shows what has been said. */
+    private Map<String, String> annotations(String businessDate) throws ServletException {
+        try {
+            DataSource dataSource =
+                    (DataSource) new InitialContext().lookup("java:comp/env/jdbc/customerMaster");
+            return new OperatorDao(dataSource).annotationsFor(businessDate);
+        } catch (NamingException notBound) {
+            throw new ServletException("jdbc/customerMaster is not bound; see web.xml", notBound);
+        } catch (OperatorException problem) {
+            throw new ServletException(problem);
+        }
     }
 
     /**

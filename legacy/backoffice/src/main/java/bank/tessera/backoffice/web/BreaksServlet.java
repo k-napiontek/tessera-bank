@@ -1,15 +1,21 @@
 package bank.tessera.backoffice.web;
 
 import bank.tessera.backoffice.BackofficeConfiguration;
+import bank.tessera.backoffice.dao.OperatorDao;
+import bank.tessera.backoffice.dao.OperatorException;
 import bank.tessera.backoffice.recon.BreakReport;
 import bank.tessera.backoffice.recon.BreakReportReader;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
 
 /**
  * The break list: what the morning's reconciliation found.
@@ -27,6 +33,8 @@ public class BreaksServlet extends HttpServlet {
 
     static final String VIEW = "/WEB-INF/jsp/breaks.jsp";
 
+    private static final String DATA_SOURCE = "java:comp/env/jdbc/customerMaster";
+
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         BackofficeConfiguration configuration = BackofficeConfiguration.from(getServletContext());
@@ -41,7 +49,28 @@ public class BreaksServlet extends HttpServlet {
         if (businessDate != null) {
             BreakReport report = BreakReportReader.readFor(directory, businessDate);
             request.setAttribute("report", report);
+            request.setAttribute("acknowledged", acknowledgements(businessDate));
         }
         request.getRequestDispatcher(VIEW).forward(request, response);
+    }
+
+    /**
+     * Which breaks already carry an acknowledgement, so the screen does not offer to make one
+     * twice.
+     *
+     * <p>Courtesy rather than a control: {@code PKG_OPERATOR.acknowledge_break} is idempotent, so
+     * the rule holds for every caller and not only for the one that reads this map. Read in a single
+     * query - a screen that asked the database once per break would be two hundred round trips on
+     * exactly the morning nobody has time for them.
+     */
+    private Map<String, String> acknowledgements(String businessDate) throws ServletException {
+        try {
+            DataSource dataSource = (DataSource) new InitialContext().lookup(DATA_SOURCE);
+            return new OperatorDao(dataSource).acknowledgementsFor(businessDate);
+        } catch (NamingException notBound) {
+            throw new ServletException(DATA_SOURCE + " is not bound; see web.xml", notBound);
+        } catch (OperatorException problem) {
+            throw new ServletException(problem);
+        }
     }
 }

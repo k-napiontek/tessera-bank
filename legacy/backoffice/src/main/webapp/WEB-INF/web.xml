@@ -52,6 +52,15 @@
     <url-pattern>/rejects</url-pattern>
   </servlet-mapping>
 
+  <servlet>
+    <servlet-name>action</servlet-name>
+    <servlet-class>bank.tessera.backoffice.web.ActionServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>action</servlet-name>
+    <url-pattern>/action</url-pattern>
+  </servlet-mapping>
+
   <welcome-file-list>
     <welcome-file>index.jsp</welcome-file>
   </welcome-file-list>
@@ -62,5 +71,36 @@
     <res-type>javax.sql.DataSource</res-type>
     <res-auth>Container</res-auth>
   </resource-ref>
+
+  <!--
+    A single operator role, which is all WP-15 scopes. Real authorisation - maker/checker on an
+    acknowledgement, segregation between whoever works a break and whoever signs it off - is a
+    bigger question than this screen, and pretending to it with a second role nobody enforces would
+    be worse than the honest gap.
+
+    BASIC over the container's realm, as a 2011 internal tool did. The operations team binds the
+    realm to the bank's directory in the container's configuration, which is why no user or password
+    appears anywhere in this WAR.
+  -->
+  <security-constraint>
+    <web-resource-collection>
+      <web-resource-name>Back office</web-resource-name>
+      <url-pattern>/breaks</url-pattern>
+      <url-pattern>/rejects</url-pattern>
+      <url-pattern>/action</url-pattern>
+    </web-resource-collection>
+    <auth-constraint>
+      <role-name>operator</role-name>
+    </auth-constraint>
+  </security-constraint>
+
+  <login-config>
+    <auth-method>BASIC</auth-method>
+    <realm-name>Tessera Back Office</realm-name>
+  </login-config>
+
+  <security-role>
+    <role-name>operator</role-name>
+  </security-role>
 
 </web-app>

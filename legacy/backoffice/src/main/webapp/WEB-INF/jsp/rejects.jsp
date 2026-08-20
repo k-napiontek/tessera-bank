@@ -30,6 +30,10 @@
     <noscript><input type="submit" value="Show"/></noscript>
   </form>
 
+  <c:if test="${not empty param.refused}">
+    <p class="notice"><strong>Refused:</strong> <c:out value="${param.refused}"/></p>
+  </c:if>
+
   <c:choose>
     <c:when test="${empty businessDate}">
       <p class="notice">
@@ -66,6 +70,7 @@
           <th>Value date</th>
           <th>Code</th>
           <th>Reason</th>
+          <th>Note</th>
         </tr>
         <c:forEach var="r" items="${rejects}" varStatus="row">
           <tr class="${row.index % 2 == 1 ? 'alt' : ''}">
@@ -79,6 +84,21 @@
             <td><c:out value="${r.valueDate}"/></td>
             <td><strong><c:out value="${r.reasonCode}"/></strong></td>
             <td><c:out value="${r.reasonText}"/></td>
+            <td>
+              <%-- Re-annotating replaces the note and is itself audited: the earlier text survives
+                   in the trail and nowhere else. --%>
+              <c:if test="${not empty annotations[r.key]}">
+                <div class="acted"><c:out value="${annotations[r.key]}"/></div>
+              </c:if>
+              <form class="act" method="post" action="<c:url value='/action'/>">
+                <input type="hidden" name="action" value="annotate"/>
+                <input type="hidden" name="businessDate" value="${businessDate}"/>
+                <input type="hidden" name="transferRef" value="<c:out value='${r.transferRef}'/>"/>
+                <input type="hidden" name="legNo" value="${r.legNo}"/>
+                <input type="text" name="note" maxlength="400" title="What you found"/>
+                <input type="submit" value="Annotate"/>
+              </form>
+            </td>
           </tr>
         </c:forEach>
       </table>

@@ -30,6 +30,10 @@
     <noscript><input type="submit" value="Show"/></noscript>
   </form>
 
+  <c:if test="${not empty param.refused}">
+    <p class="notice"><strong>Refused:</strong> <c:out value="${param.refused}"/></p>
+  </c:if>
+
   <c:choose>
     <c:when test="${empty businessDate}">
       <%-- Not the same as "no breaks", and the difference is the whole point of the control. --%>
@@ -113,8 +117,25 @@
                 </td>
                 <td>
                   <%-- A TIMING break is expected and offers no action. Inviting an operator to work
-                       one undoes what ADR 0015 was for. --%>
-                  <c:if test="${not b.actionable}"><em>expected</em></c:if>
+                       one undoes what ADR 0015 was for, and PKG_OPERATOR refuses it as well - a rule
+                       enforced only in a JSP is a rule the next caller does not have. --%>
+                  <c:choose>
+                    <c:when test="${not b.actionable}"><em>expected</em></c:when>
+                    <c:when test="${not empty acknowledged[b.accountRef]}">
+                      <span class="acted">acknowledged by
+                        <c:out value="${acknowledged[b.accountRef]}"/></span>
+                    </c:when>
+                    <c:otherwise>
+                      <form class="act" method="post" action="<c:url value='/action'/>">
+                        <input type="hidden" name="action" value="acknowledge"/>
+                        <input type="hidden" name="businessDate" value="${businessDate}"/>
+                        <input type="hidden" name="accountRef" value="<c:out value='${b.accountRef}'/>"/>
+                        <input type="hidden" name="classification" value="${b.classification}"/>
+                        <input type="text" name="note" maxlength="400" title="What you found"/>
+                        <input type="submit" value="Acknowledge"/>
+                      </form>
+                    </c:otherwise>
+                  </c:choose>
                 </td>
               </tr>
             </c:forEach>
