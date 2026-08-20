@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  esb-adapter - the bridge between eras.
+
+  Stratum 2, vintage ~2019: Java 8, Spring Boot 2.7.18. That pairing is the whole point of this tier.
+  Boot 2.7 is the last line that supports Java 8, so an estate on Java 8 is on Boot 2.7, and moving
+  either one means moving both plus everything above them - which is exactly why nobody does. Those
+  versions are load-bearing and are not to be raised; see the legacy-strata rule in CLAUDE.md and
+  ADR 0002.
+
+  It inherits the CORPORATE parent, not spring-boot-starter-parent. That is the realistic
+  arrangement - a bank's platform team outranks a framework - and the price is that the Boot BOM has
+  to be imported by hand below and the Boot plugin version named in the parent.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>bank.tessera</groupId>
+    <artifactId>tessera-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../platform/parent-pom/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>esb-adapter</artifactId>
+  <packaging>jar</packaging>
+
+  <name>esb-adapter</name>
+  <description>Kafka to XSLT to SOAP to COMP-3: the bridge between the ledger and the mainframe.</description>
+
+  <properties>
+    <!-- The WSDL and the canonical schema are read from the repository root, in place. The WSDL
+         imports the schema as ../xsd/canonical-v1.xsd, so a copy without its sibling directory
+         breaks generation with an error naming the schema rather than the copy. -->
+    <tessera.contracts.dir>${project.basedir}/../../contracts</tessera.contracts.dir>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        Imported here rather than in the corporate parent, deliberately. At parent level it would
+        manage junit, slf4j and jackson for legacy/customer-master as well - a 2011 tier that has
+        never heard of Spring - and a 2019 framework's preferred versions would quietly become
+        stratum 1's. The version itself is pinned in the parent; only its reach is local.
+      -->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <!-- The intermediate document on the way from JSON to canonical XML. XSLT consumes XML and the
+         event is JSON, so something has to bridge the two - and it is this, never a StringBuilder.
+         Managed by the Boot BOM, so it is not a new third-party dependency. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-xml</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>kafka</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

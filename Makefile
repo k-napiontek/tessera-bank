@@ -9,8 +9,9 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help build test lint plan status eod \
-        build-mainframe build-legacy build-services build-edge build-batch test-contracts \
-        test-mainframe test-legacy test-services test-edge test-gateway test-fraud test-web \
+        build-mainframe build-legacy build-integration build-services build-edge build-batch \
+        test-contracts test-mainframe test-legacy test-integration test-services test-edge \
+        test-gateway test-fraud test-web \
         test-batch test-reporting \
         lint-contracts lint-edge lint-batch build-web lint-web jdk8 jdk17 docker go uv node
 
@@ -124,8 +125,7 @@ endif
 
 # --- build ------------------------------------------------------------------------------------
 
-build: build-mainframe build-legacy build-services build-edge build-batch ## Build every tier with its native toolchain
-	@echo "Nothing to build in integration/ - no source there yet."
+build: build-mainframe build-legacy build-integration build-services build-edge build-batch ## Build every tier with its native toolchain
 
 build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 	@cobc -x -std=ibm -Wall -I mainframe/copybook \
@@ -166,7 +166,7 @@ build-batch: uv ## Build the batch tier - Python
 
 # --- test -------------------------------------------------------------------------------------
 
-test: test-contracts test-mainframe test-legacy test-services test-edge test-batch ## Run every tier's test suite
+test: test-contracts test-mainframe test-legacy test-integration test-services test-edge test-batch ## Run every tier's test suite
 	@echo
 	@echo "OK    every tier with tests passed"
 
@@ -200,6 +200,19 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 # ---------------------------------------------------------------------------------------------
 test-legacy: jdk8 docker ## customer-master on real Oracle, and the WAR on a real Tomcat 8.5
 	@JAVA_HOME="$(JAVA8)" mvn -f legacy/customer-master/pom.xml verify
+
+# ---------------------------------------------------------------------------------------------
+# Stratum 2 shares stratum 1's JDK and none of its tooling: Java 8 with Spring Boot 2.7.18, which
+# is the last Boot line that supports Java 8 and therefore the reason the whole block is frozen
+# together. The tests consume from a real Kafka through Testcontainers, the same image the ledger's
+# outbox contract test uses, so this needs Docker too.
+# ---------------------------------------------------------------------------------------------
+build-integration: jdk8 ## Build the Spring Boot 2.7 tier - esb-adapter
+	@JAVA_HOME="$(JAVA8)" mvn --quiet -DskipTests -f integration/esb-adapter/pom.xml package
+	@echo "OK    esb-adapter packages"
+
+test-integration: jdk8 docker ## esb-adapter, against real Kafka and a really-deployed customer-master
+	@JAVA_HOME="$(JAVA8)" mvn -f integration/esb-adapter/pom.xml verify
 
 test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL
 	@JAVA_HOME="$(JAVA17)" ./gradlew \

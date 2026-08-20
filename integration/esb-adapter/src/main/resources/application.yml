@@ -1,0 +1,27 @@
+# Defaults for local running. Every environment's real values are supplied by the platform
+# repositories, not by this file - ADR 0001. What is here is the shape.
+spring:
+  application:
+    name: esb-adapter
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: esb-adapter
+      # Never latest. A consumer that skips what accumulated while it was down loses transfers
+      # silently, and the mainframe would be short by exactly the messages nobody saw.
+      auto-offset-reset: earliest
+      # The offset is committed after the work is done, never by a timer while it is still running.
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+    listener:
+      ack-mode: manual_immediate
+
+tessera:
+  esb:
+    topic: tessera.ledger.transfer-posted.v1
+    dead-letter-topic: tessera.esb.transfer-posted.dlt.v1

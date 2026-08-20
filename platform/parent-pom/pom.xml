@@ -67,6 +67,19 @@
          LinkageError naming neither. 2.2.10 is also what a 2011 estate would have shipped. -->
     <jaxws-rt.version>2.2.10</jaxws-rt.version>
     <servlet-api.version>3.0.1</servlet-api.version>
+
+    <!--
+      Stratum 2's version block. Spring Boot 2.7 is the last line that supports Java 8, which is why
+      the industry is pinned to Java 8 + Boot 2.7 + Tomcat 8.5 as one immovable unit and why this
+      estate reproduces it - see ADR 0002.
+
+      The version is pinned HERE and the BOM is imported in the MODULE, not in the dependencyManagement
+      below. Importing spring-boot-dependencies at this level would let it manage junit, slf4j and
+      jackson for legacy/customer-master too, which is a 2011 tier that has never heard of Spring: the
+      versions a 2019 framework prefers would silently become stratum 1's versions. One property,
+      centrally pinned; its reach stops at the module that asks for it.
+    -->
+    <spring-boot.version>2.7.18</spring-boot.version>
   </properties>
 
   <dependencyManagement>
@@ -202,6 +215,17 @@
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>build-helper-maven-plugin</artifactId>
           <version>${build-helper-maven-plugin.version}</version>
+        </plugin>
+
+        <!-- Pinned here because stratum 2 inherits THIS parent rather than
+             spring-boot-starter-parent, which is where a Boot project would normally get the
+             plugin's version from. Inheriting the corporate parent instead is the realistic
+             arrangement - a platform team's parent outranks a framework's - and the cost is that
+             every plugin the framework would have supplied has to be named. -->
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <version>${spring-boot.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
