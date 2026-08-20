@@ -29,12 +29,45 @@ Updated by the executing session at the start and end of every work package, per
 > a measured number, not a hunch"*. It sits **off the critical path and beside the plan, not in
 > front of it**.
 >
-> **WP-16 is next, detailed and awaiting review**, taken ahead of WP-15 by explicit instruction of
-> the repository owner - the mechanism this log records for work outside the plan's order, as WP-19
-> was. `batch/recon`, Python 3.12, spanning strata 0 and 3: it compares the COBOL account master
-> against the PostgreSQL ledger and reports drift, which is the safety net that makes strangler-fig
-> modernisation survivable, and it is genuinely possible for the first time because 11b made one
-> transfer reach both cores.
+> **WP-16 is done and merged** ([#54](https://github.com/k-napiontek/tessera-bank/pull/54)), and
+> **the two cores are now checked against each other.** Every
+> other package in this estate moves money between the eras; this is the one that proves the eras
+> still agree afterwards, and until it existed the strangler fig was a plan rather than a safe one.
+> `batch/recon` reads the account master the overnight cycle produced, reads the ledger at an audit
+> position, and reports every difference classified. Its end-to-end tests seed a real PostgreSQL,
+> run the **real** GnuCOBOL cycle, and reconcile the master that cycle produced - then inject a value
+> discrepancy, a missing account and a post-cut-off movement and assert each is classified correctly.
+>
+> **The cut-off is the movement file, not a timestamp** - [ADR 0015](../governance/adr/0015-the-cut-off-is-the-movement-file.md).
+> Five documents in this repository referred to "the mainframe cut-off" and none defined it, so this
+> package had to. A clock cannot: the ledger and the cycle share none, and a boundary drawn at a time
+> stops being reproducible the moment either side's moves. The cycle's input is a file that names
+> every transfer it carried, so **the set of `MOV-TRANSFER-REF` values in that file is the cut-off**.
+> Exact, with no window and no tolerance, and reproducible from the two files for ever. It is the
+> same file answering a second question, after [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md).
+>
+> **Getting timing wrong is the failure this package exists to avoid**, and the work package says so
+> outright: classifying an expected difference as a break trains operators to ignore the report,
+> which is worse than having no report. A control that is ignored still passes its audit and stops
+> working. So `TIMING` is reported rather than suppressed - a difference that is invisible cannot be
+> confirmed as understood - and the metrics count breaks **by classification**, so an alert can fire
+> on drift without paging anybody for the timing that happens every morning.
+>
+> **Nothing here is borrowed from the thing it checks.** A third independent COMP-3 implementation
+> and a fifth statement of the normal-balance rule, both deliberate. A decoder that imported one of
+> the others would inherit whatever it has wrong, and a reconciliation that asked the ledger which
+> way its own figures ran would be reconciling nothing. Balances are summed from postings for the
+> same reason: the `balance` table is a cache of the thing being checked.
+>
+> **Read-only is proved rather than promised.** The database role is granted `SELECT` and nothing
+> else, and a test asserts the refusal comes from PostgreSQL. `compare` holds no connection, no file
+> handle and no path, so REQ-REC-003 - breaks are never auto-corrected - is enforced by the shape of
+> the code: a change that wanted to auto-heal would have to add a writer to that module first.
+>
+> **WP-15 is next**, `legacy/backoffice` on stratum 1, JSP and jQuery - and it now has something real
+> to render, which is the whole reason WP-16 went first. **It is frame-only**, so a session picking
+> it up fills in its task list and has it reviewed before writing code - F-02, and the
+> `/work-package` skill halts on it.
 >
 > **The order was a decision rather than a formality, because WP-15 and WP-16 were framed to depend
 > on each other.** WP-15's break list needs breaks only WP-16 produces; WP-16's "surfaced to
@@ -215,7 +248,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `4562165` |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b | `Not started` | | |
-| [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Not started` | | |
+| [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `a9012ce` |
@@ -261,7 +294,7 @@ becomes its own change when picked up.
 | # | Raised in | Description | Status |
 |---|---|---|---|
 | F-01 | WP-01 | `git init` has not been run, so the branch-protection hook is inert. | **Closed** - repository initialised on `main` with a baseline commit, 2026-08-17 |
-| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **and WP-16**. **WP-15 and WP-18 still carry frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
+| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **and WP-16**, which has since been executed. **WP-15 and WP-18 still carry frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
 | F-03 | WP-01 | `quality/` holds no linter rule files yet. Each is added by the work package that first needs it, so the rules land with code to check. | Open |
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
@@ -325,6 +358,7 @@ becomes its own change when picked up.
 | F-63 | WP-11b | **`run-eod.sh --help` documents two of its seven arguments.** `usage()` prints the header comment, which names only `--business-date` and `--steps`; `--master`, `--movements`, `--work`, `--run-ts` and `--rerun` are all implemented and none is mentioned. WP-11b's four-era test depends on three of them and found this by reading the source, which is not how an operator at 03:00 finds it - and `--rerun` in particular is the one flag the runbook warns about. Stratum 0's file, owned by WP-05, so not fixed from an integration branch. | Open |
 | F-64 | WP-11b | **Five of the six requirement ids in `canonical-data-model.md`'s traceability table name a different requirement than the catalogue does.** The catalogue in this matrix is the authority - `CLAUDE.md` records the fourteen collisions that made it so - and that document disagrees with it: it gives REQ-LED-001 as "Money is minor units plus an ISO 4217 code" where the catalogue says "Journal entries always balance", REQ-LED-003 as "Double-entry postings are balanced and immutable" where the catalogue says "Money is exact and currency-aware" (the two look **swapped**), REQ-LED-002 and REQ-DP-002 as different requirements entirely, and REQ-MF-001 as "Packed-decimal amounts are byte-identical across tiers" where the catalogue says "Record layouts are defined once and shared". Only REQ-INT-006 agrees. This is the F-11 defect exactly, in the one document F-11's fix did not sweep - and it is live rather than cosmetic: WP-11b nearly copied the model's wording for REQ-MF-001 into this matrix, which would have put two different sentences under one id in the authority itself. `canonical-data-model.md` is WP-02's. | Open |
 | F-65 | WP-16 | **WP-15 and WP-16 were framed to depend on each other, and the dependency table hides it.** WP-15's In scope promises a "reconciliation break list with drill-down" and its DoD requires breaks to appear in `backoffice`; WP-16's In scope promised break records "surfaced to `backoffice`" and its DoD required the same thing from the other side. Neither can be first without giving up one of its own acceptance criteria, yet the table records WP-15 as depending on WP-10 alone and WP-16 on WP-05 and WP-11 - so the cycle is invisible to the rule that picks the next package, and a session following that rule would have taken WP-15 and discovered it halfway through. WP-16's detailing resolves the seam **for these two** by making the break report a contract artefact and moving the rendering box to WP-15. What is not fixed is the general defect: nothing checks that the plan's dependency graph matches what the packages actually say they need, and WP-18 is the package that verifies the plan against itself. | Open |
+| F-66 | WP-16 | **The ledger test scaffolding is now duplicated between the two batch jobs.** `batch/recon`'s conftest brings up PostgreSQL, applies the ledger's Flyway migrations and writes the rows the ledger's Java would write - and `batch/reporting`'s does all three already. Sharing it would make one batch job depend on the other, which is the coupling `accounting.py` argues against for the production code: two jobs that must be able to disagree should not import each other. The honest cost is that the fixture's reproduction of `AccountType.signedEffect` now exists twice, and the two can drift apart without anything noticing - the same shape as **F-61** one stratum over. The fix is a third thing neither job owns, which is a package-sized change rather than a branch-sized one. | Open |
 
 ---
 
@@ -430,3 +464,5 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-20 | **The four-era run is a failsafe integration test, not a walkthrough script.** WP-14's `walkthrough.sh` is the precedent for the other choice and it earned its place, but a script is not in `make test` and nothing goes red when it breaks - which is the same gap **F-17** records about repository-level documents drifting away from `STATUS.md`. The claim that one transfer crosses all four eras is this package's whole point, so it is asserted where a regression fails the build. The cost is that stratum 2's test run now needs GnuCOBOL and python3 as well as Docker, and it **fails rather than skips** when `cobc` is missing: a control that quietly does not run is the false assurance the Definition of Done's honesty clause exists to prevent. |
 | 2026-08-20 | **WP-16 is taken before WP-15, by explicit instruction of the repository owner.** The protocol's rule is the lowest-numbered `Not started` package with every dependency `Done`, which is WP-15. It is set aside here for the reason F-65 records: the two packages were framed to depend on each other, so one of them has to go first without the other's output, and the reconciliation is the half that produces data rather than the half that displays it. WP-16 is also the one on the critical path - reconciling the two cores daily is what makes the strangler fig survivable - and it became possible only when WP-11b made one transfer reach both. |
 | 2026-08-20 | **The mainframe cut-off is the movement file, not a timestamp.** Five documents in this repository refer to "the cut-off" and none defines it. A clock cannot: the ledger and the overnight cycle share none, and a boundary drawn at a time is irreproducible the moment either side's clock moves - which would break the Constraint that the comparison be reproducible from the same two inputs. The cycle's input is a file, and that file names every transfer it carried in `MOV-TRANSFER-REF`, so **the set of references in the movement file the cycle consumed is the cut-off**. A ledger entry whose reference is in the file must be in the master; one whose reference is not is expected to be absent and is *timing* rather than drift. It is the same file answering a second question, after [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md), and WP-16 records it as ADR 0015. |
+| 2026-08-20 | **A break is not a failed job, and the reconciliation exits 0 when it finds one.** The obvious alternative is to exit non-zero so that a scheduler notices, and it is wrong twice over: every scheduler treats a red job as something to rerun, and rerunning this one is guaranteed to produce the same breaks and waste the morning. Worse, it conflates *the control found a disagreement* - which is the control working - with *the control did not run*, which is the only thing an operator must never miss. Exit 1 is reserved for the second, and the findings live in the report and the metrics where a control's findings belong. |
+| 2026-08-20 | **Timing differences are reported, never suppressed, and never alerted on.** A reconciliation that hides its expected differences is one nobody can audit: a difference that is invisible cannot be confirmed as understood. But a metric that counts all breaks together would page somebody every morning for those same expected differences, which produces the exact failure the work package's Constraints section names - operators trained to ignore the report. So breaks are counted **by classification**, every classification gets a series even at zero, and the runbook says in as many words which three to alert on and which one never to. |
