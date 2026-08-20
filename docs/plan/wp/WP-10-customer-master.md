@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1010-customer-master-foundation` (10a), `feat/TB-1010-customer-master-soap` (10b) |
 | **Stratum** | 1 - Java 8, ~2011 |
 | **Depends on** | WP-02 |
-| **Status** | `In progress` - see `STATUS.md` for the per-half status |
+| **Status** | `Done` - 10a [#37](https://github.com/k-napiontek/tessera-bank/pull/37) `d6051d8`, 10b [#45](https://github.com/k-napiontek/tessera-bank/pull/45) `f43ce3f` |
 
 ## Objective
 
@@ -161,12 +161,12 @@ Branch `feat/TB-1010-customer-master-soap`. Eight tasks.
 
 ## Definition of Done
 
-- [ ] `mvn package` produces a deployable WAR under JDK 8.
-- [ ] The SOAP endpoint matches the WSDL, verified by a generated client.
-- [ ] Stored procedures are versioned and applied by script.
-- [ ] No Java 9+ construct appears anywhere in the module.
-- [ ] Every SOAP response validates against `contracts/xsd/canonical-v1.xsd` in the test suite.
-- [ ] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
+- [x] `mvn package` produces a deployable WAR under JDK 8, and `mvn verify` deploys it to a real Tomcat 8.5.
+- [x] The SOAP endpoint matches the WSDL, verified by a generated client over HTTP against the deployed WAR - `CustomerMasterDeploymentIT`.
+- [x] Stored procedures are versioned and applied by script - `scripts.list`, `SchemaApplier`, WP-10a.
+- [x] No Java 9+ construct appears anywhere in the module - `ToolchainTest` pins the JVM and the class library, `BytecodeVersionTest` holds every class in `target/classes` to major version 52, generated ones included.
+- [x] Every SOAP response validates against `contracts/xsd/canonical-v1.xsd` in the test suite - `SoapResponseConformanceTest`, including what `AccountMapper` actually produces and the empty `GetAccountsByCustomer` result.
+- [x] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
 
 ## Verification
 
