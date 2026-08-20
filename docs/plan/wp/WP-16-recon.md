@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1016-recon` |
 | **Stratum** | spans 0 and 3 |
 | **Depends on** | WP-05, WP-11b |
-| **Status** | `Not started` |
+| **Status** | `Done` - see `STATUS.md` |
 
 ## Objective
 
@@ -140,12 +140,12 @@ alone. That is a plan defect and goes to Follow-ups rather than onto this branch
 
 ## Definition of Done
 
-- [ ] A clean run over consistent data reports zero breaks and produces a report.
-- [ ] A deliberately injected discrepancy is detected and correctly classified.
-- [ ] A post-cut-off movement is classified as timing, not drift.
-- [ ] Breaks are written in a form `backoffice` can render, per the task 2 contract. **Rendering
+- [x] A clean run over consistent data reports zero breaks and produces a report.
+- [x] A deliberately injected discrepancy is detected and correctly classified.
+- [x] A post-cut-off movement is classified as timing, not drift.
+- [x] Breaks are written in a form `backoffice` can render, per the task 2 contract. **Rendering
       them is WP-15's box, not this one's** - see the Tasks preamble on the seam between the two.
-- [ ] Control totals balance.
+- [x] Control totals balance.
 
 ## Verification
 

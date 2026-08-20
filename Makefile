@@ -12,7 +12,7 @@
         build-mainframe build-legacy build-integration build-services build-edge build-batch \
         test-contracts test-mainframe test-legacy test-integration test-services test-edge \
         test-gateway test-fraud test-web \
-        test-batch test-reporting \
+        test-batch test-reporting test-recon \
         lint-contracts lint-edge lint-batch build-web lint-web jdk8 jdk17 docker go uv node
 
 # ---------------------------------------------------------------------------------------------
@@ -162,7 +162,8 @@ build-web: node ## Type-check and bundle web-banking
 
 build-batch: uv ## Build the batch tier - Python
 	@cd batch/reporting && uv sync --locked --quiet
-	@echo "OK    reporting resolves against its lock file"
+	@cd batch/recon && uv sync --locked --quiet
+	@echo "OK    reporting and recon resolve against their lock files"
 
 # --- test -------------------------------------------------------------------------------------
 
@@ -237,7 +238,7 @@ test-fraud: uv docker ## fraud-scoring, including one test against a real Kafka
 test-web: node ## web-banking, against a mocked gateway - no network
 	@cd edge/web-banking && npm ci --silent && npm test --silent
 
-test-batch: test-reporting ## Every batch component
+test-batch: test-reporting test-recon ## Every batch component
 
 # ---------------------------------------------------------------------------------------------
 # The reporting tests run against real PostgreSQL with the ledger's own Flyway migrations applied,
@@ -246,6 +247,13 @@ test-batch: test-reporting ## Every batch component
 # ---------------------------------------------------------------------------------------------
 test-reporting: uv docker ## reporting, against real PostgreSQL with the ledger schema
 	@cd batch/reporting && uv run pytest
+
+# ---------------------------------------------------------------------------------------------
+# recon reads both cores, so its suite needs both: real PostgreSQL for the ledger side and
+# GnuCOBOL for the end-to-end run, which executes the WP-05 overnight cycle rather than a stand-in.
+# ---------------------------------------------------------------------------------------------
+test-recon: uv docker ## recon, against real PostgreSQL and the real overnight cycle
+	@cd batch/recon && uv run pytest
 
 # --- lint -------------------------------------------------------------------------------------
 
@@ -274,7 +282,10 @@ lint-batch: uv ## ruff over the batch tier
 	@cd batch/reporting && uv run ruff check .
 	@cd batch/reporting && uv run ruff format --check . >/dev/null \
 		|| (echo "ruff format would change files in batch/reporting"; exit 1)
-	@echo "OK    ruff is clean over batch/reporting"
+	@cd batch/recon && uv run ruff check .
+	@cd batch/recon && uv run ruff format --check . >/dev/null \
+		|| (echo "ruff format would change files in batch/recon"; exit 1)
+	@echo "OK    ruff is clean over batch/reporting and batch/recon"
 
 # --- run --------------------------------------------------------------------------------------
 
