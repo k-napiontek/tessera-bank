@@ -29,7 +29,7 @@ Updated by the executing session at the start and end of every work package, per
 > a measured number, not a hunch"*. It sits **off the critical path and beside the plan, not in
 > front of it**.
 >
-> **WP-15 is done and merged** ([#57](https://github.com/k-napiontek/tessera-bank/pull/57)), and
+> **WP-15 is done and merged** ([#57](https://github.com/k-napiontek/tessera-bank/pull/57), `2bf4826`), and
 > **the estate finally has a screen somebody works from rather than one somebody demonstrates.**
 > `legacy/backoffice` is JSP, JSTL and jQuery 1.7.2 on Java 8 - a second WAR beside
 > `customer-master` on the same Tomcat 8.5 - and it is deliberately unfashionable: server-rendered,
@@ -291,7 +291,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `020cee2` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `8f38ced` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `ccaa851` |
-| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `Done` | [#57](https://github.com/k-napiontek/tessera-bank/pull/57) | |
+| [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `Done` | [#57](https://github.com/k-napiontek/tessera-bank/pull/57) | `2bf4826` |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `d4dceea` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `364f7b9` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
