@@ -49,14 +49,24 @@
     <maven-install-plugin.version>3.1.2</maven-install-plugin.version>
     <maven-enforcer-plugin.version>3.4.1</maven-enforcer-plugin.version>
     <jaxws-maven-plugin.version>2.6</jaxws-maven-plugin.version>
-    <cargo-maven3-plugin.version>1.10.15</cargo-maven3-plugin.version>
     <build-helper-maven-plugin.version>3.6.0</build-helper-maven-plugin.version>
+
+    <!-- One version for Cargo, used by the plugin and by the Java API a deployment test drives it
+         through. Two properties would let the container that boots Tomcat and the library that
+         configures it drift a release apart, which fails as a NoSuchMethodError. -->
+    <cargo.version>1.10.15</cargo.version>
 
     <!-- Dependency versions. -->
     <junit.version>4.13.2</junit.version>
     <testcontainers.version>1.19.8</testcontainers.version>
     <ojdbc8.version>21.11.0.0</ojdbc8.version>
     <slf4j.version>1.7.36</slf4j.version>
+    <!-- JAX-WS RI 2.2.x, and the minor version is load-bearing. JDK 8 carries the JAX-WS 2.2 API in
+         rt.jar, on the bootclasspath, where no webapp classloader can override it - so RI 2.3 in
+         WEB-INF/lib runs its implementation against 2.2's interfaces and fails at deployment with a
+         LinkageError naming neither. 2.2.10 is also what a 2011 estate would have shipped. -->
+    <jaxws-rt.version>2.2.10</jaxws-rt.version>
+    <servlet-api.version>3.0.1</servlet-api.version>
   </properties>
 
   <dependencyManagement>
@@ -92,6 +102,34 @@
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-simple</artifactId>
         <version>${slf4j.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- The JAX-WS reference implementation, packaged into the WAR. Tomcat is a servlet container
+           and not a Java EE server, so it supplies no JAX-WS runtime of its own - the application
+           brings one, declares WSServlet in web.xml, and that is how SOAP was served in 2011. -->
+      <dependency>
+        <groupId>com.sun.xml.ws</groupId>
+        <artifactId>jaxws-rt</artifactId>
+        <version>${jaxws-rt.version}</version>
+      </dependency>
+
+      <!-- Provided, always: the container has its own and two on one classpath is a
+           ClassCastException between identical class names. -->
+      <dependency>
+        <groupId>javax.servlet</groupId>
+        <artifactId>javax.servlet-api</artifactId>
+        <version>${servlet-api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!-- Cargo's Java API. A deployment test drives the container from the test JVM rather than
+           from the POM, because the database it must be pointed at is a container whose port is
+           only known once it has started. -->
+      <dependency>
+        <groupId>org.codehaus.cargo</groupId>
+        <artifactId>cargo-core-uberjar</artifactId>
+        <version>${cargo.version}</version>
         <scope>test</scope>
       </dependency>
     </dependencies>
@@ -158,7 +196,7 @@
         <plugin>
           <groupId>org.codehaus.cargo</groupId>
           <artifactId>cargo-maven3-plugin</artifactId>
-          <version>${cargo-maven3-plugin.version}</version>
+          <version>${cargo.version}</version>
         </plugin>
         <plugin>
           <groupId>org.codehaus.mojo</groupId>

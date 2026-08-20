@@ -26,10 +26,42 @@
   <name>customer-master</name>
   <description>Customer and account metadata, exposed over WSDL-first SOAP.</description>
 
+  <properties>
+    <!--
+      The contracts live at the repository root and the WSDL imports the canonical XSD as
+      ../xsd/canonical-v1.xsd - a path relative to the WSDL's own location. So wsimport is pointed at
+      the contract IN PLACE. Copying the WSDL somewhere convenient without its sibling directory
+      breaks the import, and the error names a schema location rather than the copy that caused it.
+
+      Same idiom as services/ledger-api, which passes tessera.contracts.dir to its contract tests.
+    -->
+    <tessera.contracts.dir>${project.basedir}/../../contracts</tessera.contracts.dir>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.oracle.database.jdbc</groupId>
       <artifactId>ojdbc8</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!--
+      The JAX-WS reference implementation, packaged into WEB-INF/lib because Tomcat is a servlet
+      container and has none.
+
+      Runtime scope on purpose. The endpoint is written against javax.jws and javax.xml.ws, which
+      JDK 8 carries in rt.jar, so nothing here should ever import a com.sun.xml.ws class - and a
+      runtime-scoped dependency makes that a compile error rather than a convention.
+    -->
+    <dependency>
+      <groupId>com.sun.xml.ws</groupId>
+      <artifactId>jaxws-rt</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
       <scope>provided</scope>
     </dependency>
 
@@ -48,10 +80,173 @@
       <artifactId>slf4j-simple</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!--
+      Cargo's Java API, used to boot a real Tomcat 8.5 from the deployment test.
+
+      The container is driven from the test rather than from this POM because the database it has to
+      be pointed at is itself a container, and its port is only known once it has started. Doing it
+      from the POM would mean pinning Oracle to a fixed host port, which collides with any Oracle a
+      developer already runs.
+    -->
+    <dependency>
+      <groupId>org.codehaus.cargo</groupId>
+      <artifactId>cargo-core-uberjar</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
     <finalName>customer-master</finalName>
+
+    <plugins>
+      <!--
+        WSDL-first, which is the whole discipline of this tier: the contract is authored by hand and
+        the Java is generated from it. Nothing generated is committed - GeneratedSourcesTest asserts
+        that - so the only way for the endpoint and the contract to disagree is for the build to fail.
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>jaxws-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>generate-from-wsdl</id>
+            <goals>
+              <goal>wsimport</goal>
+            </goals>
+            <configuration>
+              <wsdlDirectory>${tessera.contracts.dir}/wsdl</wsdlDirectory>
+              <wsdlFiles>
+                <wsdlFile>customer-master-v1.wsdl</wsdlFile>
+              </wsdlFiles>
+              <!-- One package for both namespaces. The alternative is two external binding files
+                   whose schemaLocation is five directories of relative path away from the schema
+                   they bind, which breaks silently the first time anything moves. -->
+              <packageName>bank.tessera.customer.ws</packageName>
+              <sourceDestDir>${project.build.directory}/generated-sources/wsimport</sourceDestDir>
+              <keep>true</keep>
+              <!-- Generate only. The generator's own javac answers to nothing this build controls,
+                   and BytecodeVersionTest holds every class in target/classes to Java 8. -->
+              <xnocompile>true</xnocompile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Two compilations, because the estate's -Werror gate must not be weakened to accommodate a
+        code generator.
+
+        wsimport emits exactly one warning: ServiceFaultMessage extends Exception and declares no
+        serialVersionUID, which is [serial]. That warning is unfixable without editing generated
+        code, and switching -Werror off for the module would take the gate away from the ~2000 lines
+        a person wrote in order to accommodate 20 files nobody did.
+
+        So the generated tree compiles first, in process-sources, with [serial] alone suppressed;
+        the hand-written tree compiles in the usual phase under the parent's unmodified flags and
+        finds the generated classes already in target/classes. The two never overlap, which is why
+        the endpoint lives in bank.tessera.customer.endpoint and the generated code in .ws.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>compile-generated-sources</id>
+            <phase>process-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <includes>
+                <include>bank/tessera/customer/ws/**</include>
+              </includes>
+              <compilerArgs>
+                <arg>-Xlint:all</arg>
+                <arg>-Xlint:-serial</arg>
+                <arg>-Werror</arg>
+              </compilerArgs>
+            </configuration>
+          </execution>
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <excludes>
+                <exclude>bank/tessera/customer/ws/**</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        The WAR carries the authored contract, copied at build time rather than kept as a second
+        copy in this module. A WSDL that is edited in one place and served from another is the
+        drift this whole tier is arranged to prevent.
+
+        The two contract directories keep their own shape underneath WEB-INF/wsdl, because the WSDL
+        imports the schema as ../xsd/canonical-v1.xsd and that path has to still mean something
+        after the copy. WEB-INF/wsdl is where the RI looks for the documents it publishes, so both
+        have to sit inside it - which is why the path reads WEB-INF/wsdl/wsdl and is not a typo.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <configuration>
+          <webResources>
+            <resource>
+              <directory>${tessera.contracts.dir}/wsdl</directory>
+              <targetPath>WEB-INF/wsdl/wsdl</targetPath>
+              <includes>
+                <include>customer-master-v1.wsdl</include>
+              </includes>
+            </resource>
+            <resource>
+              <directory>${tessera.contracts.dir}/xsd</directory>
+              <targetPath>WEB-INF/wsdl/xsd</targetPath>
+              <includes>
+                <include>canonical-v1.xsd</include>
+              </includes>
+            </resource>
+          </webResources>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <!--
+        The deployment test runs here rather than in surefire because it needs the WAR, and the WAR
+        does not exist until package. That is the whole reason failsafe exists.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>deployment-test</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+            <tessera.war>${project.build.directory}/${project.build.finalName}.war</tessera.war>
+            <tessera.tomcat.work>${project.build.directory}/tomcat</tessera.tomcat.work>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 
 </project>

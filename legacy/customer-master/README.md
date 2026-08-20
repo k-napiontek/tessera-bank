@@ -8,9 +8,12 @@ Implements [`contracts/wsdl/`](../../contracts/wsdl/). Built with Maven 3 under 
 
 ```bash
 make jdk8          # which JDK 8 the build will use
-make test-legacy   # the suite, including PL/SQL against real Oracle - needs Docker
-make build-legacy  # target/customer-master.war
+make test-legacy   # the whole suite: PL/SQL on real Oracle, and the WAR on a real Tomcat 8.5
+make build-legacy  # target/customer-master.war, without touching a database
 ```
+
+`make test-legacy` runs `mvn verify`, not `mvn test`, because the deployment test needs a WAR and a
+WAR does not exist until `package`. Needs Docker, and network on the first run.
 
 ## What is here
 
@@ -22,12 +25,62 @@ make build-legacy  # target/customer-master.war
 | Database | Oracle dialect: `VARCHAR2`, `NUMBER`, sequences, `REGEXP_LIKE` constraints |
 | Business logic | PL/SQL packages, where a 2011 team put it |
 | Data access | Plain JDBC over `CallableStatement`. No ORM, no framework, no pool of its own |
+| Interface | WSDL-first JAX-WS, SOAP 1.1, document/literal wrapped. See [ADR 0013](../../docs/governance/adr/0013-contract-first-soap-for-the-customer-master.md) |
+| Packaging | A WAR with the JAX-WS RI in `WEB-INF/lib`, deployed to Tomcat 8.5 by the test |
 
 `src/main/resources/db/migration/` holds the versioned scripts, applied in the order
 `scripts.list` gives. `V1` is the schema, `V2` is `PKG_ACCOUNT` (reads), `V3` is `PKG_POSTING`
 (applying a posted transfer). There is no SQL in the Java at all: the DAO calls a procedure and maps
 what comes back, which is exactly why migrating this component off Oracle is hard. That difficulty is
 the point - see [TD-005](../../docs/technical-debt.md).
+
+## The SOAP endpoint
+
+**Generated from the contract, never the other way round.** `wsimport` runs over
+[`contracts/wsdl/customer-master-v1.wsdl`](../../contracts/wsdl/customer-master-v1.wsdl) at
+`generate-sources` and produces `CustomerMasterPortType` into `target/generated-sources/wsimport`.
+`CustomerMasterEndpoint` implements that interface, so it cannot compile unless it answers exactly
+the operations the contract declares. **Nothing generated is committed**, and `GeneratedCodeTest`
+fails the build if it ever is.
+
+The WSDL is read from `contracts/` **in place**, because it imports the canonical schema as
+`../xsd/canonical-v1.xsd` - a path relative to the WSDL's own location. A copy without its sibling
+directory fails generation with an error naming the schema rather than the copy.
+
+Three things about the build are worth knowing before changing it:
+
+- **Generated sources are compiled separately.** The parent POM forces `-Xlint:all -Werror` on every
+  module, and `wsimport` emits one unfixable warning: the generated fault class extends `Exception`
+  and declares no `serialVersionUID`. Rather than weaken the gate for the code a person wrote, the
+  generated tree compiles in its own execution with `[serial]` alone suppressed. `BytecodeVersionTest`
+  still holds every resulting class to Java 8 bytecode.
+- **`NotifyTransferPosted` has an awkward signature** - `void` with two `Holder` out-parameters -
+  because its response wrapper carries two elements, and that is what JAX-WS wrapper style does with
+  two. It was left as generated. Adding a binding customisation to make it prettier would be the code
+  deciding what the contract says.
+- **The WAR carries the authored contract**, copied at build time into `WEB-INF/wsdl/wsdl/` and
+  `WEB-INF/wsdl/xsd/`. The doubled `wsdl` in that path is not a typo: the RI publishes documents from
+  `WEB-INF/wsdl`, and the contract's own `wsdl/` and `xsd/` shape has to survive inside it so the
+  relative import still resolves.
+
+## Deploying it, in a test
+
+`CustomerMasterDeploymentIT` fetches Tomcat 8.5.100 into `target/`, binds a JNDI `DataSource` onto
+the Oracle container, deploys `customer-master.war`, and calls all three operations over HTTP with a
+client generated from the same contract. `mvn package` succeeding is not the same statement as "the
+WAR deploys", and the difference is where a missing listener class, an unbound JNDI name or a
+JAX-WS runtime that disagrees with the one in `rt.jar` all live.
+
+Two findings from that test are recorded because both are counter-intuitive:
+
+- Take the contract out of the WAR and the RI does not fall back to generating one - the endpoint
+  fails to publish at all.
+- The `wsdl` attribute in `sun-jaxws.xml` and `wsdlLocation` on `@WebService` are both redundant
+  while exactly one document sits under `WEB-INF/wsdl`; the RI finds it either way. They stay because
+  a reader should not have to infer which document is served from a directory listing.
+
+Nothing container-shaped is committed and nothing survives `mvn clean`, so
+[ADR 0001](../../docs/governance/adr/0001-source-only-repository.md) holds.
 
 ## Running the tests against real Oracle
 
@@ -39,6 +92,10 @@ run pulls roughly 2GB; the container starts once per module.
 
 Testcontainers in a 2011 tier is an anachronism and a deliberate one: the pinned stack constrains
 what ships, not what runs the tests.
+
+`mvn verify` starts Oracle **twice**, once for surefire and once for failsafe, because they are
+separate JVMs and the container is shared per JVM. That is accepted rather than worked around:
+switching the container to Testcontainers' reuse mode would leave Oracle running after every build.
 
 ## Two things that look like defects and are not
 
@@ -76,7 +133,14 @@ it. Three properties are worth knowing:
 `ACCT_NOT_FOUND` is the only code the WSDL names. `PKG_POSTING` raises three more -
 `ACCT_CURRENCY_MISMATCH`, `AMOUNT_NOT_POSITIVE`, `SAME_ACCOUNT` - carried as Oracle error numbers
 20001 to 20004 and mapped to codes **by number, never by message text**. They are not in any
-contract yet; that is a logged follow-up, not a decision.
+contract yet; that is a logged follow-up, not a decision - **F-51**, and
+[ADR 0013](../../docs/governance/adr/0013-contract-first-soap-for-the-customer-master.md)'s closing
+note scores it against what the 2011 decision promised.
+
+A message that is malformed rather than wrong - a `NotifyTransferPosted` carrying some number of
+movements other than two - is refused as a programming error and becomes a SOAP **server** fault, not
+a `ServiceFault`. The WSDL says that element is for business faults, and inventing a code for the
+other kind would put a word on the wire that no contract declares.
 
 ## Personal data
 
@@ -89,3 +153,5 @@ cannot.
 
 None of it crosses the wire. `canonical-v1.xsd` gives the estate a `customerRef` and nothing else,
 which is what keeps every other component out of scope for an erasure request.
+`CustomerMasterEndpointReadTest` asserts that - on the success path and on the fault path, because an
+error path is the second most common place personal data escapes a system.

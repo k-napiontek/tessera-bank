@@ -190,9 +190,16 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 # compatibility mode was the alternative and runs no PL/SQL at all, so the two things this stratum
 # exists to reproduce - the dialect lock-in and the stored-procedure layer - would both have been
 # reproduced by something else pretending. First run pulls ~2GB.
+#
+# `verify`, not `test`. The WAR is deployed to a real Tomcat 8.5 and called over HTTP, and that
+# needs the WAR - which does not exist until `package`. Running only the test phase here would
+# leave the one control that proves this component deploys behind a command nobody remembers, which
+# is the shape of problem F-30 already records about the audit verifier. It costs a second Oracle
+# container, because surefire and failsafe are separate JVMs, and a ~10MB Tomcat download the first
+# time.
 # ---------------------------------------------------------------------------------------------
-test-legacy: jdk8 docker ## customer-master, with the schema and PL/SQL on real Oracle
-	@JAVA_HOME="$(JAVA8)" mvn -f legacy/customer-master/pom.xml test
+test-legacy: jdk8 docker ## customer-master on real Oracle, and the WAR on a real Tomcat 8.5
+	@JAVA_HOME="$(JAVA8)" mvn -f legacy/customer-master/pom.xml verify
 
 test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
