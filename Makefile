@@ -13,7 +13,9 @@
         test-contracts test-mainframe test-legacy test-integration test-services test-edge \
         test-gateway test-fraud test-web \
         test-batch test-reporting test-recon test-customer-master test-backoffice \
-        lint-contracts lint-edge lint-batch build-web lint-web jdk8 jdk17 docker go uv node
+        lint-contracts lint-edge lint-batch build-web lint-web \
+        build-workload test-workload lint-workload \
+        jdk8 jdk17 docker go uv node
 
 # ---------------------------------------------------------------------------------------------
 # Strata 1 and 2 need a JDK 8, and the reason is the whole point of those tiers: Java 8, Spring Boot
@@ -125,7 +127,7 @@ endif
 
 # --- build ------------------------------------------------------------------------------------
 
-build: build-mainframe build-legacy build-integration build-services build-edge build-batch ## Build every tier with its native toolchain
+build: build-mainframe build-legacy build-integration build-services build-edge build-batch build-workload ## Build every tier with its native toolchain
 
 build-mainframe: ## Compile the COBOL programs (GnuCOBOL, IBM dialect)
 	@cobc -x -std=ibm -Wall -I mainframe/copybook \
@@ -155,6 +157,10 @@ build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
 		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build
 
+build-workload: go ## Build the workload model engine and its planning tool
+	@go -C workload build ./...
+	@echo "OK    workload builds"
+
 build-edge: build-web go uv ## Build the edge tier - Go, Python and TypeScript
 	@go -C edge/api-gateway build ./...
 	@echo "OK    api-gateway builds"
@@ -177,7 +183,7 @@ build-batch: uv ## Build the batch tier - Python
 
 # --- test -------------------------------------------------------------------------------------
 
-test: test-contracts test-mainframe test-legacy test-integration test-services test-edge test-batch ## Run every tier's test suite
+test: test-contracts test-mainframe test-legacy test-integration test-services test-edge test-batch test-workload ## Run every tier's test suite
 	@echo
 	@echo "OK    every tier with tests passed"
 
@@ -240,6 +246,12 @@ test-services: jdk17 docker ## Ledger domain, persistence and API, the last two 
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
 		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test
 
+# workload/ is a fixture rather than a component of the bank, and it is the only tier that needs
+# nothing installed beyond a Go toolchain: no Docker, no database, no broker. That is deliberate -
+# an engine that had to be run against something would not be an engine that performs no I/O.
+test-workload: go ## The workload model engine, under the race detector
+	@go -C workload test -race ./...
+
 test-edge: test-gateway test-fraud test-web ## Every edge component
 
 test-gateway: go ## The api-gateway, under the race detector
@@ -275,7 +287,7 @@ test-recon: uv docker ## recon, against real PostgreSQL and the real overnight c
 
 # --- lint -------------------------------------------------------------------------------------
 
-lint: lint-contracts lint-edge lint-batch ## Run every tier's linters and quality gates
+lint: lint-contracts lint-edge lint-batch lint-workload ## Run every tier's linters and quality gates
 	@echo "No linter configured for the mainframe or Java tiers yet - see quality/ and follow-up F-03."
 
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
@@ -295,6 +307,12 @@ lint-edge: go uv node ## gofmt and go vet over Go, ruff over Python, eslint over
 lint-web: node ## eslint over web-banking, with type-aware rules
 	@cd edge/web-banking && npm ci --silent && npm run lint --silent
 	@echo "OK    eslint is clean over web-banking"
+
+lint-workload: go ## gofmt and go vet over the workload engine
+	@test -z "$$(gofmt -l workload)" \
+		|| (echo "gofmt would change:"; gofmt -l workload; exit 1)
+	@go -C workload vet ./...
+	@echo "OK    gofmt and go vet are clean over workload"
 
 lint-batch: uv ## ruff over the batch tier
 	@cd batch/reporting && uv run ruff check .
