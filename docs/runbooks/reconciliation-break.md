@@ -36,6 +36,24 @@ stop and check which file you passed before reading anything else.**
 `--position` reproduces an earlier run's cut exactly. Use it when you need to show somebody the
 report as it was, not as it is now.
 
+## Working it in the back office
+
+The report is rendered by `legacy/backoffice` at `/backoffice/breaks`, which is where an operator
+works it rather than reading JSON. The screen shows the same control totals, the same ledger cut and
+the same transfer count, so everything below applies whichever way you are reading it.
+
+Two things the screen does that the file cannot:
+
+- **It shows what has already been acknowledged, and by whom.** A break somebody else is working is
+  not a break you should start on.
+- **A `TIMING` break has no button.** That is not an oversight - it is the classification saying
+  "expected", and `PKG_OPERATOR` refuses to record an acknowledgement for one even if something
+  other than the screen asks.
+
+Acknowledging is idempotent, so a double-click is one act. Annotating a reject **replaces** the note
+and the previous text survives only in the audit trail, which is append-only. Both actions record
+the operator the container authenticated, never a name typed into the page.
+
 ## Reading the report
 
 `breaks` is ascending by account reference. `totals` bounds it: `accountsCompared` always equals

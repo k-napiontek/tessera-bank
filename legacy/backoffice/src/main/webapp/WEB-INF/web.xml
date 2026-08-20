@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Servlet 3.0 deployment descriptor.
+
+  Servlet 3.0 made web.xml optional, and a 2011 team kept writing one anyway - annotations were new,
+  the operations team read this file to find out what a WAR did, and a descriptor is what the change
+  advisory board reviewed.
+-->
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+                             http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
+         version="3.0">
+
+  <display-name>backoffice</display-name>
+
+  <!--
+    Where the morning's files are. The reconciliation writes its break report to one directory and
+    the overnight cycle leaves its rejects in another; the operations team binds both to the
+    environment's own paths here, which is why no path appears anywhere in this WAR's code.
+
+    The same reasoning as customer-master's resource-ref below: one artefact, every environment.
+  -->
+  <context-param>
+    <param-name>tessera.breaks.dir</param-name>
+    <param-value>/var/tessera/recon</param-value>
+  </context-param>
+  <context-param>
+    <param-name>tessera.rejects.dir</param-name>
+    <param-value>/var/tessera/eod</param-value>
+  </context-param>
+
+  <!--
+    The two screens. Declared here rather than by @WebServlet: Servlet 3.0 made annotations
+    possible and a 2011 operations team still read this file to find out what a WAR served.
+  -->
+  <servlet>
+    <servlet-name>breaks</servlet-name>
+    <servlet-class>bank.tessera.backoffice.web.BreaksServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>breaks</servlet-name>
+    <url-pattern>/breaks</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>rejects</servlet-name>
+    <servlet-class>bank.tessera.backoffice.web.RejectsServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>rejects</servlet-name>
+    <url-pattern>/rejects</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>action</servlet-name>
+    <servlet-class>bank.tessera.backoffice.web.ActionServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>action</servlet-name>
+    <url-pattern>/action</url-pattern>
+  </servlet-mapping>
+
+  <welcome-file-list>
+    <welcome-file>index.jsp</welcome-file>
+  </welcome-file-list>
+
+  <resource-ref>
+    <description>The customer master database, shared with customer-master.</description>
+    <res-ref-name>jdbc/customerMaster</res-ref-name>
+    <res-type>javax.sql.DataSource</res-type>
+    <res-auth>Container</res-auth>
+  </resource-ref>
+
+  <!--
+    A single operator role, which is all WP-15 scopes. Real authorisation - maker/checker on an
+    acknowledgement, segregation between whoever works a break and whoever signs it off - is a
+    bigger question than this screen, and pretending to it with a second role nobody enforces would
+    be worse than the honest gap.
+
+    BASIC over the container's realm, as a 2011 internal tool did. The operations team binds the
+    realm to the bank's directory in the container's configuration, which is why no user or password
+    appears anywhere in this WAR.
+  -->
+  <security-constraint>
+    <web-resource-collection>
+      <web-resource-name>Back office</web-resource-name>
+      <url-pattern>/breaks</url-pattern>
+      <url-pattern>/rejects</url-pattern>
+      <url-pattern>/action</url-pattern>
+    </web-resource-collection>
+    <auth-constraint>
+      <role-name>operator</role-name>
+    </auth-constraint>
+  </security-constraint>
+
+  <login-config>
+    <auth-method>BASIC</auth-method>
+    <realm-name>Tessera Back Office</realm-name>
+  </login-config>
+
+  <security-role>
+    <role-name>operator</role-name>
+  </security-role>
+
+</web-app>
