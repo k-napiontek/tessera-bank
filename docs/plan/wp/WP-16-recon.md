@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1016-recon` |
 | **Stratum** | spans 0 and 3 |
 | **Depends on** | WP-05, WP-11b |
-| **Status** | `Not started` |
+| **Status** | `In progress` - see `STATUS.md` |
 
 ## Objective
 
