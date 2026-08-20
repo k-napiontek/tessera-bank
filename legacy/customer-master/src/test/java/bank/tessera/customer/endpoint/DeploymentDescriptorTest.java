@@ -107,9 +107,17 @@ public class DeploymentDescriptorTest {
     }
 
     /**
-     * The RI publishes the WSDL named here rather than one it derived from the Java. The path is
-     * inside WEB-INF/wsdl, which is where it looks, and it keeps the contract's own wsdl/ and xsd/
-     * shape so the schema import still resolves after the copy.
+     * Both declarations of the WSDL's location, held to the same string.
+     *
+     * <p>Neither is strictly load-bearing: the RI finds the single document under WEB-INF/wsdl on
+     * its own, which the deployment test established by removing both and watching nothing change.
+     * They are here because a reader of either file should be able to see which document is served
+     * without inferring it from a directory listing - and because the day a second WSDL appears
+     * under WEB-INF/wsdl, the automatic behaviour stops being unambiguous and these become the
+     * answer. That is exactly when a silent disagreement between them would cost the most.
+     *
+     * <p>The path keeps the contract's own wsdl/ and xsd/ shape so the schema import still resolves
+     * after the copy into the WAR.
      */
     @Test
     public void theEndpointPublishesTheAuthoredContract() throws Exception {

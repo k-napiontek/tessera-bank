@@ -80,6 +80,20 @@
       <artifactId>slf4j-simple</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!--
+      Cargo's Java API, used to boot a real Tomcat 8.5 from the deployment test.
+
+      The container is driven from the test rather than from this POM because the database it has to
+      be pointed at is itself a container, and its port is only known once it has started. Doing it
+      from the POM would mean pinning Oracle to a fixed host port, which collides with any Oracle a
+      developer already runs.
+    -->
+    <dependency>
+      <groupId>org.codehaus.cargo</groupId>
+      <artifactId>cargo-core-uberjar</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -204,6 +218,31 @@
         <configuration>
           <systemPropertyVariables>
             <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <!--
+        The deployment test runs here rather than in surefire because it needs the WAR, and the WAR
+        does not exist until package. That is the whole reason failsafe exists.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>deployment-test</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+            <tessera.war>${project.build.directory}/${project.build.finalName}.war</tessera.war>
+            <tessera.tomcat.work>${project.build.directory}/tomcat</tessera.tomcat.work>
           </systemPropertyVariables>
         </configuration>
       </plugin>

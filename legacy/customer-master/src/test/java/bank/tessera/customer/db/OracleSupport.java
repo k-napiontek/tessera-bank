@@ -51,6 +51,26 @@ public final class OracleSupport {
         return dataSource;
     }
 
+    /**
+     * The coordinates, for a process that is not this JVM.
+     *
+     * <p>The deployment test hands them to a Tomcat it starts alongside, which binds a DataSource of
+     * its own onto the same container. Testcontainers maps the listener to an ephemeral host port,
+     * so these cannot be constants - which is the whole reason that test drives Cargo from Java
+     * rather than configuring it in the POM.
+     */
+    public static String jdbcUrl() {
+        return CONTAINER.getJdbcUrl();
+    }
+
+    public static String username() {
+        return CONTAINER.getUsername();
+    }
+
+    public static String password() {
+        return CONTAINER.getPassword();
+    }
+
     public static Connection connection() throws SQLException {
         return DriverManager.getConnection(
                 CONTAINER.getJdbcUrl(), CONTAINER.getUsername(), CONTAINER.getPassword());
