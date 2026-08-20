@@ -29,16 +29,50 @@ Updated by the executing session at the start and end of every work package, per
 > a measured number, not a hunch"*. It sits **off the critical path and beside the plan, not in
 > front of it**.
 >
-> **WP-11b is in progress.** Its dependencies are `Done` - 11a and WP-05 - and its task list is
-> detailed. It is the 2011-to-1995 hop: the COMP-3 encoder tested byte-for-byte against the
-> mainframe's own fixtures, the fixed-width `MOVEMENT.DAT` writer, and the transfer arriving in the
-> COBOL account master through the WP-05 overnight cycle.
+> **WP-15 is next by the protocol's rule** - the lowest-numbered package that is `Not started` with
+> every dependency `Done`. `legacy/backoffice`, JSP and jQuery on stratum 1, depending on WP-10b
+> which merged. **It is frame-only**, so a session picking it up fills in its task list and has it
+> reviewed before writing code - F-02, and the `/work-package` skill halts on it. **WP-16** is also
+> unblocked now that 11b has landed, since what it needed was the movement file rather than the SOAP
+> hop, and it is the one on the critical path: reconciling the COBOL master against the ledger is
+> what makes the strangler fig safe, and it is now genuinely possible because a transfer really does
+> reach both. WP-16 is frame-only too.
 >
-> Three decisions were taken with the repository owner before any code was written, and each is in
-> the decision log below: **the movement file is its own unique constraint** rather than the far
-> end's `alreadyApplied`; **the four-era run is a failsafe integration test**, not a walkthrough
-> script, so it cannot rot; and the write mechanism gets **an ADR**, since nothing in the estate has
-> yet recorded how a modern tier writes into a 1995 file interface.
+> **WP-11b is done and merged** ([#51](https://github.com/k-napiontek/tessera-bank/pull/51)), and
+> **one transfer now crosses all four eras.** A payment published as a 2023 Kafka event becomes
+> canonical XML by XSLT, reaches a 2011 SOAP endpoint deployed as its own WAR on a real Tomcat 8.5
+> over real Oracle, is encoded into two COMP-3 packed-decimal records in a fixed-width file, and is
+> applied to the COBOL account master by the **real** GnuCOBOL overnight cycle. `FourEraTransferIT`
+> asserts the balance moved by the same amount in 2011 and in 1995, then redelivers the event and
+> asserts the movement file is byte-identical. That is what section 3 of the master plan describes,
+> and until this package nothing had done it.
+>
+> **The movement file is its own unique constraint** - [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md).
+> WP-11a delegated idempotency to the far end's unique index and kept no record of its own; a file
+> has no index to delegate to. Reusing `alreadyApplied` would have been one line and would have lost
+> a movement for ever whenever the process died between the SOAP call returning and the record
+> landing - the redelivery would be told "already applied" and write nothing. So the writer asks the
+> **file**, under the same exclusive lock it appends under: a seek over `MOV-TRANSFER-REF` at a
+> 120-byte stride, over the key field only, never over the file as text. The test that pins this is
+> the only one that fails if the bridge is changed to trust the answer instead.
+>
+> **A partial write is undone rather than tolerated.** Both legs go out in one write and are forced
+> to disk together; any failure truncates the file back to its previous length. A file that is
+> already not a whole number of records is refused outright, because `sortrec.py` abends `STEP010`
+> on one - and an abend at 02:00 naming another program is a much worse way to find out.
+>
+> **The encoder is held to bytes it did not produce.** The canonical model's worked examples as
+> literals, and `ACCT-BOOKED-BAL` read straight out of the mainframe's own generated fixtures, whose
+> WP-03 seeds exist for exactly this: zero, the maximum representable balance, and the `+1`/`-1` pair
+> where the fifteenth digit shares the last byte with the sign. Writing `0x0F` for positive fails
+> seven of twelve. `MovementRecordTest` compares a whole 120-byte record against one the generator
+> wrote, and takes its field offsets from `contracts/check-copybook-offsets.py --json MOVEREC` -
+> a view added to the contracts checker **before** the writer that consumes it - rather than counting
+> characters.
+>
+> **This tier does not sort**, and there is a comment saying so where somebody would otherwise add
+> one. `STEP010` of the cycle is what puts the file in `MOV-ACCT-REF` order, and that is the entire
+> reason that step exists.
 >
 > **WP-11a is done and merged** ([#49](https://github.com/k-napiontek/tessera-bank/pull/49), `1e58d38`), and
 > **the modern half of the estate now reaches the old one**. A transfer posted to the ledger is
@@ -166,7 +200,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `Done` | [#37](https://github.com/k-napiontek/tessera-bank/pull/37) | `d6051d8` |
 | [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Done` | [#45](https://github.com/k-napiontek/tessera-bank/pull/45) | `f43ce3f` |
 | [11a](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP | 2 | 09, 10b | `Done` | [#49](https://github.com/k-napiontek/tessera-bank/pull/49) | `1e58d38` |
-| [11b](wp/WP-11-esb-adapter.md) | `esb-adapter` - COMP-3 encoding, movement file, end-to-end cycle | 2 | 11a, 05 | `In progress` | | |
+| [11b](wp/WP-11-esb-adapter.md) | `esb-adapter` - COMP-3 encoding, movement file, end-to-end cycle | 2 | 11a, 05 | `Done` | [#51](https://github.com/k-napiontek/tessera-bank/pull/51) | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `4562165` |
@@ -276,7 +310,10 @@ becomes its own change when picked up.
 | F-58 | WP-10b | **`NotifyTransferPosted` does not cross-check the movements against the transfer they claim to be legs of.** The endpoint reads one thing from them - the value date, which is a property of a leg and not of a transfer - and takes the accounts, the amount and the currency from the `tb:Transfer`. So a message whose two `tb:Movement` elements name different accounts, a different amount, a different transferRef or two debits is applied exactly as if they agreed. The schema cannot catch it: it enforces two movements, not two movements that mean the same thing as the transfer around them. Refusing such a message needs a fault code, the WSDL declares none that fits, and inventing one would widen F-51 from a recorded gap into a second one - so it was recorded rather than taken. The estate's own principle argues for the check: a core does not trust its feeds, and WP-11 is the feed. | Open |
 | F-59 | WP-10b | **Crypto-shredding is described in the GDPR data map and not built.** `gdpr-data-map.md` names it as the preferred resolution to the erasure problem, and nothing in this repository encrypts an identity column or manages a key. The document says so in its own banner rather than implying otherwise, which is the honest position but not a closed one: the estate's claim is that erasure is *possible* without destroying the accounting record, and the mechanism that would make it possible does not exist. It needs a key per subject, a key store, a destruction procedure that is itself audited, and an answer for backups taken before the destruction - none of which is a WP-10b-sized change, and the retention period it would run against is the regulatory question F-28 already records. | Open |
 | F-60 | WP-11a | **`requestedAt` is sent as `postedAt`, because the ledger's event carries no request timestamp.** `tb:Transfer` makes `requestedAt` mandatory and `TransferPostedPayload` has only `postedAt`, so the integration tier cannot know when the customer asked. It sends `postedAt` - the tightest upper bound it can defend, since a transfer is requested no later than it is posted - and that is a substitution rather than a fact. A consumer comparing the two will find them always equal, and `customer-master` stores neither, so nothing notices today. The fix is in another package's contract either way: the event gains `requestedAt` (WP-02 plus WP-09) or the schema stops requiring it (WP-02, which would also affect stratum 1). WP-11's Out of scope forbids changing either from an ESB branch, so the substitution is stated in the stylesheet, in the README and in a test that asserts the two timestamps are equal - so the day the event gains a real one, that test fails and names what has to change. | Open |
-| F-61 | WP-11a | **Two pieces of test scaffolding are now duplicated between strata 1 and 2.** The ESB's end-to-end test boots Tomcat through Cargo and applies stratum 1's SQL scripts, and stratum 1's own tests do both already. Sharing them would mean either publishing stratum 1's test classes as an artefact or making stratum 2's build depend on stratum 1's - and WP-11's Out of scope is explicit that this package adapts what it sits between without modifying it, which rules out changing `customer-master`'s POM to attach a classes jar. Copied test scaffolding was the cheaper mistake, and the copy of the Oracle script splitter is the part that will rot: it re-implements the `/`-terminator rule that `SqlScript` already encodes, and the two can now disagree about a package body. | Open |
+| F-61 | WP-11a | **Two pieces of test scaffolding are now duplicated between strata 1 and 2.** The ESB's end-to-end test boots Tomcat through Cargo and applies stratum 1's SQL scripts, and stratum 1's own tests do both already. Sharing them would mean either publishing stratum 1's test classes as an artefact or making stratum 2's build depend on stratum 1's - and WP-11's Out of scope is explicit that this package adapts what it sits between without modifying it, which rules out changing `customer-master`'s POM to attach a classes jar. Copied test scaffolding was the cheaper mistake, and the copy of the Oracle script splitter is the part that will rot: it re-implements the `/`-terminator rule that `SqlScript` already encodes, and the two can now disagree about a package body. **Worse after WP-11b**: `FourEraTransferIT` boots the same Cargo/Tomcat/Oracle scaffolding a second time within stratum 2 itself, so the copy is now made twice inside one module as well as once across two. Sharing it between the two test classes is a small change and is the obvious first step; sharing it across strata is still the one Out of scope forbids from here. | Open |
+| F-62 | WP-11b | **The movement file's duplicate check is linear in the size of the file.** Before appending, `MovementFileWriter` reads `MOV-TRANSFER-REF` out of every record already there - a seek at a 120-byte stride rather than a parse, and correct for a bank day's volume, which is what [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md) commits to. It is **unmeasured at any other volume**, and the ADR says so rather than implying otherwise. The answer if it ever matters is an index beside the file, not a store inside the adapter - but the estate's rule for this kind of change is F-27's: worth revisiting only with a measured number, not a hunch. WP-21 and WP-23 are where the number comes from. | Open |
+| F-63 | WP-11b | **`run-eod.sh --help` documents two of its seven arguments.** `usage()` prints the header comment, which names only `--business-date` and `--steps`; `--master`, `--movements`, `--work`, `--run-ts` and `--rerun` are all implemented and none is mentioned. WP-11b's four-era test depends on three of them and found this by reading the source, which is not how an operator at 03:00 finds it - and `--rerun` in particular is the one flag the runbook warns about. Stratum 0's file, owned by WP-05, so not fixed from an integration branch. | Open |
+| F-64 | WP-11b | **Five of the six requirement ids in `canonical-data-model.md`'s traceability table name a different requirement than the catalogue does.** The catalogue in this matrix is the authority - `CLAUDE.md` records the fourteen collisions that made it so - and that document disagrees with it: it gives REQ-LED-001 as "Money is minor units plus an ISO 4217 code" where the catalogue says "Journal entries always balance", REQ-LED-003 as "Double-entry postings are balanced and immutable" where the catalogue says "Money is exact and currency-aware" (the two look **swapped**), REQ-LED-002 and REQ-DP-002 as different requirements entirely, and REQ-MF-001 as "Packed-decimal amounts are byte-identical across tiers" where the catalogue says "Record layouts are defined once and shared". Only REQ-INT-006 agrees. This is the F-11 defect exactly, in the one document F-11's fix did not sweep - and it is live rather than cosmetic: WP-11b nearly copied the model's wording for REQ-MF-001 into this matrix, which would have put two different sentences under one id in the authority itself. `canonical-data-model.md` is WP-02's. | Open |
 
 ---
 
