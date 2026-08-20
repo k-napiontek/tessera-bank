@@ -29,13 +29,25 @@ Updated by the executing session at the start and end of every work package, per
 > a measured number, not a hunch"*. It sits **off the critical path and beside the plan, not in
 > front of it**.
 >
-> **WP-11 is next, and it is frame-only.** Its dependencies are both `Done` - WP-09 and WP-10b - so
-> nothing blocks it, but its task list has never been filled in. Per F-02 a session picking it up
-> must detail it and have the detail reviewed **before** writing code; the `/work-package` skill
-> halts on exactly this. WP-11 is the bridge between eras and the most interesting engineering in the
-> plan: consume the ledger's Kafka event, transform canonical JSON to canonical XML by XSLT, call
-> `customer-master` over SOAP, and encode a fixed-width `MOVEREC` in COMP-3 for the mainframe. It is
-> the last thing standing between the ledger and stratum 0.
+> **WP-11a is next, and it is now detailed.** WP-11 has been **split in the plan into 11a and 11b**,
+> the second package to be split this way and the third at this size; detailed out it spans a Spring
+> Boot module, a Kafka consumer, an XSLT transformation, a generated SOAP client, a packed-decimal
+> encoder and a fixed-width file the overnight COBOL cycle reads. The split falls on the **era
+> boundary each half crosses**: 11a is 2019 to 2011 - Kafka event, canonical XML by XSLT, SOAP to
+> `customer-master`; 11b is 2011 to 1995 - COMP-3, `MOVEMENT.DAT`, and the transfer arriving in the
+> COBOL master overnight. That line is forced rather than chosen: nothing may be written to the
+> movement file unless the SOAP call succeeded, so the file half is downstream of the SOAP half in
+> the running code as well as in the plan.
+>
+> Two decisions were taken with the repository owner while detailing it. **The SOAP hop is tested
+> against the real `customer-master` WAR**, deployed to a real Tomcat 8.5 against real Oracle, not a
+> stub - a stub verifies what the ESB says and never that the far end understands it, which is the
+> entire risk when two independently generated clients meet. And the module is **Maven inheriting the
+> corporate parent POM**, so the Java 8 pin is enforced by the same rule that enforces it at stratum
+> 1 rather than by a second one that can disagree.
+>
+> **WP-11b's end-to-end run is the first time a single transfer crosses all four eras**, which is what
+> the master plan's section 3 describes and what nothing in this repository has yet done.
 >
 > **WP-10b is done and merged**
 > ([#45](https://github.com/k-napiontek/tessera-bank/pull/45), `f43ce3f`). **Stratum 1 is complete.** The system
@@ -70,11 +82,11 @@ Updated by the executing session at the start and end of every work package, per
 > build system, a database, a stored-procedure layer, a SOAP endpoint, a WAR and a deployment test.
 > After WP-09 this file recorded that the right answer at that size is to split the package in the
 > plan rather than the pull request; this is the first package to do it. WP-11 and WP-15 wait on
-> **10b**, WP-16 on WP-11, WP-18 on WP-16.
+> **10b**, WP-16 on **11b**, WP-18 on WP-16.
 >
 > Every package below is frame-only until detailed - F-02 - so a session picking one up must fill in
-> its task list and have it reviewed first. **WP-10 is now detailed**, both halves; WP-11, WP-15,
-> WP-16 and WP-18 are not.
+> its task list and have it reviewed first. **WP-10 and WP-11 are now detailed**, both halves each;
+> WP-15, WP-16 and WP-18 are not.
 >
 > **Stratum 4 is complete.** `edge/api-gateway` (Go) authenticates a bearer token with the algorithm
 > pinned, routes only what the OpenAPI contract declares, limits each caller per route, and forwards
@@ -138,12 +150,13 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d450de4`, `53f5831` |
 | [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `Done` | [#37](https://github.com/k-napiontek/tessera-bank/pull/37) | `d6051d8` |
 | [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Done` | [#45](https://github.com/k-napiontek/tessera-bank/pull/45) | `f43ce3f` |
-| [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10b | `Not started` | | |
+| [11a](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP | 2 | 09, 10b | `Not started` | | |
+| [11b](wp/WP-11-esb-adapter.md) | `esb-adapter` - COMP-3 encoding, movement file, end-to-end cycle | 2 | 11a, 05 | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `2bd7952` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `b242380` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `4562165` |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b | `Not started` | | |
-| [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11 | `Not started` | | |
+| [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Not started` | | |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `a9012ce` |
@@ -152,16 +165,16 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [22](wp/WP-22-ledger-data-volume.md) | Ledger data volume - a production-shaped database | 3 | 20, 09 | `Not started` | | |
 | [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Not started` | | |
 | [24](wp/WP-24-failure-injection.md) | Failure injection and the soak run | - | 23 | `Not started` | | |
-| [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11 | `Not started` | | |
+| [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11b | `Not started` | | |
 
 ## Critical path
 
 ```
-01 -> 02 -+-> 06 -> 07 -> 08 -> 09 -+-> 11 -> 16 -> 18
-          |                          |
-          +-> 03 -> 04 -> 05 --------+
-          |                          |
-          +-> 10a -> 10b ------------+
+01 -> 02 -+-> 06 -> 07 -> 08 -> 09 -+-> 11a -> 11b -> 16 -> 18
+          |                         |           ^
+          +-> 03 -> 04 -> 05 -------+-----------+
+          |                         |
+          +-> 10a -> 10b -----------+
 ```
 
 The workload strand hangs off the contracts, not off the ledger:
@@ -171,7 +184,7 @@ The workload strand hangs off the contracts, not off the ledger:
 02 -> 20 -----+        +-> 23 -> 24
               +-> 22 --+
               |
-              +-> 25   (also needs 05, 10b, 11)
+              +-> 25   (also needs 05, 10b, 11b)
 ```
 
 `12`, `13`, `14`, `15`, `17`, `19` and `20` to `25` sit off the critical path and can be taken
@@ -189,7 +202,7 @@ becomes its own change when picked up.
 | # | Raised in | Description | Status |
 |---|---|---|---|
 | F-01 | WP-01 | `git init` has not been run, so the branch-protection hook is inert. | **Closed** - repository initialised on `main` with a baseline commit, 2026-08-17 |
-| F-02 | WP-01 | Work packages carry frame only until detailed. **WP-02 is now fully detailed.** WP-03 to WP-18 still need their task lists filled in before execution; the `/work-package` skill halts on any package that has not been. | Open |
+| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each. **WP-15, WP-16 and WP-18 still carry frame only**, as do WP-21 to WP-25 in the workload strand (WP-20 is detailed). A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
 | F-03 | WP-01 | `quality/` holds no linter rule files yet. Each is added by the work package that first needs it, so the rules land with code to check. | Open |
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
@@ -340,3 +353,5 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-20 | **The endpoint's WSDL declarations are belt and braces over an automatic behaviour, and that was established by mutation rather than assumed.** Removing the contract from the WAR does **not** make the RI publish a WSDL derived from the Java - the endpoint fails to publish at all, so carrying the authored contract is a precondition of serving anything. And removing *both* the `wsdl` attribute in `sun-jaxws.xml` and `wsdlLocation` on `@WebService` changes nothing, because the RI finds the single document under `WEB-INF/wsdl` by itself. They stay, and the test javadoc was corrected to claim only what it demonstrates: a reader should not have to infer which document is served from a directory listing, and the day a second WSDL appears there the automatic behaviour stops being unambiguous. |
 | 2026-08-20 | **A malformed `NotifyTransferPosted` is a SOAP server fault, not a `ServiceFault`.** The WSDL says that element is for business faults, and a message carrying some number of movements other than two is a producer defect rather than a business refusal. Dressing it as a `ServiceFault` would need a fault code, none fits, and inventing one puts a word on the wire that no contract declares - which is F-51 made worse rather than a gap recorded. The same reasoning is why the movements are not cross-checked against the transfer: see F-58. |
 | 2026-08-20 | **`make test-legacy` runs `mvn verify`, not `mvn test`.** The deployment test needs a WAR and a WAR does not exist until `package`, so bound to `integration-test` it would never have run under the old target - and therefore never under `make test`. A deployment control that only runs when somebody remembers is the shape of problem F-30 already records about the audit verifier. It costs a second Oracle container per run, because surefire and failsafe are separate JVMs and the container is shared per JVM, and a ~10MB Tomcat download the first time. Accepted rather than worked around: Testcontainers reuse would leave Oracle running after every build. |
+| 2026-08-20 | **WP-11 is split in the plan into 11a and 11b, on the era boundary each half crosses.** The third package to reach the size where this log's answer is to split the package rather than the pull request, after WP-09 (which split too late, into two PRs) and WP-10. The line is not arbitrary: this package already carried the constraint that **nothing may be written to the movement file unless the SOAP call succeeded**, so the file half is downstream of the SOAP half in the running code. Splitting anywhere else would have put half of one transaction in each pull request. `WP-16` and `WP-25` now depend on **11b** specifically, because what they need is the movement file rather than the SOAP hop. |
+| 2026-08-20 | **The ESB's SOAP hop will be tested against the really-deployed `customer-master` WAR, not a stub.** Two independently generated clients meet there - `customer-master` generated its server interface from `customer-master-v1.wsdl`, and the ESB will generate a client from the same document - and nothing guarantees they agree until a real call is made. A stub verifies what the sender says; only the far end verifies that it is understood. The precedent is WP-14's live walkthrough, which found three defects that a passing hermetic suite of 120 tests had missed. It costs a Tomcat and an Oracle in the ESB's own test run, which is the price of the control rather than an accident of it. |
