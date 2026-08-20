@@ -45,6 +45,26 @@
       <scope>provided</scope>
     </dependency>
 
+    <!--
+      The JAX-WS reference implementation, packaged into WEB-INF/lib because Tomcat is a servlet
+      container and has none.
+
+      Runtime scope on purpose. The endpoint is written against javax.jws and javax.xml.ws, which
+      JDK 8 carries in rt.jar, so nothing here should ever import a com.sun.xml.ws class - and a
+      runtime-scoped dependency makes that a compile error rather than a convention.
+    -->
+    <dependency>
+      <groupId>com.sun.xml.ws</groupId>
+      <artifactId>jaxws-rt</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -143,6 +163,39 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+
+      <!--
+        The WAR carries the authored contract, copied at build time rather than kept as a second
+        copy in this module. A WSDL that is edited in one place and served from another is the
+        drift this whole tier is arranged to prevent.
+
+        The two contract directories keep their own shape underneath WEB-INF/wsdl, because the WSDL
+        imports the schema as ../xsd/canonical-v1.xsd and that path has to still mean something
+        after the copy. WEB-INF/wsdl is where the RI looks for the documents it publishes, so both
+        have to sit inside it - which is why the path reads WEB-INF/wsdl/wsdl and is not a typo.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <configuration>
+          <webResources>
+            <resource>
+              <directory>${tessera.contracts.dir}/wsdl</directory>
+              <targetPath>WEB-INF/wsdl/wsdl</targetPath>
+              <includes>
+                <include>customer-master-v1.wsdl</include>
+              </includes>
+            </resource>
+            <resource>
+              <directory>${tessera.contracts.dir}/xsd</directory>
+              <targetPath>WEB-INF/wsdl/xsd</targetPath>
+              <includes>
+                <include>canonical-v1.xsd</include>
+              </includes>
+            </resource>
+          </webResources>
+        </configuration>
       </plugin>
 
       <plugin>

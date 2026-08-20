@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The JAX-WS RI endpoint declaration.
+
+  Tomcat is a servlet container, not a Java EE server, so it ships no JAX-WS runtime of its own. The
+  application brings the reference implementation in WEB-INF/lib, this file tells it which class
+  serves which port, and web.xml maps the RI's servlet at the path. That is how a WAR served SOAP in
+  2011 and it is why a Java EE server was worth paying for.
+
+  The wsdl attribute is the load-bearing one. Without it the RI generates a WSDL by reflecting over
+  the implementation class - which produces a document that describes whatever the Java happens to
+  be, rather than publishing the contract the Java was generated from. The two look alike right up
+  until they do not.
+-->
+<endpoints xmlns="http://java.sun.com/xml/ns/jax-ws/ri/runtime" version="2.0">
+
+  <endpoint name="CustomerMaster"
+            implementation="bank.tessera.customer.endpoint.CustomerMasterEndpoint"
+            wsdl="WEB-INF/wsdl/wsdl/customer-master-v1.wsdl"
+            service="{http://services.tesserabank.example/customer-master/v1}CustomerMasterService"
+            port="{http://services.tesserabank.example/customer-master/v1}CustomerMasterPort"
+            url-pattern="/services/CustomerMasterService"/>
+
+</endpoints>

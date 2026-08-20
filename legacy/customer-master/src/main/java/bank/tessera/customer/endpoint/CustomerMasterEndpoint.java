@@ -36,15 +36,23 @@ import javax.xml.ws.Holder;
         serviceName = "CustomerMasterService",
         portName = "CustomerMasterPort",
         targetNamespace = "http://services.tesserabank.example/customer-master/v1",
-        endpointInterface = "bank.tessera.customer.ws.CustomerMasterPortType")
+        endpointInterface = "bank.tessera.customer.ws.CustomerMasterPortType",
+        // The authored contract, carried in the WAR and published verbatim. Drop this and the RI
+        // publishes a WSDL it derived from these annotations instead - a description of the code
+        // rather than the contract the code was generated from.
+        wsdlLocation = "WEB-INF/wsdl/wsdl/customer-master-v1.wsdl")
 public class CustomerMasterEndpoint implements CustomerMasterPortType {
 
     /**
      * The container supplies the DataSource, which is how a WAR got one before dependency injection
      * was something a bank had heard of. Declared as a resource-ref in web.xml and bound by the
      * container to whatever the environment's database happens to be.
+     *
+     * <p>Not private: DeploymentDescriptorTest holds this string and the resource-ref in web.xml to
+     * the same value, because the two drifting apart is a deployment that fails at the first
+     * request with a message naming neither of them.
      */
-    private static final String DATA_SOURCE_NAME = "java:comp/env/jdbc/customerMaster";
+    static final String DATA_SOURCE_NAME = "java:comp/env/jdbc/customerMaster";
 
     private final AccountDao accounts;
 
