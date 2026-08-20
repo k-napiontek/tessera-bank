@@ -14,4 +14,41 @@
 
   <display-name>customer-master</display-name>
 
+  <!--
+    The RI reads sun-jaxws.xml when the context starts and publishes the endpoints it names. It has
+    to be a listener rather than servlet init, because the endpoint has to exist before the first
+    request arrives at the mapping below.
+  -->
+  <listener>
+    <listener-class>com.sun.xml.ws.transport.http.servlet.WSServletContextListener</listener-class>
+  </listener>
+
+  <servlet>
+    <servlet-name>customer-master</servlet-name>
+    <servlet-class>com.sun.xml.ws.transport.http.servlet.WSServlet</servlet-class>
+    <!-- Published at deployment, not on the first call: a WAR that cannot reach its database should
+         fail in front of whoever deployed it. -->
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>customer-master</servlet-name>
+    <!-- The path in the contract's soap:address, under the /customer-master context root. A
+         DeploymentDescriptorTest holds the three of them to the same string. -->
+    <url-pattern>/services/CustomerMasterService</url-pattern>
+  </servlet-mapping>
+
+  <!--
+    The database, supplied by the container. A 2011 application declared what it needed here and the
+    operations team bound it to the environment's own database in the container's configuration -
+    which is why no connection string appears anywhere in this WAR, and why the same artefact
+    deploys to test and to production unchanged.
+  -->
+  <resource-ref>
+    <description>The customer master database.</description>
+    <res-ref-name>jdbc/customerMaster</res-ref-name>
+    <res-type>javax.sql.DataSource</res-type>
+    <res-auth>Container</res-auth>
+  </resource-ref>
+
 </web-app>

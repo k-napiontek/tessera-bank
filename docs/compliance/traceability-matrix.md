@@ -2,7 +2,7 @@
 
 > **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02 to WP-09, WP-10a, WP-12, WP-13, WP-14, WP-17 and WP-19. Every work package adds its own as
+> WP-02 to WP-09, WP-10a, WP-10b, WP-12, WP-13, WP-14, WP-17 and WP-19. Every work package adds its own as
 > part of the Definition of Done, and WP-18 verifies that none is missing.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
@@ -536,3 +536,31 @@ to account and there is no other register for it.
 | Control | What it does | Verified by |
 |---|---|---|
 | Colour contrast, computed rather than judged | `styles/contrast.test.ts` reads `styles/tokens.css`, computes WCAG 2.2 relative luminance for every declared colour, and asserts each declared pair clears 4.5:1 for text or 3:1 for a control edge. Every colour token must appear in a pair or in a list of exemptions with a stated reason, so a colour nobody thought about fails the build rather than shipping. The same shape as `money.source.test.ts`, aimed at the failure a stylesheet actually has: not a crash, but a colour a fifth of readers cannot make out, which nothing reports | Demonstrated to fail both ways - `--ink-muted` lightened to `#949494` failed three pairs, and an unpaired token failed the accounting test. It is why `--amber-500` fills the meter and carries no word: PKO's call-to-action amber reaches 2.6:1 on white |
+
+
+---
+
+## WP-10b - customer-master: SOAP endpoint, WAR and deployment
+
+Ticket TB-1010. Stratum 1, Java 8 on Tomcat 8.5. **No requirement is added** - a package that
+completes an interface satisfies the requirement that was already waiting for it, and inventing an id
+for the second half of one package's work would put two ids on one obligation. What changes is that
+the two requirements WP-10a could only meet in part are now met in full.
+
+125 tests: the 118 that run in surefire, of which 43 need real Oracle, and 7 that deploy the WAR to a
+real Tomcat 8.5 and call it over HTTP.
+
+### Completed by WP-10b, owned by WP-10
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-CM-002** The interface is contract-first SOAP | `wsimport` runs over `contracts/wsdl/customer-master-v1.wsdl` **in place** - the WSDL imports the canonical schema by a relative path, so a copy without its sibling directory breaks generation - and produces `CustomerMasterPortType`. `CustomerMasterEndpoint` implements that generated interface, so it cannot compile unless it answers exactly the operations the contract declares. Nothing generated is committed. The generated tree compiles in its own execution with `[serial]` suppressed rather than the module's `-Werror` gate being weakened for the code a person wrote. SOAP 1.1, document/literal wrapped, and the awkward signature JAX-WS produces for `NotifyTransferPosted` - `void` plus two `Holder` out-parameters - was left as generated, because a binding customisation to make it prettier is the code deciding what the contract says. The 2011 reasoning is recorded in [ADR 0013](../governance/adr/0013-contract-first-soap-for-the-customer-master.md) | `GeneratedCodeTest` fails the build if a generated artefact appears under `src/main/java`, and asserts the generated port type carries the three operations the WSDL declares - demonstrated by planting an `ObjectFactory.java` in the source tree, which it named and refused. `CustomerMasterDeploymentIT` builds its client from the WSDL the running container publishes and asserts the authored `wsdl:documentation` prose survives to the wire: a WSDL the runtime derives from Java has the same operations, the same namespace and none of the sentences | **Met** |
+| **REQ-EST-001** Stratum 1 is authentically dated in style and stack | The half WP-10a could not reach: a Servlet 3.0 descriptor with the JAX-WS RI's listener and servlet declared by hand, `sun-jaxws.xml`, the runtime shipped in `WEB-INF/lib` because Tomcat is a servlet container and has none, and the database arriving through a JNDI `resource-ref` so no connection string appears anywhere in the artefact. **JAX-WS RI 2.2.10, never 2.3.x**: JDK 8 carries the 2.2 API in `rt.jar`, on the bootclasspath, where no webapp classloader can override it - a 2.3 runtime against 2.2 interfaces fails at deployment with a `LinkageError` naming neither | `DeploymentDescriptorTest` holds four documents to the same strings - the address in the contract, the `url-pattern` in `sun-jaxws.xml`, the servlet mapping in `web.xml`, and the JNDI name the endpoint looks up - none of which a compiler checks. `CustomerMasterDeploymentIT` fetches Tomcat 8.5.100 into `target/`, deploys the WAR and calls all three operations, so "the WAR deploys" stops being inferred from a `mvn package` that succeeded. `BytecodeVersionTest` now also sweeps the generated classes | **Met** |
+
+### Contributed by WP-10b, verified by the owning package
+
+| Requirement | Owner | What WP-10b contributes | Status |
+|---|---|---|---|
+| **REQ-INT-001** Every interface is defined by a contract before implementation | WP-02 | The first implementation in this repository generated *from* its contract rather than checked against it afterwards. `SoapResponseConformanceTest` builds a validator from the WSDL's own inline schema, handed to the schema factory with the WSDL's location as its base URI so the `../xsd/` import resolves to the real file, and validates every response against it - including what `AccountMapper` actually produces, not only objects the test assembled | Met at this tier |
+| **REQ-INT-004** Duplicate delivery does not duplicate a movement | WP-11 | The receiving half, now reachable over the wire. A redelivery of an identical `NotifyTransferPosted` answers `alreadyApplied=true` and moves no money | `CustomerMasterEndpointNotifyTest` and `CustomerMasterDeploymentIT` both send the message twice and assert the balance moved once. Proved to have teeth by mutation: hard-coding `alreadyApplied` to false failed exactly the redelivery assertion | Met at this tier |
+| **REQ-DP-001** All test data is synthetic | WP-03 | The claim that identity does not cross the wire, asserted rather than read off the schema. Every family name, given name and national identifier in the fixture is checked absent from a successful answer **and** from a fault - the fault path explicitly, because an error path is the second most common place personal data escapes a system, which is why the WSDL says so where the fault is defined | `CustomerMasterEndpointReadTest.aSuccessfulAnswerCarriesNoIdentity` and `.aFaultCarriesNoIdentity` | Met at this tier |
