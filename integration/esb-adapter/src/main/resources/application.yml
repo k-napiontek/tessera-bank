@@ -22,6 +22,13 @@ spring:
       ack-mode: manual_immediate
 
 tessera:
+  # The contracts are read at runtime, in place: the WSDL imports the canonical schema by a relative
+  # path, so the directory rather than the file is what this component needs to be pointed at.
+  contracts:
+    dir: contracts
   esb:
     topic: tessera.ledger.transfer-posted.v1
     dead-letter-topic: tessera.esb.transfer-posted.dlt.v1
+    # Supplied per environment by the platform repositories. The default is the development address
+    # the WSDL itself advertises.
+    customer-master-endpoint: http://localhost:8080/customer-master/services/CustomerMasterService

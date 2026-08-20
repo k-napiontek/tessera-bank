@@ -41,6 +41,19 @@
   <dependencyManagement>
     <dependencies>
       <!--
+        Declared BEFORE the Boot BOM, because the first declaration wins. Cargo 1.10 calls
+        commons-lang3 APIs that arrived in 3.14 and Boot 2.7's BOM pins 3.12 - so without this the
+        deployment test dies at the first container start with NoClassDefFoundError on a class
+        nothing in this module mentions. Test-scope tooling forcing a floor on a shared library is
+        the ordinary shape of a version conflict in an estate this old.
+      -->
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>${commons-lang3.version}</version>
+      </dependency>
+
+      <!--
         Imported here rather than in the corporate parent, deliberately. At parent level it would
         manage junit, slf4j and jackson for legacy/customer-master as well - a 2011 tier that has
         never heard of Spring - and a 2019 framework's preferred versions would quietly become
@@ -101,6 +114,32 @@
     <dependency>
       <groupId>com.networknt</groupId>
       <artifactId>json-schema-validator</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      The far end of the SOAP hop, for real: the deployment test boots customer-master's WAR on a
+      real Tomcat 8.5 against a real Oracle and calls it.
+
+      A stub would verify what this component SAYS and never that the system of record understands
+      it - and two independently generated clients meeting is the entire risk this hop carries.
+      These are test-scope only; nothing about stratum 1 is on this module's compile classpath, and
+      the WAR is located as a file rather than as a Maven dependency, because depending on it would
+      mean changing stratum 1's build, which WP-11's Out of scope forbids.
+    -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>oracle-free</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc8</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.codehaus.cargo</groupId>
+      <artifactId>cargo-core-uberjar</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -197,6 +236,39 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <systemPropertyVariables>
+            <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <!--
+        The end-to-end test runs here rather than in surefire because of what it costs: a Kafka, an
+        Oracle and a Tomcat 8.5 with customer-master's WAR on it. Keeping it out of the test phase
+        leaves `mvn test` fast enough to run constantly, while `mvn verify` - which is what
+        `make test-integration` runs - still proves the hop for real.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>bridge-test</id>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <!--
+            target/classes, not the project artifact. spring-boot-maven-plugin:repackage rewrites
+            the jar into an executable one whose classes live under BOOT-INF/classes, and failsafe
+            puts the project artifact on the classpath ahead of the output directory - so the
+            application's own classes vanish and JUnit reports only "failed to discover tests",
+            naming nothing. One line, and an hour if it is not known.
+          -->
+          <classesDirectory>${project.build.outputDirectory}</classesDirectory>
           <systemPropertyVariables>
             <tessera.contracts.dir>${tessera.contracts.dir}</tessera.contracts.dir>
           </systemPropertyVariables>

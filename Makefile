@@ -211,7 +211,10 @@ build-integration: jdk8 ## Build the Spring Boot 2.7 tier - esb-adapter
 	@JAVA_HOME="$(JAVA8)" mvn --quiet -DskipTests -f integration/esb-adapter/pom.xml package
 	@echo "OK    esb-adapter packages"
 
-test-integration: jdk8 docker ## esb-adapter, against real Kafka and a really-deployed customer-master
+# build-legacy first, and not by accident: the end-to-end test deploys customer-master's real WAR
+# rather than a stub, so the WAR has to exist. Naming the dependency here beats a test failure that
+# says "no such file" about a path nobody recognises.
+test-integration: jdk8 docker build-legacy ## esb-adapter, against real Kafka and a really-deployed customer-master
 	@JAVA_HOME="$(JAVA8)" mvn -f integration/esb-adapter/pom.xml verify
 
 test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL

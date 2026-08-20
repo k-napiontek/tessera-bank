@@ -85,6 +85,12 @@
          with. A contract test that uses a different validator from the rest of the estate is a
          test that can disagree with the estate about what the contract means. -->
     <json-schema-validator.version>1.5.1</json-schema-validator.version>
+
+    <!-- Cargo 1.10 calls commons-lang3 APIs that arrived in 3.14 - SystemProperties and ArrayFill.
+         Spring Boot 2.7's BOM pins 3.12, and a BOM wins over a transitive dependency, so a module
+         using both gets a Cargo that fails with NoClassDefFoundError at the first container start.
+         The floor is named here so the two cannot silently disagree again. -->
+    <commons-lang3.version>3.14.0</commons-lang3.version>
   </properties>
 
   <dependencyManagement>
