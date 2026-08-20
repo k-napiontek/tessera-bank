@@ -38,7 +38,7 @@ Updated by the executing session at the start and end of every work package, per
 > the last thing standing between the ledger and stratum 0.
 >
 > **WP-10b is done and merged**
-> ([#45](https://github.com/k-napiontek/tessera-bank/pull/45)). **Stratum 1 is complete.** The system
+> ([#45](https://github.com/k-napiontek/tessera-bank/pull/45), `8fd6704`). **Stratum 1 is complete.** The system
 > of record now answers SOAP over HTTP from a WAR on Tomcat 8.5: `wsimport` generates
 > `CustomerMasterPortType` from the authored WSDL - read from `contracts/` **in place**, because it
 > imports the canonical schema by a relative path - and the endpoint implements that generated
@@ -137,7 +137,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [08](wp/WP-08-ledger-api.md) | Ledger API - transfers, idempotency, Problem Details, contract test | 3 | 07 | `Done` | [#22](https://github.com/k-napiontek/tessera-bank/pull/22) | `429ce24` |
 | [09](wp/WP-09-ledger-audit-outbox.md) | Ledger audit chain, transactional outbox, metrics, logging | 3 | 08 | `Done` | [#24](https://github.com/k-napiontek/tessera-bank/pull/24), [#25](https://github.com/k-napiontek/tessera-bank/pull/25) | `d49e0d0`, `5aabcbd` |
 | [10a](wp/WP-10-customer-master.md) | `customer-master` - parent POM, Oracle schema, PL/SQL | 1 | 02 | `Done` | [#37](https://github.com/k-napiontek/tessera-bank/pull/37) | `58ac367` |
-| [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Done` | [#45](https://github.com/k-napiontek/tessera-bank/pull/45) | |
+| [10b](wp/WP-10-customer-master.md) | `customer-master` - WSDL-first SOAP endpoint, WAR on Tomcat 8.5 | 1 | 10a | `Done` | [#45](https://github.com/k-napiontek/tessera-bank/pull/45) | `8fd6704` |
 | [11](wp/WP-11-esb-adapter.md) | `esb-adapter` - Boot 2.7, Kafka to XSLT to SOAP, COMP-3 encoding | 2 | 09, 10b | `Not started` | | |
 | [12](wp/WP-12-api-gateway.md) | `api-gateway` - Go | 4 | 08 | `Done` | [#27](https://github.com/k-napiontek/tessera-bank/pull/27) | `020cee2` |
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `8f38ced` |
