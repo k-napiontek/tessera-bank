@@ -29,7 +29,7 @@ Updated by the executing session at the start and end of every work package, per
 > a measured number, not a hunch"*. It sits **off the critical path and beside the plan, not in
 > front of it**.
 >
-> **WP-16 is done and merged** ([#54](https://github.com/k-napiontek/tessera-bank/pull/54)), and
+> **WP-16 is done and merged** ([#54](https://github.com/k-napiontek/tessera-bank/pull/54), `d4dceea`), and
 > **the two cores are now checked against each other.** Every
 > other package in this estate moves money between the eras; this is the one that proves the eras
 > still agree afterwards, and until it existed the strangler fig was a plan rather than a safe one.
@@ -248,7 +248,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [13](wp/WP-13-fraud-scoring.md) | `fraud-scoring` - Python, Kafka consumer | 4 | 09 | `Done` | [#29](https://github.com/k-napiontek/tessera-bank/pull/29) | `8f38ced` |
 | [14](wp/WP-14-web-banking.md) | `web-banking` - React | 4 | 12 | `Done` | [#33](https://github.com/k-napiontek/tessera-bank/pull/33) | `ccaa851` |
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b | `Not started` | | |
-| [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | |
+| [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `d4dceea` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `364f7b9` |
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `90c009a` |
