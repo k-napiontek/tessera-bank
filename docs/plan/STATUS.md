@@ -9,6 +9,62 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-23 is done and merged** ([#68](https://github.com/k-napiontek/tessera-bank/pull/68), `a09cd7c`), and
+> **the estate is no longer unjudged.** Twenty-five metrics across five components had said nothing
+> about what value any of them should have, and the database that every transfer locks twice exported
+> nothing at all. `contracts/slo/` now declares what good looks like as a **contract** rather than a
+> document - eleven objectives and twenty-eight supporting signals, each with its SLI, target,
+> measurement window, error-budget arithmetic and the reasoning for the number - and
+> `workload/baselines/` records what the estate actually did.
+>
+> **F-27 has its number, and the answer is the one ADR 0005 predicted.** Money movement peaks at about
+> **790 postings a second** on a developer machine and is flat from single-digit concurrency: from
+> eight workers to sixty-four the rate does not rise at all, mean latency grows from 10 ms to 88 ms,
+> and **not one request fails**. **A second ledger instance on the same PostgreSQL does not move the
+> ceiling** - 751.6 against 786.3, inside the run-to-run variation - and doubles the chain wait per
+> posting, because `pg_advisory_xact_lock` lives in the database rather than in the JVM. The
+> account-lock timer sits at 0.29 ms at every level and never moves, which is how we know the ceiling
+> is the chain rather than row contention. That separation was a deliberate design decision of this
+> package: one averaged "lock wait" would have moved for two unrelated reasons and answered neither
+> question. Everything is in [`estate-under-load.md`](../architecture/estate-under-load.md).
+>
+> **The control the catalogue rests on runs in both directions.** Every metric the estate emits owes
+> an entry, and every entry names a metric it emits - read out of each component's own source rather
+> than transcribed, so a metric renamed in code fails the build. ADR 0012 names the dangerous
+> direction precisely: *"an objective nobody alerts on is a claim nobody checks... because it looks
+> like a control."* The two halves of each metric name are checked where each can be: `meterName`
+> against source by `check-slo-catalogue.py`, `exposedName` against a **real scrape** by
+> `CatalogueScrapeTest`, because the mapping between them is Micrometer's convention and a copy of it
+> here would agree with itself. The ADR's own boundary is mechanical too - a denylist fails the build
+> if `burnRate`, `severity`, `receiver`, `dashboard` or `retention` ever becomes a field.
+>
+> **A latency objective turned out to be unmeasurable, and nothing had said so.** A Micrometer `Timer`
+> publishes count, sum and max and no buckets, so "the proportion answered within half a second" could
+> not be computed from a scrape at all. `application.yml` now publishes a bucket at the boundary, and a
+> test fails if that number and the catalogued threshold ever drift apart. Every objective also
+> declares **how it is computed**, so the report derives the SLI instead of a tool restating it - and
+> an objective stated over a window is **refused** rather than answered from two snapshots, because a
+> figure from two samples would be invented rather than measured.
+>
+> **F-71 is closed, and not the way the follow-up proposed.** It suggested giving `releaseHold` a
+> `201`, which would have made the status-code inference work again at the cost of the contract stating
+> that a resource was created when none was - releasing a hold creates nothing. The **inference** was
+> the defect. `IdempotencyFilter` now sets `Idempotency-Replayed: true`, the contract documents the
+> header on all five money-moving operations, and both the ledger's filter and the workload driver read
+> it instead of guessing. **F-37** and **F-69** close too: the limiter's size is exported, and
+> `workload-plan`'s invented threshold of 2 000 is now a measured **800**, which is where the ceiling
+> ladder and the baseline agree.
+>
+> **The baseline is honest about what it could not measure**, which is the half worth reading. It
+> covers two of the five catalogued components: `fraud-scoring` consumes from Kafka and there is no
+> broker in the fixture, and `reporting` and `recon` are batch jobs that do not run inside a compressed
+> window. The report prints `nothing happened` against all three rather than omitting them, and
+> `SLO-LEDGER-OUTBOX-FRESHNESS` is left in it as **missed** - lag 140 s against a 60 s target - because
+> with no broker the relay cannot drain. That is the fixture rather than the ledger, and suppressing a
+> signal a fixture happened to break is how a control stops being one. **F-77** to **F-80** record
+> that, the four objectives no snapshot pair can answer, a baseline taken at 40 001 accounts rather
+> than WP-22's 300 001, and a purity list that classifies by role.
+>
 > **WP-22 is done and merged** ([#65](https://github.com/k-napiontek/tessera-bank/pull/65), `3aa0fe4`), and **the ledger's queries have
 > finally met a number.** Every one of the twenty-one packages before this one was verified against a
 > database holding about three accounts, so every plan in this repository was a plan of a fixture -
@@ -455,7 +511,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [20](wp/WP-20-workload-model.md) | Workload model - the bank day as a contract | 4 | 02 | `Done` | [#59](https://github.com/k-napiontek/tessera-bank/pull/59) | `bf4d4cb` |
 | [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | `7de9ce2` |
 | [22](wp/WP-22-ledger-data-volume.md) | Ledger data volume - a production-shaped database | 3 | 20, 09 | `Done` | [#65](https://github.com/k-napiontek/tessera-bank/pull/65) | `3aa0fe4` |
-| [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `In progress` | | |
+| [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Done` | [#68](https://github.com/k-napiontek/tessera-bank/pull/68) | `a09cd7c` |
 | [24](wp/WP-24-failure-injection.md) | Failure injection and the soak run | - | 23 | `Not started` | | |
 | [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11b | `Not started` | | |
 
@@ -494,7 +550,7 @@ becomes its own change when picked up.
 | # | Raised in | Description | Status |
 |---|---|---|---|
 | F-01 | WP-01 | `git init` has not been run, so the branch-protection hook is inert. | **Closed** - repository initialised on `main` with a baseline commit, 2026-08-17 |
-| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, both of which have since been executed. **WP-18 still carries frame only**, as do WP-24 and WP-25 in the workload strand - WP-20, WP-21 and WP-22 were detailed and have since been executed, and WP-23 is detailed and awaiting execution. A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
+| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, both of which have since been executed. **WP-18 still carries frame only**, as do WP-24 and WP-25 in the workload strand - WP-20 to WP-23 were detailed and have all since been executed. A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
 | F-03 | WP-01 | `quality/` holds no linter rule files yet. Each is added by the work package that first needs it, so the rules land with code to check. | Open |
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
@@ -706,3 +762,4 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-21 | **A dataset is compared by digest, never by row count.** The Definition of Done asks for it and the reason is the same one WP-20 gives for comparing a schedule as bytes: two loads can write the same number of rows and disagree about every amount in them. `DigestingSink` takes SHA-256 over every row in write order, prefixed by its table so a row written into the wrong one cannot leave the digest unchanged, and excludes `posting.id` and `audit_record.seq` because an identity value is the database's answer rather than the dataset's. |
 | 2026-08-21 | **WP-23 is taken before WP-18, by explicit instruction of the repository owner.** The third occurrence of the 2026-08-20 decision and for the same two reasons, which have still not moved: WP-18 carries frame only, and its Definition of Done requires that no stub remain under `docs/` and that the traceability matrix resolve every requirement, while **F-57** records two governance stubs - `environments.md` naming PREPROD as where performance testing happens, and `test-strategy.md` listing six test levels with performance among none of them - that contradict each other and cannot be reconciled truthfully until WP-23 exists. WP-23's own dependencies, WP-21, WP-22, WP-13 and WP-17, are all `Done`. |
 | 2026-08-21 | **WP-23's task list is detailed before execution, and four decisions are settled in the detailing rather than left for the executing session to improvise.** The machine-readable catalogue is a **contract** at `contracts/slo/` with a checker wired into `validate.sh`, not a second document under `docs/`: ADR 0012 names an objective nobody can check as the dangerous half of the split it draws, and a catalogue with no check is exactly that. The run-report generator is **Go under `workload/cmd/`**, because `internal/manifest` and `internal/reconcile` already read a run manifest and a Prometheus exposition and a Python generator would need a second copy of both - the duplication **F-61**, **F-64** and **F-66** each record rotting. **F-71 is fixed inside this package** rather than left open, so that the replay rate the baseline records is one somebody can use. And **F-27's number is taken from a harness driving the ledgers directly**, never through the gateway: the question is about an advisory lock on the write path, and an edge in front of it adds a rate limiter and a token check to a figure that is supposed to be about the database. |
+| 2026-08-21 | **F-71 is fixed by making the ledger state a replay rather than by making the status code carry it.** The follow-up proposed giving `releaseHold` a `201` so that the existing 201-against-200 inference would work again. That would have made the contract say a resource was created when none was: releasing a hold creates nothing, and the other four money-moving operations answer `201` precisely because they do create something. The inference was the defect rather than the operation. `IdempotencyFilter` is the only thing in the estate that knows whether an answer came from its store, so it now says so - `Idempotency-Replayed: true`, documented on all five operations - and the ledger's metric filter and the workload driver both read it. The header is additive and the status list is unchanged. |
