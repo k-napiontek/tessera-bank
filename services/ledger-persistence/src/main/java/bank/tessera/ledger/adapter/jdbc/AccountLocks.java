@@ -30,9 +30,15 @@ import java.util.Map;
 public final class AccountLocks {
 
     private final AccountRepository accounts;
+    private final LockWaits lockWaits;
 
     public AccountLocks(AccountRepository accounts) {
+        this(accounts, LockWaits.UNMEASURED);
+    }
+
+    public AccountLocks(AccountRepository accounts, LockWaits lockWaits) {
         this.accounts = accounts;
+        this.lockWaits = lockWaits;
     }
 
     /**
@@ -49,14 +55,19 @@ public final class AccountLocks {
                 .sorted(Comparator.comparing(AccountRef::value))
                 .toList();
 
-        Map<AccountRef, Account> locked = new LinkedHashMap<>();
-        for (AccountRef reference : ordered) {
-            Account account = accounts
-                    .findForUpdate(reference)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Cannot lock account " + reference + ": it does not exist."));
-            locked.put(reference, account);
-        }
-        return locked;
+        // Timed as one acquisition rather than one per account: what a transfer waits for is all
+        // of its locks, and a per-account figure would report two short waits where there was one
+        // long one.
+        return lockWaits.timing(LockWaits.Kind.ACCOUNT, () -> {
+            Map<AccountRef, Account> locked = new LinkedHashMap<>();
+            for (AccountRef reference : ordered) {
+                Account account = accounts
+                        .findForUpdate(reference)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Cannot lock account " + reference + ": it does not exist."));
+                locked.put(reference, account);
+            }
+            return locked;
+        });
     }
 }

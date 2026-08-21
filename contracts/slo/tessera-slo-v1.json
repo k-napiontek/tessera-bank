@@ -227,6 +227,24 @@
           "meaning": "Age of the last autovacuum. NaN means never - reported as NaN and never as zero, because zero reads as vacuumed a moment ago, which is the exact opposite of the truth.",
           "introducedBy": "WP-23",
           "noObjectiveBecause": "How long is too long depends on the table's write rate, which differs by two orders of magnitude across the eight tables here. One threshold across all of them would be wrong for seven."
+        },
+        {
+          "meterName": "ledger.lock.chain",
+          "exposedName": "ledger_lock_chain_seconds",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Time a money-moving transaction spent waiting for the audit chain's advisory lock. Service-wide: one writer at a time, across every account and every instance.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "The threshold worth promising is the one F-27 has been asking for since WP-09, and it is measured by this package rather than guessed at here. A number set before the measurement would be the invented constant F-69 records, in the file that records it."
+        },
+        {
+          "meterName": "ledger.lock.account",
+          "exposedName": "ledger_lock_account_seconds",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Time a transaction spent taking row locks on the accounts it touches, timed as one acquisition because that is what a transfer actually waits for.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "This rises with how concentrated the day's traffic is rather than with how much of it there is, so a threshold would be a statement about the customers rather than about the ledger. It is kept apart from the chain wait above precisely so the two cannot be averaged."
         }
       ]
     },

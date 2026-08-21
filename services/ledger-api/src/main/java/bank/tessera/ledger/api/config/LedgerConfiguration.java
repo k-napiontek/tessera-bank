@@ -6,6 +6,7 @@ import bank.tessera.ledger.adapter.jdbc.LedgerEventJson;
 import bank.tessera.ledger.adapter.outbox.EventPublisher;
 import bank.tessera.ledger.adapter.outbox.OutboxRelay;
 import bank.tessera.ledger.adapter.jdbc.JdbcAuditLog;
+import bank.tessera.ledger.adapter.jdbc.LockWaits;
 import bank.tessera.ledger.adapter.jdbc.JdbcEventOutbox;
 import bank.tessera.ledger.adapter.jdbc.JdbcHoldRepository;
 import bank.tessera.ledger.adapter.jdbc.JdbcIdempotencyStore;
@@ -16,6 +17,7 @@ import bank.tessera.ledger.adapter.jdbc.JdbcUnitOfWork;
 import bank.tessera.ledger.api.audit.HttpAuditContext;
 import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
 import bank.tessera.ledger.api.metrics.DatabaseSignals;
+import bank.tessera.ledger.api.metrics.MicrometerLockWaits;
 import bank.tessera.ledger.api.metrics.MoneyMovementMetricsFilter;
 import bank.tessera.ledger.api.outbox.KafkaEventPublisher;
 import bank.tessera.ledger.api.outbox.OutboxRelayScheduler;
@@ -124,8 +126,13 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    AuditLog auditLog(NamedParameterJdbcTemplate jdbc, ObjectMapper json) {
-        return new JdbcAuditLog(jdbc, json);
+    LockWaits lockWaits(MeterRegistry registry) {
+        return new MicrometerLockWaits(registry);
+    }
+
+    @Bean
+    AuditLog auditLog(NamedParameterJdbcTemplate jdbc, ObjectMapper json, LockWaits lockWaits) {
+        return new JdbcAuditLog(jdbc, json, lockWaits);
     }
 
     @Bean
@@ -216,10 +223,11 @@ public class LedgerConfiguration {
     }
 
     @Bean
-    UnitOfWork unitOfWork(TransactionTemplate transactions, AccountRepository accounts) {
+    UnitOfWork unitOfWork(
+            TransactionTemplate transactions, AccountRepository accounts, LockWaits lockWaits) {
         // AccountLocks, not repeated findForUpdate calls. The deterministic order it imposes is what
         // keeps two transfers over the same pair of accounts from deadlocking.
-        return new JdbcUnitOfWork(transactions, new AccountLocks(accounts));
+        return new JdbcUnitOfWork(transactions, new AccountLocks(accounts, lockWaits));
     }
 
     @Bean
