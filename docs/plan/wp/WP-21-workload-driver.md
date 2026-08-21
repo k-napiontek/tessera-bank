@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1021-workload-driver` |
 | **Stratum** | 4 - Go, ~2025 |
 | **Depends on** | WP-20, WP-09, WP-12 |
-| **Status** | `In progress` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -145,15 +145,21 @@ number it collects a measurement of the wrong system.
 
 ## Definition of Done
 
-- [ ] A planned run executes at the intended rate, with the realised send times matching the schedule
-      within a stated tolerance.
-- [ ] Every outcome class is accounted for, and the driver's own totals reconcile against
-      `ledger_transfers_total` for the same window.
-- [ ] A retry of a lost request reuses its key, proven by the ledger replaying rather than posting
-      twice.
-- [ ] Rate-limit refusals are counted separately and do not inflate the failure count.
-- [ ] A run is reproducible: the same seed and model produce the same sequence of requests.
-- [ ] Nothing in the estate was changed to make the run work.
+- [x] A planned run executes at the intended rate, with the realised send times matching the schedule
+      within a stated tolerance. The scheduler's own lateness never exceeded 3 ms across the runs
+      recorded in the pull request, and is published as `tessera_workload_schedule_lag_seconds`.
+- [x] Every outcome class is accounted for, and the driver's own totals reconcile against
+      `ledger_transfers_total` for the same window. Scheduled equals sent plus unsent; the three
+      columns that must match did, in every run.
+- [x] A retry of a lost request reuses its key, proven by the ledger replaying rather than posting
+      twice. The same seed and date run twice against one ledger: 406 posted, then 0 posted and 421
+      replayed, the ledger's own counter agreeing exactly.
+- [x] Rate-limit refusals are counted separately and do not inflate the failure count, and are
+      reconciled as never having reached the ledger.
+- [x] A run is reproducible: the same seed and model produce the same sequence of requests, compared
+      as rendered bytes rather than as structs.
+- [x] Nothing in the estate was changed to make the run work. The diff touches `workload/`, the
+      plan, the matrix and two READMEs, and nothing else.
 
 ## Verification
 
