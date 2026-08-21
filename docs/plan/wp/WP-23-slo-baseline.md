@@ -181,14 +181,29 @@ database signal can answer.
 
 ## Definition of Done
 
-- [ ] Every component with metrics has an SLI, an objective, a window and an error budget stated.
-- [ ] The database signals above are emitted by the ledger and appear in a scrape.
-- [ ] A baseline is committed together with the manifest and dataset digest that produced it.
-- [ ] A run report is generated from a manifest and is byte-identical on a rerun over the same
-      inputs.
-- [ ] The audit chain's throughput ceiling is stated as a measured figure with its conditions, and
-      the effect of adding a second ledger instance on that figure is recorded.
-- [ ] No alert rule, dashboard or threshold configuration is added to this repository.
+- [x] Every component with metrics has an SLI, an objective, a window and an error budget stated.
+      Eleven objectives and twenty-eight supporting signals over five components, thirty-nine metrics
+      accounted for. The schema requires at least one objective per component, and
+      `check-slo-catalogue.py` fails when the estate emits a metric the catalogue does not mention -
+      or names one nothing emits.
+- [x] The database signals above are emitted by the ledger and appear in a scrape. Pool utilisation
+      and acquire wait from Boot's Hikari binder, per-table size, dead tuples and vacuum activity from
+      `DatabaseSignals`, and the two lock waits timed apart. `CatalogueScrapeTest` reads every one of
+      them out of `/actuator/prometheus` under `@AutoConfigureObservability`.
+- [x] A baseline is committed together with the manifest and dataset digest that produced it.
+      `workload/baselines/`: the report, the run manifest, the dataset manifest (digest `747f4177`,
+      chain head `d0c59134`) and the four scrapes it was generated from.
+- [x] A run report is generated from a manifest and is byte-identical on a rerun over the same
+      inputs. `workload-report` reads no clock; `TestTheSameInputsProduceAByteIdenticalReport`
+      compares bytes over committed fixtures, and the committed report regenerates with `diff` clean.
+- [x] The audit chain's throughput ceiling is stated as a measured figure with its conditions, and
+      the effect of adding a second ledger instance on that figure is recorded. About **790 postings a
+      second**, flat from single-digit concurrency; a second instance on the same PostgreSQL **does not
+      move it** and doubles the chain wait per posting. Conditions in every artefact; the reading in
+      [`../../architecture/estate-under-load.md`](../../architecture/estate-under-load.md).
+- [x] No alert rule, dashboard or threshold configuration is added to this repository. Enforced rather
+      than promised: `check-slo-catalogue.py` fails the build if `burnRate`, `severity`, `receiver`,
+      `dashboard`, `alertname`, `retention` or any of the rest appears as a field in the schema.
 
 ## Verification
 
