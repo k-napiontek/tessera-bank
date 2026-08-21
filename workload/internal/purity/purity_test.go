@@ -62,6 +62,7 @@ var engine = []string{
 var driver = []string{
 	"internal/client",
 	"internal/identity",
+	"internal/seeding",
 }
 
 // cmd is a main rather than a library: it reads the model from a path, writes a manifest to one,
