@@ -39,6 +39,27 @@ var floatIsJustified = map[string]string{
 	"internal/model/model.go":           "weights, multipliers and the diurnal curve arrive from the model as JSON numbers; the one money field in the document is decoded as int64 and stays one",
 	"internal/manifest/manifest.go":     "every figure in a manifest is a rate - events per second at one of two clocks - and none of them is money",
 	"cmd/workload-plan/main.go":         "the summary prints rates per second, which are not money; the one amount it prints arrives from the engine as an int64",
+
+	// WP-21's driver half. The rule is the same one: a float may appear in a file that has said
+	// why, and none of these is an amount.
+	"internal/seeding/seeding.go": "the currency of the estate is chosen by weighting each cohort's mix by its share of the day's events - a share is a ratio, and the opening balance beside it is an int64 throughout",
+	"internal/metrics/metrics.go": "the Prometheus exposition format is float64 by specification: bucket boundaries, seconds and counts. No amount is ever published, and a run reports what it did rather than what it moved",
+}
+
+// The driver half of this module does two things the engine may not, and each is named per file
+// with the reason rather than by widening the rule above until it excuses everything.
+//
+// A run happens in real time - that is the entire difference between WP-20 and WP-21 - so the
+// driver reads the wall clock. And a Prometheus exposition is a text format of float64 values, so
+// rendering one calls the formatter the engine is forbidden. Neither is permitted anywhere near an
+// amount, which the rest of this scanner still enforces over every file in the module.
+var driverMayCall = map[string]map[string]string{
+	"internal/seeding/seeding.go": {
+		"time.Now": "seeding sends real requests to a running estate before the measured run starts",
+	},
+	"internal/metrics/metrics.go": {
+		"strconv.FormatFloat": "a bucket boundary and a lag in seconds are rendered into the exposition; minor units never appear in it",
+	},
 }
 
 // Calls that have no business anywhere in this module, whatever they are applied to.
@@ -140,7 +161,9 @@ func scan(fset *token.FileSet, file *ast.File, rel string, source []byte, justif
 					}
 					name := pkg.Name + "." + fn.Sel.Name
 					if advice, forbidden := forbiddenAnywhere[name]; forbidden {
-						found = append(found, finding{at(n.Pos()), "calls " + name + " - " + advice})
+						if _, permitted := driverMayCall[rel][name]; !permitted {
+							found = append(found, finding{at(n.Pos()), "calls " + name + " - " + advice})
+						}
 					}
 					if advice, forbidden := forbiddenOnAmounts[name]; forbidden {
 						for _, arg := range n.Args {
@@ -231,6 +254,32 @@ func TestNoFloatReachesAnAmount(t *testing.T) {
 
 	for _, f := range findings {
 		t.Errorf("%s  %s", f.where, f.what)
+	}
+}
+
+func TestEveryDriverExemptionIsStillNeeded(t *testing.T) {
+	// The same staleness rule the float allowlist is held to, and it matters more here: an
+	// exemption for a call a file no longer makes is an exemption waiting to excuse the next one
+	// somebody adds to that file without thinking about it.
+	present := map[string]bool{}
+	for _, rel := range production(t) {
+		present[rel] = true
+	}
+
+	for rel, calls := range driverMayCall {
+		if !present[rel] {
+			t.Errorf("%s is exempted and does not exist", rel)
+			continue
+		}
+		source, err := os.ReadFile(filepath.Join(moduleRoot, rel))
+		if err != nil {
+			t.Fatalf("reading %s: %v", rel, err)
+		}
+		for call := range calls {
+			if !strings.Contains(string(source), call+"(") {
+				t.Errorf("%s is exempted for %s and never calls it", rel, call)
+			}
+		}
 	}
 }
 
