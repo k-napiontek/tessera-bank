@@ -9,7 +9,7 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-21 is done and merged** ([#62](https://github.com/k-napiontek/tessera-bank/pull/62), merge sha to follow), and
+> **WP-21 is done and merged** ([#62](https://github.com/k-napiontek/tessera-bank/pull/62), `7de9ce2`), and
 > **the estate has now been under load.** Every one of the twenty packages before this one was
 > verified a request at a time, and the observability WP-09, WP-12, WP-13 and WP-17 installed had
 > never had anything to observe. `workload/scripts/estate-up.sh` boots PostgreSQL, the ledger and
@@ -396,7 +396,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `90c009a` |
 | [20](wp/WP-20-workload-model.md) | Workload model - the bank day as a contract | 4 | 02 | `Done` | [#59](https://github.com/k-napiontek/tessera-bank/pull/59) | `bf4d4cb` |
-| [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | |
+| [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | `7de9ce2` |
 | [22](wp/WP-22-ledger-data-volume.md) | Ledger data volume - a production-shaped database | 3 | 20, 09 | `Not started` | | |
 | [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Not started` | | |
 | [24](wp/WP-24-failure-injection.md) | Failure injection and the soak run | - | 23 | `Not started` | | |
