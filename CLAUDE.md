@@ -39,6 +39,7 @@ Check before writing a line. The pinned stack differs per directory and mixing t
 | `services/` | 3 | ~2023 | Java 17, Spring Boot 3.2, PostgreSQL, Flyway, Kafka, Gradle |
 | `edge/` | 4 | ~2025 | Go 1.22+, Python 3.12 (uv), TypeScript + React + Vite |
 | `batch/` | - | mixed | Python 3.12 for reporting; reconciliation spans strata 0 and 3 |
+| `workload/` | 4 | ~2025 | Go 1.25, standard library only. A test fixture, not a component of the bank |
 
 ## Building and verifying
 
