@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1022-ledger-data-volume` |
 | **Stratum** | 3 - Java 17, ~2023 |
 | **Depends on** | WP-20, WP-09 |
-| **Status** | `Not started` |
+| **Status** | `In progress` |
 
 ## Objective
 
