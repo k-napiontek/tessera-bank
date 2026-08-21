@@ -155,7 +155,8 @@ build-legacy: jdk8 ## Build the Java 8 tier - two WARs, customer-master and back
 
 build-services: jdk17 ## Build the Java 17 tier
 	@JAVA_HOME="$(JAVA17)" ./gradlew --quiet \
-		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build
+		:services:ledger-core:build :services:ledger-persistence:build :services:ledger-api:build \
+		:services:ledger-loader:build
 
 build-workload: go ## Build the workload model engine and its planning tool
 	@go -C workload build ./...
@@ -244,7 +245,8 @@ test-integration: jdk8 docker build-legacy ## esb-adapter, against real Kafka an
 
 test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
-		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test
+		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test \
+		:services:ledger-loader:test
 
 # workload/ is a fixture rather than a component of the bank, and it is the only tier that needs
 # nothing installed beyond a Go toolchain: no Docker, no database, no broker. That is deliberate -
