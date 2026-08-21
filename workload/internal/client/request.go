@@ -37,6 +37,9 @@ type Request struct {
 	Subject string
 	// Body is the JSON payload, or nil for a read.
 	Body []byte
+	// Key is the Idempotency-Key the request carries, empty for a read. Minted once per scheduled
+	// event and reused by every retry of it - see Key.
+	Key string
 	// MovesMoney reports whether the ledger requires an Idempotency-Key. The five operations that
 	// do are the five the contract marks, and a request that omits the header is refused with a 400
 	// that reads like a malformed body.
@@ -95,7 +98,7 @@ const statementDays = 30
 // draws a currency per transfer from a mix of up to five. The request goes in the currency the
 // accounts hold and says so, rather than being sent in the drawn currency to collect a 422 the
 // estate is right to return.
-func Build(action population.Action, date bankday.Date, held money.Currency, known References) (Request, error) {
+func Build(action population.Action, date bankday.Date, seq int64, held money.Currency, known References) (Request, error) {
 	request := Request{
 		Operation: action.Operation,
 		Subject:   action.CustomerRef,
@@ -221,6 +224,9 @@ func Build(action population.Action, date bankday.Date, held money.Currency, kno
 	if action.MovesMoney() && request.Body == nil && request.Operation != "releaseHold" {
 		return Request{}, fmt.Errorf("client: %s carries an amount and sends no body", action.Operation)
 	}
+	if request.MovesMoney {
+		request.Key = Key(date, seq, action.Operation)
+	}
 	return request, nil
 }
 
@@ -247,6 +253,9 @@ func OpenAccount(customerRef, accountRef string, accountType string, currency mo
 }
 
 // Fund is the opening credit seeding sends, from the treasury account to a customer's.
+//
+// The key is derived from the account being funded, so that a second seeding pass over an estate
+// that is already seeded replays rather than funding it twice.
 func Fund(treasuryRef, accountRef, subject string, amount money.Amount) (Request, error) {
 	body, err := json.Marshal(transferRequest{
 		DebitAccountRef:  treasuryRef,
@@ -265,6 +274,7 @@ func Fund(treasuryRef, accountRef, subject string, amount money.Amount) (Request
 		Subject:    subject,
 		Body:       body,
 		MovesMoney: true,
+		Key:        "wl-funding-" + accountRef,
 	}, nil
 }
 

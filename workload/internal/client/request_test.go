@@ -148,7 +148,7 @@ func TestEveryRequestIsAnOperationTheContractDeclares(t *testing.T) {
 	declared := operationsInContract(t)
 
 	for _, name := range everyDrawnOperation {
-		built, err := client.Build(action(name), date(t), "PLN", populated())
+		built, err := client.Build(action(name), date(t), 7, "PLN", populated())
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -171,7 +171,7 @@ func TestTheKeyIsCarriedByExactlyTheOperationsThatRequireIt(t *testing.T) {
 	declared := operationsInContract(t)
 
 	for _, name := range everyDrawnOperation {
-		built, err := client.Build(action(name), date(t), "PLN", populated())
+		built, err := client.Build(action(name), date(t), 7, "PLN", populated())
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -188,7 +188,7 @@ func TestAReadOfSomethingNotYetCreatedIsNotSentAtAll(t *testing.T) {
 	// package objective warns about.
 	empty := known{}
 	for _, name := range []string{"getTransfer", "reverseTransfer", "captureHold", "releaseHold"} {
-		if _, err := client.Build(action(name), date(t), "PLN", empty); err != client.ErrNoReferenceYet {
+		if _, err := client.Build(action(name), date(t), 7, "PLN", empty); err != client.ErrNoReferenceYet {
 			t.Errorf("%s with nothing posted yet returned %v", name, err)
 		}
 	}
@@ -198,7 +198,7 @@ func TestADependentOperationNamesWhatTheRunPosted(t *testing.T) {
 	// Not what the population drew. The ledger allocates its own transfer and hold references; the
 	// drawn ones exist for WP-25, where the older strata are told the reference instead.
 	drawn := action("getTransfer")
-	built, err := client.Build(drawn, date(t), "PLN", populated())
+	built, err := client.Build(drawn, date(t), 7, "PLN", populated())
 	if err != nil {
 		t.Fatalf("getTransfer: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestACaptureNeverExceedsWhatWasHeld(t *testing.T) {
 	drawn := action("captureHold")
 	drawn.Amount = money.Amount{Minor: 9_999_999, Currency: "PLN"}
 
-	built, err := client.Build(drawn, date(t), "PLN", populated())
+	built, err := client.Build(drawn, date(t), 7, "PLN", populated())
 	if err != nil {
 		t.Fatalf("captureHold: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestATransferGoesInTheCurrencyTheAccountsHold(t *testing.T) {
 	drawn := action("createTransfer")
 	drawn.Amount = money.Amount{Minor: 4_500, Currency: "EUR"}
 
-	built, err := client.Build(drawn, date(t), "PLN", populated())
+	built, err := client.Build(drawn, date(t), 7, "PLN", populated())
 	if err != nil {
 		t.Fatalf("createTransfer: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestATransferGoesInTheCurrencyTheAccountsHold(t *testing.T) {
 
 	matching := action("createTransfer")
 	matching.Amount = money.Amount{Minor: 4_500, Currency: "PLN"}
-	built, err = client.Build(matching, date(t), "PLN", populated())
+	built, err = client.Build(matching, date(t), 7, "PLN", populated())
 	if err != nil {
 		t.Fatalf("createTransfer: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestNoRequestCarriesAnythingResemblingPersonalData(t *testing.T) {
 	denied := regexp.MustCompile(`(?i)name|email|address|phone|pesel|iban|holder|birth|street|surname|passport|card`)
 
 	for _, name := range everyDrawnOperation {
-		built, err := client.Build(action(name), date(t), "PLN", populated())
+		built, err := client.Build(action(name), date(t), 7, "PLN", populated())
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -290,7 +290,7 @@ func TestTheTemplateIsBoundedAndThePathIsNot(t *testing.T) {
 	// label would give every account in a 1.2 million customer population its own series - which is
 	// the cardinality trap edge/api-gateway keeps a route class to avoid.
 	for _, name := range everyDrawnOperation {
-		built, err := client.Build(action(name), date(t), "PLN", populated())
+		built, err := client.Build(action(name), date(t), 7, "PLN", populated())
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -307,7 +307,7 @@ func TestAStatementAsksForARangeRatherThanADay(t *testing.T) {
 	// from and to are both required, and a range of one day is answered from almost nothing. A
 	// month is what a customer looks at and it is wide enough to make the ledger page, which is the
 	// query F-24 is about.
-	built, err := client.Build(action("getStatement"), date(t), "PLN", populated())
+	built, err := client.Build(action("getStatement"), date(t), 7, "PLN", populated())
 	if err != nil {
 		t.Fatalf("getStatement: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestAnOperationWithNoRequestShapeIsRefusedRatherThanSkipped(t *testing.T) {
 	// Unreachable from the committed model, which is validated against the contract's eleven
 	// operationIds. Reachable the day somebody writes a second model, and silently sending nothing
 	// would be far worse than stopping.
-	if _, err := client.Build(action("auditTheBank"), date(t), "PLN", populated()); err == nil {
+	if _, err := client.Build(action("auditTheBank"), date(t), 7, "PLN", populated()); err == nil {
 		t.Error("built a request for an operation the ledger does not serve")
 	}
 }
