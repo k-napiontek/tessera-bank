@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1025-estate-drivers` |
 | **Stratum** | spans 0, 1 and 2 |
 | **Depends on** | WP-21, WP-05, WP-10b, WP-11 |
-| **Status** | `Not started` - **blocked**, WP-10b and WP-11 are not started |
+| **Status** | `Not started` - no longer blocked; WP-10b and WP-11b landed 2026-08-20 |
 
 ## Objective
 
@@ -40,9 +40,13 @@ movement file that arrives late and pushes reconciliation past the start of busi
 
 ## Constraints
 
-- **Blocked until WP-10b and WP-11 are `Done`.** `customer-master` has a complete WSDL and no
-  `@WebService` anywhere, and `integration/` holds READMEs only. Two thirds of this package has
-  nothing to call. Stated here rather than discovered by a session that picks it up.
+- **No longer blocked.** This read "blocked until WP-10b and WP-11 are `Done`" until 2026-08-21,
+  because when it was written `customer-master` had a complete WSDL and no `@WebService` anywhere and
+  `integration/` held READMEs only, so two thirds of this package had nothing to call. Both landed on
+  2026-08-20 - WP-10b as [#45](https://github.com/k-napiontek/tessera-bank/pull/45) `f43ce3f` and
+  WP-11b as [#51](https://github.com/k-napiontek/tessera-bank/pull/51) `717153a` - and the line is
+  corrected rather than left for a session to trip over. The package still carries **frame only** and
+  the `work-package` skill halts on it until its task list is detailed.
 - **F-18 must be closed first, or the stratum-0 measurement is a measurement of the reject path.**
   `build_movements` hard-codes `PLN` while `build_master` draws from five currencies, so 162 of 302
   movements reject on a full run. Loading that generator's output at volume exercises rejection
