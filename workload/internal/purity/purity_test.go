@@ -48,6 +48,7 @@ var forbidden = map[string]string{
 var engine = []string{
 	"internal/arrivals",
 	"internal/bankday",
+	"internal/dataset",
 	"internal/manifest",
 	"internal/model",
 	"internal/money",

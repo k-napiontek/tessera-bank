@@ -8,3 +8,4 @@ rootProject.name = "tessera-bank"
 include("services:ledger-core")
 include("services:ledger-persistence")
 include("services:ledger-api")
+include("services:ledger-loader")

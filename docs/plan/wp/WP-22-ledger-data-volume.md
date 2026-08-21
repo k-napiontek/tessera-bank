@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1022-ledger-data-volume` |
 | **Stratum** | 3 - Java 17, ~2023 |
 | **Depends on** | WP-20, WP-09 |
-| **Status** | `Not started` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -172,13 +172,22 @@ fixture is a recorded normal of the fixture.
 
 ## Definition of Done
 
-- [ ] A loaded ledger passes `BalanceReconciliation` for every account.
-- [ ] `AuditChain.verify()` passes over the whole loaded chain.
-- [ ] No constraint or trigger was disabled to complete a load.
-- [ ] The same seed produces the same dataset, checked by a digest rather than by row counts alone.
-- [ ] `batch/reporting` runs against the loaded ledger and its control totals reconcile.
-- [ ] The statement page's query plan at volume is captured and recorded, with the row counts it was
-      measured at.
+- [x] A loaded ledger passes `BalanceReconciliation` for every account. Clean over all 300 001 after a
+      250-day load, and clean in `LoadedLedgerTest` on every run of the suite.
+- [x] `AuditChain.verify()` passes over the whole loaded chain - 2 854 025 rows, end to end.
+- [x] No constraint or trigger was disabled to complete a load. Asserted rather than promised:
+      `pg_trigger.tgenabled` is read out of the catalogue after a load, and a planted single-leg entry
+      is still refused at commit with "does not balance".
+- [x] The same seed produces the same dataset, checked by a digest rather than by row counts alone. A
+      SHA-256 over every row in write order, prefixed by its table, excluding the two identity columns;
+      two loads into two fresh databases agree on the digest and on the chain head.
+- [x] `batch/reporting` runs against the loaded ledger and its control totals reconcile. 300 001
+      accounts, 22 088 movements, debits 3 227 751 544 544 against credits 3 227 751 544 544 over all
+      4 840 086 postings - and the chain hash it recorded independently is the one the load reported.
+- [x] The statement page's query plan at volume is captured and recorded, with the row counts it was
+      measured at. Both ends of it: 0.48 ms at 59 postings with `posting_account_ix` used as intended,
+      and 2.5 s at 300 000 with the index abandoned. See
+      [`../../architecture/query-plans-at-volume.md`](../../architecture/query-plans-at-volume.md).
 
 ## Verification
 

@@ -401,3 +401,82 @@ func TestAnAccountReferenceNamesTheCustomerThatHoldsIt(t *testing.T) {
 		t.Error("read a customer out of characters the pattern forbids")
 	}
 }
+
+// smallSpec is testSpec's shape at a size a test can materialise: two cohorts, contiguous blocks,
+// whole people at 80/20.
+func smallSpec() population.Spec {
+	spec := testSpec()
+	spec.Size = 100
+	return spec
+}
+
+// The layout Accounts yields is the one New computed, not a second derivation of it. The check is
+// that every reference it yields is one Draw could have drawn, and that the cohorts sit where the
+// shares put them - which is the property a loader would silently get wrong on its own.
+func TestAccountsYieldsTheTreasuryFirstAndThenTheWholePopulation(t *testing.T) {
+	people, err := population.New(smallSpec())
+	if err != nil {
+		t.Fatalf("building the population: %v", err)
+	}
+
+	var holdings []population.Holding
+	for holding := range people.Accounts() {
+		holdings = append(holdings, holding)
+	}
+
+	spec := smallSpec()
+	want := spec.Size*spec.AccountsPerCustomer + 1
+	if len(holdings) != want {
+		t.Fatalf("Accounts yielded %d holdings, want %d", len(holdings), want)
+	}
+
+	first := holdings[0]
+	treasuryCustomer, treasuryAccount := people.Treasury()
+	if !first.Treasury || first.AccountRef != treasuryAccount || first.CustomerRef != treasuryCustomer {
+		t.Fatalf("the first holding is %+v, want the treasury %s/%s",
+			first, treasuryCustomer, treasuryAccount)
+	}
+
+	seen := map[string]bool{}
+	for _, holding := range holdings[1:] {
+		if holding.Treasury {
+			t.Fatalf("%s is marked as the treasury and is held by %s", holding.AccountRef, holding.CustomerRef)
+		}
+		if holding.Cohort == "" {
+			t.Fatalf("%s belongs to no cohort", holding.AccountRef)
+		}
+		if seen[holding.AccountRef] {
+			t.Fatalf("%s was yielded twice", holding.AccountRef)
+		}
+		seen[holding.AccountRef] = true
+
+		owner, ok := people.CustomerOf(holding.AccountRef)
+		if !ok || owner != holding.CustomerRef {
+			t.Fatalf("%s is yielded against %s and CustomerOf says %s (ok=%v)",
+				holding.AccountRef, holding.CustomerRef, owner, ok)
+		}
+	}
+}
+
+// A cohort's block is contiguous and starts where the previous one ended, which is what makes a
+// customer index enough to say which cohort somebody is in. If Accounts ever interleaved them, a
+// loader would open the right accounts with the wrong opening balances and nothing would fail.
+func TestEachCohortsAccountsAreContiguous(t *testing.T) {
+	people, err := population.New(smallSpec())
+	if err != nil {
+		t.Fatalf("building the population: %v", err)
+	}
+
+	var order []string
+	for holding := range people.Accounts() {
+		if holding.Treasury {
+			continue
+		}
+		if len(order) == 0 || order[len(order)-1] != holding.Cohort {
+			order = append(order, holding.Cohort)
+		}
+	}
+	if len(order) != len(smallSpec().Cohorts) {
+		t.Fatalf("the cohorts appear in %d runs, want one run each: %v", len(order), order)
+	}
+}
