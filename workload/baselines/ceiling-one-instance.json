@@ -1,0 +1,87 @@
+{
+  "conditions": {
+    "ledgerInstances": 1,
+    "levels": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "secondsPerLevel": 10,
+    "poolMaxPerLedger": 16,
+    "accountsPerWorker": "two of its own, funded from a treasury opened for this run",
+    "hardware": "Darwin arm64, 10 cores, go1.25.6",
+    "gitSha": "5f7882f"
+  },
+  "levels": [
+    {
+      "workers": 1,
+      "posted": 3095,
+      "failed": 0,
+      "perSecond": 309.4392725427635,
+      "meanMillis": 3.2315510329563812,
+      "chainWaitMillisPerPosting": 0.10519484426494345,
+      "accountWaitMillisPerPosting": 0.22983117124394184
+    },
+    {
+      "workers": 2,
+      "posted": 6006,
+      "failed": 0,
+      "perSecond": 600.4469110763117,
+      "meanMillis": 3.3305904092574092,
+      "chainWaitMillisPerPosting": 0.13146280502830504,
+      "accountWaitMillisPerPosting": 0.2433976818181818
+    },
+    {
+      "workers": 4,
+      "posted": 7653,
+      "failed": 0,
+      "perSecond": 765.0174025714902,
+      "meanMillis": 5.2277538524761535,
+      "chainWaitMillisPerPosting": 1.2062011270090163,
+      "accountWaitMillisPerPosting": 0.28907195374363
+    },
+    {
+      "workers": 8,
+      "posted": 7869,
+      "failed": 0,
+      "perSecond": 786.266128601457,
+      "meanMillis": 10.170940379844962,
+      "chainWaitMillisPerPosting": 6.289950822340831,
+      "accountWaitMillisPerPosting": 0.2805872334477062
+    },
+    {
+      "workers": 16,
+      "posted": 7503,
+      "failed": 0,
+      "perSecond": 749.0545034073072,
+      "meanMillis": 21.343466017059843,
+      "chainWaitMillisPerPosting": 17.326618707850194,
+      "accountWaitMillisPerPosting": 0.28946427135812325
+    },
+    {
+      "workers": 32,
+      "posted": 7466,
+      "failed": 0,
+      "perSecond": 743.9709925052346,
+      "meanMillis": 42.94209272729708,
+      "chainWaitMillisPerPosting": 17.502907312617193,
+      "accountWaitMillisPerPosting": 0.2908317583712831
+    },
+    {
+      "workers": 64,
+      "posted": 7296,
+      "failed": 0,
+      "perSecond": 722.9721110229233,
+      "meanMillis": 88.11857918133224,
+      "chainWaitMillisPerPosting": 17.982779192708332,
+      "accountWaitMillisPerPosting": 0.29623432223135954
+    }
+  ],
+  "peakPerSecond": 786.266128601457,
+  "peakAtWorkers": 8,
+  "conclusion": "Peak 786.3 postings a second at 8 workers, across 1 ledger instance(s). Adding workers past that point buys latency, not throughput."
+}
