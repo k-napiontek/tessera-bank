@@ -203,6 +203,8 @@ paths:
               schema: { $ref: '#/components/schemas/Transfer' }
         '200':
           description: Replay of a previously accepted idempotency key. The original result.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Transfer' }
@@ -256,6 +258,8 @@ paths:
               schema: { $ref: '#/components/schemas/Transfer' }
         '200':
           description: Replay of a previously accepted idempotency key. The original result.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Transfer' }
@@ -313,6 +317,8 @@ paths:
               schema: { $ref: '#/components/schemas/Hold' }
         '200':
           description: Replay of a previously accepted idempotency key. The original result.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Hold' }
@@ -346,6 +352,8 @@ paths:
               schema: { $ref: '#/components/schemas/Transfer' }
         '200':
           description: Replay of a previously accepted idempotency key. The original result.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Transfer' }
@@ -368,7 +376,15 @@ paths:
         - $ref: '#/components/parameters/CorrelationId'
       responses:
         '200':
-          description: The released hold.
+          description: |
+            The released hold.
+
+            Unlike the other four money-moving operations this answers `200` whether the hold was
+            released now or the answer came from the idempotency store, because releasing a hold
+            creates nothing and `201` would say otherwise. `Idempotency-Replayed` is how a caller
+            tells the two apart.
+          headers:
+            Idempotency-Replayed: { $ref: '#/components/headers/IdempotencyReplayed' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Hold' }
@@ -377,6 +393,23 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
 
 components:
+
+  headers:
+
+    IdempotencyReplayed:
+      description: |
+        Present and `true` when this answer came from the idempotency store rather than from work
+        done now. Absent when the request executed.
+
+        It exists because a status code cannot carry this for every operation. Four of the five
+        money-moving operations create something and answer `201`, so a `200` from them is
+        unambiguously a replay - but `releaseHold` creates nothing, and answering `201` to say "this
+        one really did release it" would state that a resource was created, which would be false. A
+        header states the fact directly rather than leaving it to be inferred from a status that
+        means something else.
+      schema:
+        type: boolean
+        enum: [true]
 
   securitySchemes:
     bearerAuth:

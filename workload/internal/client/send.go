@@ -246,22 +246,35 @@ func (s *Sender) attempt(ctx context.Context, request Request) (Outcome, int, []
 	if err != nil {
 		return Unknown, response.StatusCode, nil, 0, err
 	}
-	return classify(response.StatusCode, request.MovesMoney), response.StatusCode, payload, retryAfter(response), nil
+	replayed := response.Header.Get(replayedHeader) == "true"
+	return classify(response.StatusCode, request.MovesMoney, replayed),
+		response.StatusCode, payload, retryAfter(response), nil
 }
 
 // maxResponseBytes bounds what the driver will read back. A statement page is the largest thing the
 // contract returns and it is bounded at 500 movements.
 const maxResponseBytes = 1 << 20
 
-// classify maps a status to an outcome. The line between rejected and unknown is 4xx against 5xx,
-// and it is the line WP-14 found live. The line between posted and replayed is 201 against 200, and
-// it exists only for an operation that moves money: the ledger's own filter draws it in the same
-// place, for the same reason.
-func classify(status int, movesMoney bool) Outcome {
+// replayedHeader is how the ledger states that an answer came from its idempotency store rather
+// than from work done now.
+//
+// This driver used to infer it from a 201 against a 200, which the ledger's own filter also did,
+// and both were wrong in the same place: `releaseHold` creates nothing, so it answers 200 whether it
+// released the hold or replayed an earlier answer. A run that released thirty holds reported thirty
+// retries nobody had made - and because the two sides inferred it identically, the reconciliation
+// agreed exactly while describing something that never happened. F-71.
+const replayedHeader = "Idempotency-Replayed"
+
+// classify maps a response to an outcome. The line between rejected and unknown is 4xx against 5xx,
+// and it is the line WP-14 found live. The line between posted and replayed is what the ledger says
+// on the response, and it is drawn only for an operation that moves money: a read answers 200 every
+// time it works, and counting those as replays is what made the first run of this driver report
+// 2 525 of them.
+func classify(status int, movesMoney bool, replayed bool) Outcome {
 	switch {
 	case status == http.StatusTooManyRequests:
 		return Refused
-	case status == http.StatusOK && movesMoney:
+	case status >= 200 && status < 300 && movesMoney && replayed:
 		return Replayed
 	case status >= 200 && status < 300:
 		return Posted

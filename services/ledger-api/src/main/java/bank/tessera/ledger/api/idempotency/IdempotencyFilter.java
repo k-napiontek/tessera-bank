@@ -44,6 +44,19 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
     static final String HEADER = "Idempotency-Key";
+
+    /**
+     * Set on a replay, and absent otherwise.
+     *
+     * <p>This filter is the only thing in the estate that knows whether an answer was produced now
+     * or read out of the store, and until WP-23 it did not say so - every consumer inferred it from
+     * the status code instead. That works for the four operations that create something and answer
+     * {@code 201}, and it is wrong for {@code releaseHold}, which creates nothing and answers
+     * {@code 200} either way. F-71 records what the inference cost: the ledger's own metric and the
+     * workload driver both counted every successful release as a retry that never happened, and
+     * they agreed with each other, so the reconciliation looked perfect.
+     */
+    public static final String REPLAYED_HEADER = "Idempotency-Replayed";
     private static final int MINIMUM_KEY_LENGTH = 16;
     private static final int MAXIMUM_KEY_LENGTH = 64;
 
@@ -126,6 +139,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 
         response.reset();
         CorrelationId.applyTo(response);
+        response.setHeader(REPLAYED_HEADER, "true");
         response.setStatus(HttpStatus.OK.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

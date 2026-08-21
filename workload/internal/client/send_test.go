@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,8 +82,17 @@ func transfer(t *testing.T) client.Request {
 }
 
 func answering(status int, body string) http.HandlerFunc {
+	return answeringReplay(status, body, false)
+}
+
+// answeringReplay is the ledger answering from its idempotency store. The header is how it says so:
+// the status cannot, because releaseHold creates nothing and answers 200 either way. F-71.
+func answeringReplay(status int, body string, replayed bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if replayed {
+			w.Header().Set("Idempotency-Replayed", "true")
+		}
 		w.WriteHeader(status)
 		if body != "" {
 			_, _ = w.Write([]byte(body))
@@ -94,21 +104,25 @@ func TestEachStatusLandsInTheColumnItBelongsIn(t *testing.T) {
 	// The five classes exist because a bank cannot be measured with two. 429 apart from 4xx: a
 	// refusal is a control working. 5xx apart from 4xx: the request may have been applied.
 	cases := []struct {
-		status int
-		want   client.Outcome
+		status   int
+		replayed bool
+		want     client.Outcome
 	}{
-		{http.StatusCreated, client.Posted},
-		{http.StatusOK, client.Replayed}, // on a transfer: the ledger had already done it
-		{http.StatusUnprocessableEntity, client.Rejected},
-		{http.StatusConflict, client.Rejected},
-		{http.StatusNotFound, client.Rejected},
-		{http.StatusTooManyRequests, client.Refused},
-		{http.StatusInternalServerError, client.Unknown},
-		{http.StatusBadGateway, client.Unknown},
+		{http.StatusCreated, false, client.Posted},
+		// 200 with no replay header is a release that really did release: work done now, on an
+		// operation that creates nothing and therefore never answers 201.
+		{http.StatusOK, false, client.Posted},
+		{http.StatusOK, true, client.Replayed},
+		{http.StatusUnprocessableEntity, false, client.Rejected},
+		{http.StatusConflict, false, client.Rejected},
+		{http.StatusNotFound, false, client.Rejected},
+		{http.StatusTooManyRequests, false, client.Refused},
+		{http.StatusInternalServerError, false, client.Unknown},
+		{http.StatusBadGateway, false, client.Unknown},
 	}
 	for _, c := range cases {
-		t.Run(http.StatusText(c.status), func(t *testing.T) {
-			sending, _, stop := sender(t, answering(c.status, `{}`), 1)
+		t.Run(fmt.Sprintf("%s replayed=%t", http.StatusText(c.status), c.replayed), func(t *testing.T) {
+			sending, _, stop := sender(t, answeringReplay(c.status, `{}`, c.replayed), 1)
 			defer stop()
 
 			result := sending.Send(context.Background(), transfer(t), time.Now())
@@ -135,8 +149,9 @@ func TestAReadThatAnswers200IsNotCountedAsAReplay(t *testing.T) {
 		t.Errorf("a served balance enquiry is %s", result.Outcome)
 	}
 
-	// The same status on a transfer still means what it means: the ledger had already done it.
-	sendingMoney, _, stopMoney := sender(t, answering(http.StatusOK, `{"transferRef":"TB202608310000000001"}`), 1)
+	// The same status on a transfer means a replay only when the ledger says so on the response.
+	sendingMoney, _, stopMoney := sender(
+		t, answeringReplay(http.StatusOK, `{"transferRef":"TB202608310000000001"}`, true), 1)
 	defer stopMoney()
 
 	if result := sendingMoney.Send(context.Background(), transfer(t), time.Now()); result.Outcome != client.Replayed {
@@ -177,7 +192,9 @@ func TestARetryOfALostRequestCarriesTheKeyTheFirstAttemptUsed(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		// What the ledger answers to a replayed key: the original result, and 200 rather than 201.
+		// What the ledger answers to a replayed key: the original result, 200 rather than 201, and
+		// the header that says the answer came from the store rather than from work done now.
+		w.Header().Set("Idempotency-Replayed", "true")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"transferRef":"TB202608310000000009"}`))
 	}, 3)

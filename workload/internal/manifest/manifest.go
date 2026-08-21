@@ -13,6 +13,8 @@
 package manifest
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -168,4 +170,27 @@ func New(run Run) (Manifest, error) {
 		RealDuration:        realDuration,
 		RealDurationSeconds: realDuration.Seconds(),
 	}, nil
+}
+
+// Read decodes a manifest a run wrote.
+//
+// New builds one; this reads one back, which is what WP-23's report needs in order to say which run
+// it is describing. A manifest whose format it does not recognise is refused rather than read
+// partially: the fields it would find are exactly the fields both versions happen to share, and a
+// report that named the wrong seed or the wrong compression would be a plausible account of a run
+// that never took place.
+func Read(document []byte) (Manifest, error) {
+	var record Manifest
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&record); err != nil {
+		return Manifest{}, fmt.Errorf("%w: %v", ErrRun, err)
+	}
+	if record.FormatID != FormatID {
+		return Manifest{}, fmt.Errorf(
+			"%w: it announces itself as %q and this reads %q", ErrRun, record.FormatID, FormatID)
+	}
+	// RealDuration is json:"-", so a manifest read back carries only the seconds it published.
+	record.RealDuration = time.Duration(record.RealDurationSeconds * float64(time.Second))
+	return record, nil
 }

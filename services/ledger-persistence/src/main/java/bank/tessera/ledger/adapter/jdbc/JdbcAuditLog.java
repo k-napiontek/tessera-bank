@@ -44,10 +44,16 @@ public final class JdbcAuditLog implements AuditLog {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper json;
+    private final LockWaits lockWaits;
 
     public JdbcAuditLog(NamedParameterJdbcTemplate jdbc, ObjectMapper json) {
+        this(jdbc, json, LockWaits.UNMEASURED);
+    }
+
+    public JdbcAuditLog(NamedParameterJdbcTemplate jdbc, ObjectMapper json, LockWaits lockWaits) {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
         this.json = Objects.requireNonNull(json, "json");
+        this.lockWaits = Objects.requireNonNull(lockWaits, "lockWaits");
     }
 
     @Override
@@ -56,7 +62,11 @@ public final class JdbcAuditLog implements AuditLog {
         AuditEntry stored = normalise(entry);
 
 
-        jdbc.queryForObject("SELECT pg_advisory_xact_lock(:key)", Map.of("key", CHAIN_LOCK), Object.class);
+        // The wait here is the whole of F-27: this lock is service-wide, so every money-moving
+        // transaction in every instance queues on it. Timed apart from the account locks, because a
+        // single averaged figure moves for two unrelated reasons and answers neither question.
+        lockWaits.timing(LockWaits.Kind.CHAIN, () -> jdbc.queryForObject(
+                "SELECT pg_advisory_xact_lock(:key)", Map.of("key", CHAIN_LOCK), Object.class));
 
         String previousHash = jdbc.query(
                         "SELECT hash FROM audit_record ORDER BY seq DESC LIMIT 1",

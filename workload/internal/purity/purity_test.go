@@ -67,6 +67,10 @@ var driver = []string{
 	"internal/reconcile",
 	"internal/runner",
 	"internal/seeding",
+	// WP-23. It performs no I/O either - cmd/workload-report hands it bytes, exactly as cmd hands
+	// the model bytes - but it is classified by role rather than by purity, like internal/reconcile
+	// beside it: both read what a run produced, and neither describes what a bank's day looks like.
+	"internal/slo",
 }
 
 // cmd is a main rather than a library: it reads the model from a path, writes a manifest to one,

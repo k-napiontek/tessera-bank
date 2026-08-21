@@ -70,6 +70,12 @@ func Public(deps Dependencies) http.Handler {
 // Admin is the handler an orchestrator and a Prometheus scraper reach. It is never exposed to a
 // customer: readiness names the state of the estate, and the metrics name its routes and volumes.
 func Admin(deps Dependencies, readiness health.Probe) http.Handler {
+	// Bound here rather than in main, so that anything assembling a gateway gets the gauge - and so
+	// that the limiter's size is exported by the same function that exposes the endpoint carrying it.
+	if deps.Limiter != nil {
+		deps.Metrics.TrackLimiter(deps.Limiter.Tracked)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", health.Handler(readiness))
 	mux.Handle("/readyz", health.Handler(readiness))

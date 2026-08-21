@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#
+# Capture the estate's recorded normal: a WP-21 day driven against a WP-22 ledger.
+#
+# **A test fixture, not a component of the bank.** It composes the two scripts either side of it
+# rather than reimplementing them - services/ledger-loader/scripts/load-dataset.sh builds the
+# database, workload/scripts/estate-up.sh boots the estate against it and drives the day, and
+# workload-report turns the manifest and the two scrapes into the report that gets committed.
+#
+#   bash workload/scripts/baseline.sh
+#   bash workload/scripts/baseline.sh --customers 20000 --scale 0.002 --compress 720
+#
+# Why it composes rather than copies: three scripts in this repository already boot a database and
+# a JVM, and F-61 records what the fourth copy of that scaffolding costs when one of them is fixed.
+#
+# Needs: Docker, a JDK 17, Go. Takes several minutes - most of it is the load.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OUT="${TB_BASELINE_OUT:-$ROOT/workload/baselines}"
+WORK="${TMPDIR:-/tmp}/tessera-baseline"
+
+CUSTOMERS=20000
+FROM=2026-06-01
+TO=2026-06-30
+SEED=42
+LOAD_SCALE=0.0017
+RUN_SCALE=0.002
+COMPRESS=720
+WINDOW=branch-hours
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --customers) CUSTOMERS="$2"; shift 2 ;;
+    --from) FROM="$2"; shift 2 ;;
+    --to) TO="$2"; shift 2 ;;
+    --seed) SEED="$2"; shift 2 ;;
+    --load-scale) LOAD_SCALE="$2"; shift 2 ;;
+    --scale) RUN_SCALE="$2"; shift 2 ;;
+    --compress) COMPRESS="$2"; shift 2 ;;
+    --window) WINDOW="$2"; shift 2 ;;
+    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+step() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
+
+rm -rf "$WORK"
+mkdir -p "$WORK" "$OUT"
+
+step "Load a production-shaped ledger (WP-22)"
+TB_DATASET_MANIFEST="$WORK/dataset-manifest.json" \
+  bash "$ROOT/services/ledger-loader/scripts/load-dataset.sh" \
+    --customers "$CUSTOMERS" --from "$FROM" --to "$TO" \
+    --seed "$SEED" --scale "$LOAD_SCALE"
+
+step "Drive a compressed day against it (WP-21)"
+# TB_KEEP_DATA=1 is what stops estate-up.sh emptying the ledger it was pointed at. Without it the
+# baseline would be captured against three accounts, which is the state WP-22 exists to end.
+TB_DB_PORT=5435 \
+TB_DB_CONTAINER=tessera-dataset-db \
+TB_KEEP_DATA=1 \
+TB_MANIFEST="$WORK/run-manifest.json" \
+TB_SCRAPE_DIR="$WORK" \
+  bash "$ROOT/workload/scripts/estate-up.sh" \
+    --scale "$RUN_SCALE" --compress "$COMPRESS" --window "$WINDOW" \
+  | tee "$WORK/run.log"
+
+step "Generate the report"
+go -C "$ROOT/workload" run ./cmd/workload-report \
+  --manifest "$WORK/run-manifest.json" \
+  --before "$WORK/before.prom" --before "$WORK/before-edge.prom" \
+  --after "$WORK/after.prom" --after "$WORK/after-edge.prom" \
+  --catalogue "$ROOT/contracts/slo/tessera-slo-v1.json" \
+  --out "$OUT/baseline-report.txt"
+
+cp "$WORK/run-manifest.json" "$OUT/baseline-run-manifest.json"
+cp "$WORK/dataset-manifest.json" "$OUT/baseline-dataset-manifest.json"
+cp "$WORK/before.prom" "$OUT/baseline-before.prom"
+cp "$WORK/after.prom" "$OUT/baseline-after.prom"
+cp "$WORK/before-edge.prom" "$OUT/baseline-before-edge.prom"
+cp "$WORK/after-edge.prom" "$OUT/baseline-after-edge.prom"
+
+step "Captured"
+echo "  $OUT/baseline-report.txt"
+echo "  $OUT/baseline-run-manifest.json"
+echo "  $OUT/baseline-dataset-manifest.json"
+echo "  $OUT/baseline-before.prom, baseline-after.prom"
+echo
+echo "  Stop the database:  docker rm -f tessera-dataset-db"

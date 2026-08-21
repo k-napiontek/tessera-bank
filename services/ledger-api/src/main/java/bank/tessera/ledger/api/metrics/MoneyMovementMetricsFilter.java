@@ -1,5 +1,6 @@
 package bank.tessera.ledger.api.metrics;
 
+import bank.tessera.ledger.api.idempotency.IdempotencyFilter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.servlet.FilterChain;
@@ -23,10 +24,16 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * in milliseconds. And what an operator needs to know is what the customer experienced, which is the
  * response, not an internal call that may have been retried or replayed on the way out.
  *
- * <p><strong>A replay is its own outcome, not a success.</strong> A {@code 200} on a money-moving
- * endpoint means the idempotency filter answered from its store: the client retried. Counting it as
- * a posting would inflate throughput with work nobody did, and hide the signal that actually matters
- * - a rise in replays means clients are timing out on a ledger that is answering too slowly.
+ * <p><strong>A replay is its own outcome, not a success.</strong> The idempotency filter says so on
+ * the response, and this reads what it said: counting a replay as a posting would inflate throughput
+ * with work nobody did, and hide the signal that actually matters - a rise in replays means clients
+ * are timing out on a ledger that is answering too slowly.
+ *
+ * <p>It used to infer that from a {@code 200} instead, and F-71 records the cost. Four of the five
+ * money-moving operations create something and answer {@code 201}, so a {@code 200} from them really
+ * is a replay - but {@code releaseHold} creates nothing and answers {@code 200} either way, so every
+ * successful release was counted as a retry that never happened. The workload driver inferred it the
+ * same way, so the two agreed and the reconciliation looked perfect while both were wrong.
  *
  * <p>Latency is recorded for outcomes that did something. Timing rejections alongside postings mixes
  * a validation failure that returns in a millisecond with a transfer that took two locks, and the
@@ -81,7 +88,7 @@ public class MoneyMovementMetricsFilter extends OncePerRequestFilter implements 
         try {
             chain.doFilter(request, response);
         } finally {
-            String outcome = outcomeOf(response.getStatus());
+            String outcome = outcomeOf(response.getStatus(), replayed(response));
             registry.counter(OUTCOME_COUNTER, "operation", operation, "outcome", outcome).increment();
             if (!"rejected".equals(outcome)) {
                 sample.stop(registry.timer(LATENCY_TIMER, "operation", operation, "outcome", outcome));
@@ -99,8 +106,21 @@ public class MoneyMovementMetricsFilter extends OncePerRequestFilter implements 
         return null;
     }
 
-    private static String outcomeOf(int status) {
-        if (status == 200) {
+    /**
+     * Whether the idempotency filter answered from its store.
+     *
+     * <p>Read from the header rather than inferred from a {@code 200}, which is what this filter
+     * used to do. {@code releaseHold} creates nothing and therefore answers {@code 200} whether it
+     * released the hold or replayed an earlier answer, so the inference reported every successful
+     * release as a retry - F-71. Giving that operation a {@code 201} would have made the inference
+     * work again at the cost of the contract saying a resource was created when none was.
+     */
+    private static boolean replayed(HttpServletResponse response) {
+        return Boolean.parseBoolean(response.getHeader(IdempotencyFilter.REPLAYED_HEADER));
+    }
+
+    private static String outcomeOf(int status, boolean replayed) {
+        if (status >= 200 && status < 300 && replayed) {
             return "replayed";
         }
         if (status >= 200 && status < 300) {
