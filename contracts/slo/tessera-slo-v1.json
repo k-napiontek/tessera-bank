@@ -327,6 +327,15 @@
           "meaning": "Calls to the ledger that produced no usable answer, by kind. The edge's view of a ledger that is failing, timing out or unreachable.",
           "introducedBy": "WP-12",
           "noObjectiveBecause": "This is the ledger's failure seen from one hop away, and SLO-LEDGER-MOVEMENT-SUCCESS already carries that promise. Stating it twice lets one be met while the other is missed, and then the argument is about which number is right rather than about the outage."
+        },
+        {
+          "meterName": "tessera_gateway_limiter_buckets",
+          "exposedName": "tessera_gateway_limiter_buckets",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Rate-limit buckets currently held. The limiter keeps one per caller and sweeps the idle ones on a clock rather than on a request count, and this is the only thing that would show the sweep having stopped. NaN means nothing has been bound to read it.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "How many buckets is too many depends on how many callers there are, which is a property of the deployment rather than of the software - ADR 0006 makes the same argument about the rate limit itself being per instance. What this needs is the recorded normal this package commits, so that a limiter whose sweep has stopped is visible as a shape rather than as a threshold."
         }
       ]
     },

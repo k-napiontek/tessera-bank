@@ -8,8 +8,10 @@
 package metrics
 
 import (
+	"math"
 	"net/http"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,6 +32,11 @@ type Metrics struct {
 	duration *prometheus.HistogramVec
 	refusals *prometheus.CounterVec
 	upstream *prometheus.CounterVec
+
+	// buckets is where the limiter's own size is read from. Held as a swappable source rather than
+	// registered later, because a collector registered twice is a panic and Admin is called once
+	// per process in production and once per test.
+	buckets atomic.Pointer[func() float64]
 }
 
 // New builds the instruments.
@@ -62,8 +69,36 @@ func New() *Metrics {
 			Help: "Calls to the ledger that produced no usable answer, by kind.",
 		}, []string{"kind"}),
 	}
-	registry.MustRegister(m.requests, m.duration, m.refusals, m.upstream)
+	// F-37: Limiter.Tracked() reports how many buckets are held and nothing exported it, so the
+	// memory the limiter uses - and the sweep that is supposed to bound it - were invisible in
+	// production. The gauge belongs beside the refusal counter, which is what WP-12 left out.
+	buckets := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "tessera_gateway_limiter_buckets",
+		Help: "Rate-limit buckets currently held. NaN when nothing has been bound to read them.",
+	}, m.trackedBuckets)
+
+	registry.MustRegister(m.requests, m.duration, m.refusals, m.upstream, buckets)
 	return m
+}
+
+// TrackLimiter binds the gauge to whatever is holding the buckets.
+//
+// Separate from New so that this package does not import the limiter: metrics measures things and
+// should not know what any of them are.
+func (m *Metrics) TrackLimiter(tracked func() int) {
+	source := func() float64 { return float64(tracked()) }
+	m.buckets.Store(&source)
+}
+
+func (m *Metrics) trackedBuckets() float64 {
+	source := m.buckets.Load()
+	if source == nil {
+		// Never zero. Zero is a reading - "the limiter is holding nothing" - and nothing has been
+		// asked. An operator acts differently on "empty" than on "unknown", so they are different
+		// values, and the same rule the ledger's vacuum age follows.
+		return math.NaN()
+	}
+	return (*source)()
 }
 
 // Handler serves the exposition format. It belongs on the administrative listener: metrics name
