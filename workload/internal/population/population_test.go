@@ -342,3 +342,62 @@ func TestASpecThatDoesNotAddUpIsRefused(t *testing.T) {
 		})
 	}
 }
+
+func TestTheTreasuryIsAReferenceNoCustomerCanHold(t *testing.T) {
+	// A run has to debit its funding from somewhere, and the ledger is double-entry: an opening
+	// balance is a transfer. The reference is generated here rather than invented in the driver, so
+	// that every row a run leaves behind traces back to the model.
+	people := build(t)
+	customer, account := people.Treasury()
+
+	if pattern := patternFor(t, "CustomerRef"); !pattern.MatchString(customer) {
+		t.Errorf("the treasury customer %q does not match %s", customer, pattern)
+	}
+	if pattern := patternFor(t, "AccountRef"); !pattern.MatchString(account) {
+		t.Errorf("the treasury account %q does not match %s", account, pattern)
+	}
+
+	// It sits one past the last customer, so no draw over the whole population can reach it.
+	date, err := bankday.ParseDate("2026-08-31")
+	if err != nil {
+		t.Fatalf("ParseDate: %v", err)
+	}
+	for seq := int64(0); seq < 20_000; seq++ {
+		drawn := people.Draw(11, seq, date)
+		if drawn.AccountRef == account || drawn.CounterpartyRef == account {
+			t.Fatalf("event %d drew the treasury account", seq)
+		}
+		if drawn.CustomerRef == customer {
+			t.Fatalf("event %d drew the treasury customer", seq)
+		}
+	}
+}
+
+func TestAnAccountReferenceNamesTheCustomerThatHoldsIt(t *testing.T) {
+	// Seeding opens an account against its customer, and an action names the counterparty by
+	// account only. The inverse has to agree with the generator over the whole population, not over
+	// the two examples somebody checked by hand.
+	people := build(t)
+	date, err := bankday.ParseDate("2026-08-31")
+	if err != nil {
+		t.Fatalf("ParseDate: %v", err)
+	}
+
+	for seq := int64(0); seq < 5_000; seq++ {
+		drawn := people.Draw(3, seq, date)
+		customer, found := people.CustomerOf(drawn.AccountRef)
+		if !found {
+			t.Fatalf("%s names no customer", drawn.AccountRef)
+		}
+		if customer != drawn.CustomerRef {
+			t.Fatalf("%s belongs to %s and the draw says %s", drawn.AccountRef, customer, drawn.CustomerRef)
+		}
+	}
+
+	if _, found := people.CustomerOf("not an account"); found {
+		t.Error("read a customer out of something that is not an account reference")
+	}
+	if _, found := people.CustomerOf("TB000000000000!!"); found {
+		t.Error("read a customer out of characters the pattern forbids")
+	}
+}
