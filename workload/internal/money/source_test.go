@@ -44,6 +44,7 @@ var floatIsJustified = map[string]string{
 	// why, and none of these is an amount.
 	"internal/seeding/seeding.go": "the currency of the estate is chosen by weighting each cohort's mix by its share of the day's events - a share is a ratio, and the opening balance beside it is an int64 throughout",
 	"internal/reconcile/parse.go": "a Prometheus counter is a float64 in the exposition, so the ledger's own totals arrive as floats and are totalled as counts; no amount is ever read from it",
+	"cmd/workload-run/main.go":    "the run report prints offered rates and latency quantiles, both of which are rates; it prints no amount at all - a run reports what it did, never what it moved",
 	"internal/metrics/metrics.go": "the Prometheus exposition format is float64 by specification: bucket boundaries, seconds and counts. No amount is ever published, and a run reports what it did rather than what it moved",
 }
 
@@ -63,6 +64,9 @@ var driverMayCall = map[string]map[string]string{
 	},
 	"internal/reconcile/parse.go": {
 		"strconv.ParseFloat": "a Prometheus counter is a float64 by specification, and the ledger's counter counts requests; nothing here reads an amount",
+	},
+	"cmd/workload-run/main.go": {
+		"time.Now": "a run happens in real time: this is where the wall clock enters, and the schedule it executes was computed without one",
 	},
 }
 
