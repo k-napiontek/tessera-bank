@@ -298,7 +298,16 @@ def check_coverage(catalogue: dict) -> list[str]:
                 f"metric with no stated objective is the state that ADR exists to end"
             )
             continue
-        named = {entry["meterName"] for entry, _ in catalogued_metrics(component)}
+        # Only the entries this repository registers itself can be matched against its source. A
+        # framework meter - Boot's Hikari binder, say - has no literal here to find, and re-deriving
+        # one so that it could be found would be a second copy of somebody else's instrument. Those
+        # are asserted against a real scrape by the component's own test instead, which is the only
+        # place the exposed name is real rather than assumed.
+        named = {
+            entry["meterName"]
+            for entry, _ in catalogued_metrics(component)
+            if entry["origin"] == "source"
+        }
         for metric in sorted(emitted - named):
             problems.append(f"{path}: emits {metric!r} and the catalogue does not mention it")
         for metric in sorted(named - emitted):
@@ -378,10 +387,17 @@ def main() -> int:
 
     objectives = sum(len(c["objectives"]) for c in catalogue["components"])
     signals = sum(len(c["signals"]) for c in catalogue["components"])
+    framework = sum(
+        1
+        for component in catalogue["components"]
+        for entry, _ in catalogued_metrics(component)
+        if entry["origin"] == "framework"
+    )
     print(
         f"OK    {CATALOGUE_ID}: {len(catalogue['components'])} components, "
         f"{objectives} objectives, {signals} supporting signals, "
-        f"{objectives + signals} metrics accounted for"
+        f"{objectives + signals} metrics accounted for "
+        f"({framework} of them a framework's, asserted against a scrape rather than against source)"
     )
     return 0
 

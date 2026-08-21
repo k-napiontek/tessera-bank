@@ -15,6 +15,7 @@ import bank.tessera.ledger.adapter.jdbc.JdbcReferenceGenerator;
 import bank.tessera.ledger.adapter.jdbc.JdbcUnitOfWork;
 import bank.tessera.ledger.api.audit.HttpAuditContext;
 import bank.tessera.ledger.api.correlation.CorrelationIdFilter;
+import bank.tessera.ledger.api.metrics.DatabaseSignals;
 import bank.tessera.ledger.api.metrics.MoneyMovementMetricsFilter;
 import bank.tessera.ledger.api.outbox.KafkaEventPublisher;
 import bank.tessera.ledger.api.outbox.OutboxRelayScheduler;
@@ -198,6 +199,16 @@ public class LedgerConfiguration {
 
     /** Nothing but a handle, so the registration above happens exactly once at startup. */
     public static final class OutboxGauges {}
+
+    @Bean
+    DatabaseSignals databaseSignals(
+            NamedParameterJdbcTemplate jdbc,
+            MeterRegistry registry,
+            @Value("${tessera.db-signals.refresh:PT15S}") Duration refresh) {
+        // Cached for a scrape interval rather than read per gauge: forty-eight series against one
+        // pooled connection, every scrape, would make the pool utilisation this measures worse.
+        return DatabaseSignals.register(jdbc, registry, refresh);
+    }
 
     @Bean
     IdempotencyStore idempotencyStore(NamedParameterJdbcTemplate jdbc) {
