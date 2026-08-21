@@ -22,6 +22,13 @@
 
 set -euo pipefail
 
+# Job control, so that every background job below is its own process group. `go run` and `gradlew`
+# both exec a child - the compiled binary and a JVM - and killing the parent alone leaves that child
+# holding the port. The next run then talks to the previous run's gateway, which still holds the
+# previous run's public key, and every request in it is a 401 that reads like a broken driver. Found
+# by running this script twice.
+set -m
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KEYS="${TMPDIR:-/tmp}/tessera-workload-keys.pem"
 RUN_LOG="${TMPDIR:-/tmp}/tessera-workload-run.log"
@@ -38,8 +45,12 @@ cleanup() {
   echo
   echo "== stopping =="
   for pid in "${PIDS[@]:-}"; do
-    [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    [ -n "$pid" ] || continue
+    # The group first, then the process itself in case it was never given one.
+    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   done
+  # Give the JVM and the gateway a moment to go, so that the next run finds its ports free.
+  sleep 1
   docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -104,6 +115,11 @@ fi
 
 step "Driver"
 echo "  it writes the public key, then waits for the gateway - its output follows below"
+# The key from a previous run is removed first. Without this, wait_for_file sees the old file
+# immediately, the gateway starts holding the public half of a key pair that no longer exists, and
+# every request in the run is a 401 that reads like a broken driver. Found by running this script
+# twice.
+rm -f "$KEYS"
 go -C "$ROOT/workload" run ./cmd/workload-run \
   --model "$ROOT/contracts/workload/tessera-day-v1.json" \
   --date "$(date +%Y-%m-%d)" \

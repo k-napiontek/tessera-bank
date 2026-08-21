@@ -369,11 +369,14 @@ func printReport(summary runner.Summary, registry *metrics.Registry) {
 	fmt.Printf("\n== Outcome ==\n")
 	fmt.Printf("  scheduled %d, sent %d, elapsed %s\n",
 		summary.Scheduled, summary.Sent, summary.Elapsed().Round(time.Millisecond))
-	for _, outcome := range client.Outcomes() {
-		fmt.Printf("  %-10s %d\n", outcome, summary.Outcomes[outcome])
-	}
+
+	// Split, because a replay means something only where money moves: a balance enquiry answers 200
+	// every time it works, and totalling the two together produces a replay rate that reads as
+	// clients retrying a struggling ledger when nothing of the sort happened.
+	fmt.Printf("  %-16s %s\n", "money movement", columns(moneyMoving(summary)))
+	fmt.Printf("  %-16s %s\n", "reads", columns(reads(summary)))
 	for reason, count := range summary.Unsent {
-		fmt.Printf("  unsent     %d (%s)\n", count, reason)
+		fmt.Printf("  %-16s %d (%s)\n", "unsent", count, reason)
 	}
 
 	fmt.Printf("\n== Latency, from the intended send time ==\n")
@@ -447,6 +450,35 @@ func describeURL(url string) string {
 func moneyMoving(summary runner.Summary) map[string]int64 {
 	counted := map[string]int64{}
 	for _, operation := range []string{"createTransfer", "reverseTransfer", "placeHold", "captureHold", "releaseHold"} {
+		for outcome, count := range summary.ByOperation[operation] {
+			counted[outcome.String()] += count
+		}
+	}
+	return counted
+}
+
+// columns renders one outcome row, leaving out the classes that did not occur so that the line a
+// reader has to scan is short.
+func columns(counted map[string]int64) string {
+	var parts []string
+	for _, outcome := range client.Outcomes() {
+		count := counted[outcome.String()]
+		if count == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %d", outcome, count))
+	}
+	if len(parts) == 0 {
+		return "nothing"
+	}
+	return strings.Join(parts, "   ")
+}
+
+// reads is the driver's count over the operations that move no money. The ledger counts none of
+// them, which is why they are reported apart rather than folded in.
+func reads(summary runner.Summary) map[string]int64 {
+	counted := map[string]int64{}
+	for _, operation := range []string{"getAccount", "getBalance", "getStatement", "getTransfer", "listHolds"} {
 		for outcome, count := range summary.ByOperation[operation] {
 			counted[outcome.String()] += count
 		}

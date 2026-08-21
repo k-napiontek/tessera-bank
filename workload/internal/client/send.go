@@ -26,11 +26,16 @@ type Outcome int
 const (
 	// Posted is 201: the ledger did the thing, for the first time.
 	Posted Outcome = iota
-	// Replayed is 200 on a money-moving operation: the ledger had already done it under this key
-	// and answered with the original result. Counted apart from Posted because a run's replay rate
-	// is the signal that clients are timing out on a ledger answering too slowly, and folding it
-	// into throughput would inflate the figure with work nobody did. It is also 200 on a read,
-	// where it means the page came back.
+	// Replayed is 200 on a **money-moving** operation: the ledger had already done it under this
+	// key and answered with the original result. Counted apart from Posted because a run's replay
+	// rate is the signal that clients are timing out on a ledger answering too slowly, and folding
+	// it into throughput would inflate the figure with work nobody did.
+	//
+	// A read that answers 200 is not a replay: it is counted as Posted, the request having done
+	// what it asked. The first run of this driver against a real estate reported two and a half
+	// thousand replays and twenty-four real ones, because a balance enquiry answers 200 like
+	// everything else - a plausible-looking figure that meant nothing, which is the shape of defect
+	// this repository keeps finding.
 	Replayed
 	// Rejected is 4xx other than 429: the ledger understood the request and refused it. That is the
 	// bank working.
@@ -241,7 +246,7 @@ func (s *Sender) attempt(ctx context.Context, request Request) (Outcome, int, []
 	if err != nil {
 		return Unknown, response.StatusCode, nil, 0, err
 	}
-	return classify(response.StatusCode), response.StatusCode, payload, retryAfter(response), nil
+	return classify(response.StatusCode, request.MovesMoney), response.StatusCode, payload, retryAfter(response), nil
 }
 
 // maxResponseBytes bounds what the driver will read back. A statement page is the largest thing the
@@ -249,12 +254,14 @@ func (s *Sender) attempt(ctx context.Context, request Request) (Outcome, int, []
 const maxResponseBytes = 1 << 20
 
 // classify maps a status to an outcome. The line between rejected and unknown is 4xx against 5xx,
-// and it is the line WP-14 found live.
-func classify(status int) Outcome {
+// and it is the line WP-14 found live. The line between posted and replayed is 201 against 200, and
+// it exists only for an operation that moves money: the ledger's own filter draws it in the same
+// place, for the same reason.
+func classify(status int, movesMoney bool) Outcome {
 	switch {
 	case status == http.StatusTooManyRequests:
 		return Refused
-	case status == http.StatusOK:
+	case status == http.StatusOK && movesMoney:
 		return Replayed
 	case status >= 200 && status < 300:
 		return Posted

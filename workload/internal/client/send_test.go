@@ -98,7 +98,7 @@ func TestEachStatusLandsInTheColumnItBelongsIn(t *testing.T) {
 		want   client.Outcome
 	}{
 		{http.StatusCreated, client.Posted},
-		{http.StatusOK, client.Replayed},
+		{http.StatusOK, client.Replayed}, // on a transfer: the ledger had already done it
 		{http.StatusUnprocessableEntity, client.Rejected},
 		{http.StatusConflict, client.Rejected},
 		{http.StatusNotFound, client.Rejected},
@@ -116,6 +116,31 @@ func TestEachStatusLandsInTheColumnItBelongsIn(t *testing.T) {
 				t.Errorf("%d is %s, want %s", c.status, result.Outcome, c.want)
 			}
 		})
+	}
+}
+
+func TestAReadThatAnswers200IsNotCountedAsAReplay(t *testing.T) {
+	// The ledger's own filter counts a replay only on the five money-moving operations, and for the
+	// same reason: a balance enquiry answers 200 every time it works. A driver that called those
+	// replays would report a run in which almost nothing was posted and almost everything was a
+	// retry - which is what the first real run of this driver printed before this test existed.
+	read, err := client.Build(action("getBalance"), date(t), 3, "PLN", populated())
+	if err != nil {
+		t.Fatalf("building a read: %v", err)
+	}
+	sending, _, stop := sender(t, answering(http.StatusOK, `{"bookedBalance":{"amountMinor":1,"currency":"PLN"}}`), 1)
+	defer stop()
+
+	if result := sending.Send(context.Background(), read, time.Now()); result.Outcome != client.Posted {
+		t.Errorf("a served balance enquiry is %s", result.Outcome)
+	}
+
+	// The same status on a transfer still means what it means: the ledger had already done it.
+	sendingMoney, _, stopMoney := sender(t, answering(http.StatusOK, `{"transferRef":"TB202608310000000001"}`), 1)
+	defer stopMoney()
+
+	if result := sendingMoney.Send(context.Background(), transfer(t), time.Now()); result.Outcome != client.Replayed {
+		t.Errorf("a replayed transfer is %s", result.Outcome)
 	}
 }
 
