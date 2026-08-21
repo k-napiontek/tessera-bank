@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera-bank.example/contracts/workload/workload-model.schema.json",
+  "title": "Tessera Bank workload model",
+  "description": "The shape of one business day of demand, declared as a contract so that every driver that executes it - WP-21 against the modern spine, WP-25 against the older strata - is executing the same day. The model performs no I/O and names no host: it states what customers do and when, never where the request goes. Every time in this document is local civil time at the bank; mapping a minute of the day onto an instant is the driver's job, not the model's.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["modelId", "modelVersion", "summary", "realTime", "calendar", "population"],
+  "properties": {
+    "modelId": {
+      "const": "TB-WORKLOAD-DAY-V1",
+      "description": "Format identifier. A driver that does not recognise it must refuse the model rather than guess at it."
+    },
+    "modelVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this model instance. The run manifest records the digest as well, because a version somebody forgot to raise is the failure this guards against."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 400,
+      "description": "Prose. What bank, and what day, this model claims to describe."
+    },
+    "realTime": { "$ref": "#/$defs/realTime" },
+    "calendar": { "$ref": "#/$defs/calendar" },
+    "population": { "$ref": "#/$defs/population" }
+  },
+  "$defs": {
+    "realTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dailyEventCount", "peakToTroughRatio"],
+      "description": "What this model asks for in real time, at scale 1.0 and compression 1. A run at any other setting states both dials in its manifest, so that nothing claims a throughput a run did not produce.",
+      "properties": {
+        "dailyEventCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000,
+          "description": "Events across an ordinary weekday with every calendar multiplier at 1.0. Cross-checked against the population: the cohorts and their per-customer rates have to add up to this number."
+        },
+        "peakToTroughRatio": {
+          "type": "number",
+          "exclusiveMinimum": 1,
+          "maximum": 200,
+          "description": "The busiest hour of the diurnal curve divided by the quietest. Declared here and asserted against the curve, because a flat rate with a nice name is the thing this model exists not to be."
+        }
+      }
+    },
+    "calendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["diurnal", "weekday", "payday", "monthEnd", "windows", "instants"],
+      "description": "When demand happens. The diurnal curve is a shape rather than a rate - the engine normalises it so that a day's total is dailyEventCount - and the multipliers below scale the whole day.",
+      "properties": {
+        "diurnal": {
+          "type": "array",
+          "minItems": 24,
+          "maxItems": 24,
+          "description": "Relative intensity by hour of local civil time, index 0 being 00:00. Shape only; the absolute rate comes from realTime.dailyEventCount.",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 100
+          }
+        },
+        "weekday": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+          "description": "Whole-day multiplier by day of week. A Saturday is not a Tuesday with fewer people awake; it is a different day.",
+          "properties": {
+            "monday": { "$ref": "#/$defs/multiplier" },
+            "tuesday": { "$ref": "#/$defs/multiplier" },
+            "wednesday": { "$ref": "#/$defs/multiplier" },
+            "thursday": { "$ref": "#/$defs/multiplier" },
+            "friday": { "$ref": "#/$defs/multiplier" },
+            "saturday": { "$ref": "#/$defs/multiplier" },
+            "sunday": { "$ref": "#/$defs/multiplier" }
+          }
+        },
+        "payday": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["daysOfMonth", "multiplier"],
+          "description": "Salary dates. Compounds with monthEnd when a date falls in both.",
+          "properties": {
+            "daysOfMonth": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 6,
+              "items": { "type": "integer", "minimum": 1, "maximum": 28 }
+            },
+            "multiplier": { "$ref": "#/$defs/multiplier" }
+          }
+        },
+        "monthEnd": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lastDays", "multiplier"],
+          "description": "The closing days of the month, counted back from the last. Compounds with payday.",
+          "properties": {
+            "lastDays": { "type": "integer", "minimum": 1, "maximum": 5 },
+            "multiplier": { "$ref": "#/$defs/multiplier" }
+          }
+        },
+        "windows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "Named spans of the day a driver needs to know about. A window whose endMinute is not after its startMinute wraps midnight.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "startMinute", "endMinute", "purpose"],
+            "properties": {
+              "id": { "$ref": "#/$defs/identifier" },
+              "startMinute": { "$ref": "#/$defs/minuteOfDay" },
+              "endMinute": { "$ref": "#/$defs/minuteOfDay" },
+              "purpose": { "type": "string", "minLength": 8, "maxLength": 300 }
+            }
+          }
+        },
+        "instants": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "Named moments rather than spans.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "atMinute", "purpose"],
+            "properties": {
+              "id": { "$ref": "#/$defs/identifier" },
+              "atMinute": { "$ref": "#/$defs/minuteOfDay" },
+              "purpose": { "type": "string", "minLength": 8, "maxLength": 300 }
+            }
+          }
+        }
+      }
+    },
+    "population": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size", "accountsPerCustomer", "cohorts"],
+      "description": "Who generates the demand. References only - there is no field in this model a person's name, address or identifier could be written into, and the checker refuses a schema that grows one.",
+      "properties": {
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50000000,
+          "description": "Distinct synthetic customers. The gateway limits per token subject plus route class (ADR 0006), so a population of thousands is what makes meaningful load possible as well as what makes it realistic."
+        },
+        "accountsPerCustomer": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "cohorts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "items": { "$ref": "#/$defs/cohort" }
+        }
+      }
+    },
+    "cohort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "share", "eventsPerCustomerPerDay", "amount", "currencyMix", "operationMix"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "share": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "Fraction of the population. The shares add to 1 and each must yield a whole number of customers."
+        },
+        "eventsPerCustomerPerDay": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "amount": { "$ref": "#/$defs/amountDistribution" },
+        "currencyMix": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 8,
+          "propertyNames": { "pattern": "^[A-Z]{3}$" },
+          "additionalProperties": { "$ref": "#/$defs/weight" },
+          "description": "ISO 4217 alphabetic codes to weights adding to 1."
+        },
+        "operationMix": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 16,
+          "propertyNames": { "pattern": "^[a-z][A-Za-z]{2,31}$" },
+          "additionalProperties": { "$ref": "#/$defs/weight" },
+          "description": "OpenAPI operationId to weight, adding to 1. Every key must be an operationId the ledger actually serves; the checker reads them from contracts/openapi/ledger-core.yaml rather than from a list copied into it."
+        }
+      }
+    },
+    "amountDistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["medianMinor", "sigma", "minMinor", "maxMinor"],
+      "description": "Log-normal in shape, stated in minor units and drawn as int64. There is no scale here and no decimal point: the currency's scale resolves the figure, per the canonical data model.",
+      "properties": {
+        "medianMinor": { "type": "integer", "minimum": 1, "maximum": 100000000000 },
+        "sigma": { "type": "number", "exclusiveMinimum": 0, "maximum": 4 },
+        "minMinor": { "type": "integer", "minimum": 1, "maximum": 100000000000 },
+        "maxMinor": { "type": "integer", "minimum": 1, "maximum": 100000000000 }
+      }
+    },
+    "multiplier": { "type": "number", "exclusiveMinimum": 0, "maximum": 20 },
+    "weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+    "minuteOfDay": { "type": "integer", "minimum": 0, "maximum": 1439 },
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,30}$" }
+  }
+}

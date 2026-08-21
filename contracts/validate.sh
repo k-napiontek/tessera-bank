@@ -61,6 +61,9 @@ record python3 contracts/check-extract-layout.py
 step "Reconciliation break report format"
 record python3 contracts/check-break-report.py
 
+step "Workload model against its schema"
+record python3 contracts/check-workload-model.py
+
 printf '\n'
 if [ "$failed" -ne 0 ]; then
   printf '\033[1mFAILED\033[0m - %d check(s) did not pass\n' "$failed"

@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1020-workload-model` |
 | **Stratum** | 4 - Go, ~2025 |
 | **Depends on** | WP-02 |
-| **Status** | `Not started` |
+| **Status** | `Done` |
 
 ## Objective
 
@@ -124,23 +124,36 @@ driver cannot drift from the first.
 8. **The run manifest.** Seed, model digest, git SHA, scale, compression and window, written as JSON,
    with a test proving the digest changes when the model changes.
 9. **Toolchain and documentation.** Makefile targets, `workload/README.md` stating plainly that this
-   is a fixture and not a component of the bank, the traceability rows, and ADR 0012.
+   is a fixture and not a component of the bank, the traceability rows, and ADR 0016 - **0012 was
+   taken** by `0012-slo-catalogue-boundary.md`, written when this strand was planned.
 10. **Verification and landing.** The commands below, with real output into the pull request, then
     `STATUS.md`.
 
 ## Definition of Done
 
-- [ ] `bash contracts/validate.sh` exits 0 with the workload family included, and fails when the
-      committed model breaks the schema. Demonstrated both ways.
-- [ ] The same seed and the same model produce a byte-identical schedule; changing either changes it.
-- [ ] The realised arrival rate over each hour of a simulated day matches the declared intensity
+- [x] `bash contracts/validate.sh` exits 0 with the workload family included, and fails when the
+      committed model breaks the schema. Demonstrated both ways - a cohort share moved from 0.80 to
+      0.79 fails naming both the shares and the volume they no longer generate.
+- [x] The same seed and the same model produce a byte-identical schedule; changing either changes it.
+      `arrivals_test.go` compares rendered bytes rather than structs, and pins the seed, the model
+      and the business date each separately.
+- [x] The realised arrival rate over each hour of a simulated day matches the declared intensity
       within the stated tolerance, and the peak-to-trough ratio is what the model says it is.
-- [ ] Every generated reference matches the pattern in the OpenAPI document, read from that document.
-- [ ] No `float64` on any amount path. The source-scanning test fails when one is planted.
-- [ ] The schema has no field capable of carrying personal data, and a grep of a generated day's
-      output finds nothing resembling any.
-- [ ] The engine performs no I/O, asserted by a test that fails if `net`, `os/exec` or a database
-      driver becomes reachable from the engine package - the same control as `DomainPurityTest`.
+      Tolerance 8%, stated in the test as four standard deviations at the thinnest hour rather than
+      tuned. Disabling the thinning step fails it by 3 000%.
+- [x] Every generated reference matches the pattern in the OpenAPI document, read from that document.
+      All five - account, customer, transfer, hold, movement - over 20 000 draws, and each format is
+      asserted to fail the other four.
+- [x] No `float64` on any amount path, and the rule is narrower than the box asks: exactly one
+      **function**, `population.drawMinor`, may convert between a float and an amount, and every file
+      naming `float64` carries its reason. A planted `float64(a.Amount.Minor) / 100` fails naming the
+      function it was planted in.
+- [x] The schema has no field capable of carrying personal data - checked structurally, so a planted
+      `holderName` property fails - and a grep of 4 000 generated events and a run manifest for
+      thirteen identity markers matches nothing.
+- [x] The engine performs no I/O, asserted **transitively**: a `net/http` import planted in
+      `internal/bankday` fails naming all five packages that reach it, not only the one that declared
+      it. `cmd/` is the recorded exemption and the test fails if it ever stops existing.
 
 ## Verification
 
