@@ -13,7 +13,11 @@ import java.util.TreeMap;
  *
  * @param datasetDigest SHA-256 over every row written, in write order
  * @param chainHead the last audit hash, which says which chain a later report's figures came from
- * @param busiestAccountRef the account the draw gave the most postings, named rather than chosen
+ * @param treasuryAccountRef the bank's own account, which every opening balance was debited from -
+ *     it carries one leg per account in the estate and is excluded from busiestAccountRef for that
+ *     reason
+ * @param busiestAccountRef the customer account the draw gave the most postings, named rather than
+ *     chosen
  */
 public record LoadManifest(
         String formatId,
@@ -28,6 +32,7 @@ public record LoadManifest(
         int customers,
         int accountsPerCustomer,
         String baseCurrency,
+        String treasuryAccountRef,
         long openingMultiple,
         Map<String, Long> counters,
         long rowsWritten,
@@ -59,6 +64,7 @@ public record LoadManifest(
                 header.customers(),
                 header.accountsPerCustomer(),
                 header.baseCurrency(),
+                header.treasuryAccountRef(),
                 DatasetLoader.OPENING_MULTIPLE,
                 counters,
                 rowsWritten,

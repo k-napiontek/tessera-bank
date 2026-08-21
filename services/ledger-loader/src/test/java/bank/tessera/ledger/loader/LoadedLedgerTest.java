@@ -239,6 +239,11 @@ class LoadedLedgerTest {
         assertThat(counters).containsKey(Counter.CURRENCY_SUBSTITUTED.name());
         assertThat(loaded.manifest().busiestAccountRef()).matches("^TB[0-9A-Z]{14}$");
         assertThat(loaded.manifest().busiestAccountPostings()).isPositive();
+        // Never the treasury, which carries one leg for every account in the estate. The first load
+        // of this package reported it, and a deep cursor into it would have been a plan of the
+        // opening phase rather than of a customer's year.
+        assertThat(loaded.manifest().busiestAccountRef())
+                .isNotEqualTo(loaded.manifest().treasuryAccountRef());
         assertThat(loaded.manifest().formatId()).isEqualTo(LoadManifest.FORMAT_ID);
     }
 

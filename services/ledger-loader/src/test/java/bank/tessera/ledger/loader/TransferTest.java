@@ -151,8 +151,10 @@ class TransferTest {
 
         LoadSummary summary = loader.finish();
 
-        // Both customer accounts have one opening leg and two transfer legs; the treasury has two
-        // opening debits and nothing else.
+        // Both customer accounts have one opening leg and two transfer legs. The treasury has two
+        // opening debits and is excluded outright: it carries a leg for every account in the estate,
+        // so it wins every time and a statement page captured against it would be a plan of the
+        // opening phase rather than of a customer's year.
         assertThat(summary.busiest().postings()).isEqualTo(3);
         assertThat(summary.busiest().accountRef()).isIn(SENDER, RECEIVER);
     }

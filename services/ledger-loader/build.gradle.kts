@@ -45,12 +45,18 @@ dependencies {
     // A compile dependency rather than a runtime one, deliberately: CopyManager is the API this
     // module is built around, and loading through anything else would take days and measure itself.
     implementation("org.postgresql:postgresql")
+    // The loader creates the schema it loads into, so a run is one command rather than "boot the
+    // ledger once first". The migrations themselves are ledger-persistence's and are read off its
+    // classpath - this module owns none of them, which its Out of scope requires.
+    implementation("org.flywaydb:flyway-core")
+    // Flyway and spring-jdbc log through slf4j and this module is a command-line tool with nothing
+    // to say in a log. Without a binding every run prints three warnings into the evidence.
+    runtimeOnly("org.slf4j:slf4j-nop")
 
     testImplementation(platform("org.springframework.boot:spring-boot-dependencies:3.2.12"))
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.3")
-    testImplementation("org.flywaydb:flyway-core")
     testImplementation(platform("org.testcontainers:testcontainers-bom:1.20.4"))
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.testcontainers:junit-jupiter")

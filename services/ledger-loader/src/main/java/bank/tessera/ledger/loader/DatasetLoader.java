@@ -474,15 +474,23 @@ public class DatasetLoader implements DatasetVisitor {
     }
 
     /**
-     * The account the load gave the most postings to.
+     * The customer account the load gave the most postings to.
      *
      * <p>Reported rather than chosen: the deep-cursor query plan is captured against whatever the
      * draw actually produced, and an account planted to be deep would be a plan of the fixture this
      * package exists to replace.
+     *
+     * <p><strong>The treasury is excluded, and it is the answer if it is not.</strong> Every account
+     * in the estate is funded by debiting it, so it carries one leg per account and wins by a factor
+     * of thousands - and a statement page captured against it would be a plan of the opening phase
+     * rather than of a customer's year. Found by running the first load and reading the manifest.
      */
     private LoadSummary.Busiest busiestAccount() {
         LoadSummary.Busiest busiest = LoadSummary.Busiest.none();
         for (Map.Entry<String, AccountState> entry : accounts.entrySet()) {
+            if (entry.getKey().equals(header.treasuryAccountRef())) {
+                continue;
+            }
             if (entry.getValue().postings > busiest.postings()) {
                 busiest = new LoadSummary.Busiest(entry.getKey(), entry.getValue().postings);
             }
