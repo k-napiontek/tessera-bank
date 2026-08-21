@@ -72,9 +72,15 @@ type Hold struct {
 // nobody made. Reading back what this run posted is both the honest traffic and the only traffic
 // that exercises the read path at all.
 type References interface {
-	// Transfer returns a transfer this run has posted, if it has posted one.
+	// Transfer returns a transfer this run has posted, if it has posted one. A read does not
+	// consume it: a transfer can be fetched any number of times.
 	Transfer() (Transfer, bool)
-	// Hold returns a hold this run has placed and not yet finished with, if it has placed one.
+	// TakeTransfer returns a transfer and gives it up. A reversal consumes what it reverses -
+	// reversing the same transfer twice is a conflict the ledger is right to refuse, and one this
+	// driver would have manufactured.
+	TakeTransfer() (Transfer, bool)
+	// Hold returns a hold this run has placed and gives it up, for the same reason: a hold can be
+	// captured or released once.
 	Hold() (Hold, bool)
 }
 
@@ -169,7 +175,7 @@ func Build(action population.Action, date bankday.Date, seq int64, held money.Cu
 		request.Path = "/transfers/" + posted.Ref
 
 	case "reverseTransfer":
-		posted, found := known.Transfer()
+		posted, found := known.TakeTransfer()
 		if !found {
 			return Request{}, ErrNoReferenceYet
 		}

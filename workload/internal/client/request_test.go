@@ -93,8 +93,9 @@ type known struct {
 	has      bool
 }
 
-func (k known) Transfer() (client.Transfer, bool) { return k.transfer, k.has }
-func (k known) Hold() (client.Hold, bool)         { return k.hold, k.has }
+func (k known) Transfer() (client.Transfer, bool)     { return k.transfer, k.has }
+func (k known) TakeTransfer() (client.Transfer, bool) { return k.transfer, k.has }
+func (k known) Hold() (client.Hold, bool)             { return k.hold, k.has }
 
 func populated() known {
 	return known{
