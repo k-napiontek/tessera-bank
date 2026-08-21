@@ -40,9 +40,37 @@ var forbidden = map[string]string{
 	"io/ioutil":    "deprecated, and it exists only to read and write files",
 }
 
-// cmd is the one place allowed to touch the outside world, and it is a main rather than a library:
-// it reads the model from a path and writes a manifest to one. Naming it here rather than
-// discovering it is the point - the exemption is a decision somebody recorded.
+// engine is the model: the packages WP-20 built, which perform no I/O of any kind. The list is
+// named rather than discovered, because "every package that is not under cmd/" stopped being the
+// right rule the moment WP-21 added a driver to the same module. A new package is in neither list
+// until somebody decides which side of the line it belongs on, and TestEveryPackageIsClassified
+// fails until they do.
+var engine = []string{
+	"internal/arrivals",
+	"internal/bankday",
+	"internal/manifest",
+	"internal/model",
+	"internal/money",
+	"internal/population",
+}
+
+// driver is WP-21's half: the packages that execute a schedule against a running estate. They reach
+// the network by definition, which is why the forbidden list cannot apply to them - and why the
+// engine list above has to be exact. The boundary is the whole reason two drivers can share one
+// model: an engine that could open a socket would eventually contain half a driver, and WP-25 would
+// then be written against the other half.
+var driver = []string{
+	"internal/client",
+	"internal/identity",
+	"internal/metrics",
+	"internal/reconcile",
+	"internal/runner",
+	"internal/seeding",
+}
+
+// cmd is a main rather than a library: it reads the model from a path, writes a manifest to one,
+// and now also drives. Naming it here rather than discovering it is the point - the exemption is a
+// decision somebody recorded.
 const exempt = "cmd/"
 
 // imports maps every non-test package in the module to what it imports.
@@ -117,22 +145,50 @@ func reachable(graph map[string][]string, from string) map[string]bool {
 func TestTheEngineReachesNothingOutsideItself(t *testing.T) {
 	graph := imports(t)
 
-	engine := make([]string, 0, len(graph))
-	for pkg := range graph {
-		if !strings.HasPrefix(pkg, exempt) {
-			engine = append(engine, pkg)
-		}
-	}
-	sort.Strings(engine)
-	if len(engine) < 4 {
-		t.Fatalf("found only %v - the walker is looking in the wrong place", engine)
-	}
-
 	for _, pkg := range engine {
+		if _, found := graph[pkg]; !found {
+			// A rule about a package that no longer exists holds trivially and hides the day
+			// somebody renamed the package it was written for.
+			t.Fatalf("%s is listed as engine and does not exist", pkg)
+		}
 		for imported := range reachable(graph, pkg) {
 			if reason, banned := forbidden[imported]; banned {
 				t.Errorf("%s reaches %s - %s", pkg, imported, reason)
 			}
+		}
+	}
+}
+
+func TestEveryPackageIsClassified(t *testing.T) {
+	// The control this replaces was "everything that is not cmd/ is pure", which was true while the
+	// module held nothing but the engine. Left alone, WP-21's first driver package would have made
+	// it fail, and the cheapest way to make it pass again would have been to widen the exemption
+	// until it excused everything. A package that is in neither list fails here instead, so the
+	// decision is taken deliberately rather than by whoever was in a hurry.
+	classified := map[string]bool{}
+	for _, pkg := range append(append([]string(nil), engine...), driver...) {
+		if classified[pkg] {
+			t.Errorf("%s is listed twice", pkg)
+		}
+		classified[pkg] = true
+	}
+
+	for pkg := range imports(t) {
+		if strings.HasPrefix(pkg, exempt) || classified[pkg] {
+			continue
+		}
+		t.Errorf("%s is neither engine nor driver - decide which side of the boundary it is on, "+
+			"in internal/purity", pkg)
+	}
+}
+
+func TestTheDriverListNamesPackagesThatExist(t *testing.T) {
+	// The same staleness rule the exemption below is held to. A driver entry that outlives its
+	// package silently permits I/O in whatever takes that name next.
+	graph := imports(t)
+	for _, pkg := range driver {
+		if _, found := graph[pkg]; !found {
+			t.Errorf("%s is listed as driver and does not exist", pkg)
 		}
 	}
 }
