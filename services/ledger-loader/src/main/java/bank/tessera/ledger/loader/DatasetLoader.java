@@ -5,6 +5,7 @@ import bank.tessera.ledger.domain.CurrencyCode;
 import bank.tessera.ledger.domain.Direction;
 import bank.tessera.ledger.domain.Money;
 import bank.tessera.ledger.domain.OverdraftPolicy;
+import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.loader.LedgerRows.AccountRow;
 import bank.tessera.ledger.loader.LedgerRows.BalanceRow;
 import bank.tessera.ledger.loader.LedgerRows.EntryRow;
@@ -49,6 +50,7 @@ public class DatasetLoader implements DatasetVisitor {
 
     private final RowSink sink;
     private final long checkpointEvery;
+    private final ChainWriter chain = new ChainWriter(ACTOR);
     private final EnumMap<Counter, Long> counters = new EnumMap<>(Counter.class);
 
     /**
@@ -160,6 +162,15 @@ public class DatasetLoader implements DatasetVisitor {
                 openedAt,
                 header.openingDate()));
         count(Counter.ACCOUNTS_OPENED);
+        // The same state map OpenAccount writes, so a loaded account's audit row is the row the API
+        // would have left. A report joining on subject_ref cannot tell the two apart, which is the
+        // point of loading rather than of inventing.
+        audit(openedAt, AuditAction.ACCOUNT_OPENED, reference, Map.of(
+                "customerRef", state.customerRef,
+                "accountType", state.type.name(),
+                "currency", baseCurrency.code(),
+                "status", "OPEN",
+                "openedDate", header.openingDate().toString()));
 
         if (!opened.treasury()) {
             fund(opened, openedAt);
@@ -190,6 +201,29 @@ public class DatasetLoader implements DatasetVisitor {
         postLeg(reference, 2, opened.account().value(), Direction.CREDIT, amount);
         count(Counter.ENTRIES);
         count(Counter.FUNDING_ENTRIES);
+        transferPosted(reference, at, header.openingDate(), header.treasuryAccountRef(),
+                opened.account().value(), amount);
+    }
+
+    /** The audit row a posted transfer leaves, whatever posted it. */
+    private void transferPosted(
+            String reference, Instant at, LocalDate valueDate, String debitRef, String creditRef, Money amount) {
+        audit(at, AuditAction.TRANSFER_POSTED, reference, Map.of(
+                "debitAccountRef", debitRef,
+                "creditAccountRef", creditRef,
+                "amountMinor", String.valueOf(amount.amountMinor()),
+                "currency", amount.currency().code(),
+                "valueDate", valueDate.toString()));
+    }
+
+    private void audit(Instant at, AuditAction action, String subject, Map<String, String> after) {
+        audit(at, action, subject, Map.of(), after);
+    }
+
+    private void audit(
+            Instant at, AuditAction action, String subject, Map<String, String> before, Map<String, String> after) {
+        sink.audit(chain.next(at, action, subject, before, after));
+        count(Counter.AUDIT_ROWS);
     }
 
     /**
@@ -264,6 +298,7 @@ public class DatasetLoader implements DatasetVisitor {
         postLeg(reference, 2, creditRef, Direction.CREDIT, amount);
         count(Counter.ENTRIES);
         count(Counter.TRANSFERS_POSTED);
+        transferPosted(reference, action.at(), action.date(), debitRef, creditRef, amount);
         reversible.put(debitRef, new PostedTransfer(reference, debitRef, creditRef, amount.amountMinor()));
     }
 
@@ -302,6 +337,10 @@ public class DatasetLoader implements DatasetVisitor {
         postLeg(reference, 2, original.debitRef(), Direction.CREDIT, amount);
         count(Counter.ENTRIES);
         count(Counter.TRANSFERS_REVERSED);
+        audit(action.at(), AuditAction.TRANSFER_REVERSED, reference, Map.of(
+                "reversesTransferRef", original.entryRef(),
+                "reason", "LOADED",
+                "valueDate", action.date().toString()));
     }
 
     /**
@@ -321,6 +360,11 @@ public class DatasetLoader implements DatasetVisitor {
         holds.put(reference, new HoldState(action.accountRef(), action.amountMinor(), action.at()));
         openHolds.computeIfAbsent(action.accountRef(), account -> new ArrayDeque<>()).addLast(reference);
         count(Counter.HOLDS_PLACED);
+        audit(action.at(), AuditAction.HOLD_PLACED, reference, Map.of(
+                "accountRef", action.accountRef(),
+                "amountMinor", String.valueOf(action.amountMinor()),
+                "currency", baseCurrency.code(),
+                "status", "PLACED"));
     }
 
     /**
@@ -366,6 +410,16 @@ public class DatasetLoader implements DatasetVisitor {
         hold.capturedBy = entryRef;
         hold.transitionedAt = action.at();
         count(Counter.HOLDS_CAPTURED);
+        // The capture posts a transfer and then transitions the hold, and CaptureHold records both.
+        transferPosted(entryRef, action.at(), action.date(), hold.accountRef, action.counterpartyRef(), amount);
+        audit(action.at(), AuditAction.HOLD_CAPTURED, reference,
+                Map.of("status", "PLACED"),
+                Map.of(
+                        "status", "CAPTURED",
+                        "accountRef", hold.accountRef,
+                        "capturedByTransferRef", entryRef,
+                        "capturedAmountMinor", String.valueOf(amount.amountMinor()),
+                        "transitionedAt", action.at().toString()));
     }
 
     /** Releases the oldest open hold on the account. No posting: nothing moved. */
@@ -379,6 +433,12 @@ public class DatasetLoader implements DatasetVisitor {
         hold.status = "RELEASED";
         hold.transitionedAt = action.at();
         count(Counter.HOLDS_RELEASED);
+        audit(action.at(), AuditAction.HOLD_RELEASED, reference,
+                Map.of("status", "PLACED"),
+                Map.of(
+                        "status", "RELEASED",
+                        "accountRef", hold.accountRef,
+                        "transitionedAt", action.at().toString()));
     }
 
     private String takeOpenHold(String accountRef) {
@@ -410,7 +470,7 @@ public class DatasetLoader implements DatasetVisitor {
             sink.balance(new BalanceRow(entry.getKey(), entry.getValue().bookedMinor, baseCurrency.code(), at));
         }
         sink.checkpoint(header.to());
-        return new LoadSummary(header, Map.copyOf(counters), busiestAccount());
+        return new LoadSummary(header, Map.copyOf(counters), busiestAccount(), chain.length(), chain.head());
     }
 
     /**

@@ -7,8 +7,10 @@ import java.util.Map;
  *
  * @param busiest the account that ended up with the most postings, which is where the deep-cursor
  *     query plan is captured
+ * @param chainHead the hash of the last audit row, which is what says which chain a figure came from
  */
-public record LoadSummary(Header header, Map<Counter, Long> counters, Busiest busiest) {
+public record LoadSummary(
+        Header header, Map<Counter, Long> counters, Busiest busiest, long chainLength, String chainHead) {
 
     /** An account and its posting count. */
     public record Busiest(String accountRef, long postings) {
