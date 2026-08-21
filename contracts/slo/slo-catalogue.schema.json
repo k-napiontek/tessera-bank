@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera-bank.example/contracts/slo/slo-catalogue.schema.json",
+  "title": "Tessera Bank service level objective catalogue",
+  "description": "What good looks like for every component in the estate that emits a metric, declared beside the code that emits it. This document holds the SLI, the objective, the measurement window and the error budget, and nothing that turns those into an operational response - no burn rate, no notification route, no dashboard, no threshold that would differ between two deployments of the same code. ADR 0012 draws that line and this schema is what keeps it: the test is whether the artefact would change if the same code were deployed differently. An objective is a declaration about what the software promises; the baseline beside it records what it actually did.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["catalogueId", "catalogueVersion", "summary", "components"],
+  "properties": {
+    "catalogueId": {
+      "const": "TB-SLO-CATALOGUE-V1",
+      "description": "Format identifier. A consumer that does not recognise it must refuse the catalogue rather than guess at it."
+    },
+    "catalogueVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this catalogue instance."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 800,
+      "description": "Prose. What this catalogue claims and what it deliberately does not."
+    },
+    "components": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 32,
+      "description": "One entry per component of the bank that emits a metric. A component that emits a metric and has no entry here is the state ADR 0012 exists to end, and check-slo-catalogue.py fails on it.",
+      "items": { "$ref": "#/$defs/component" }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "path", "stratum", "exposure", "objectives", "signals"],
+      "properties": {
+        "componentId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,31}$",
+          "description": "The component's name as the estate map uses it."
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9/-]{2,63}$",
+          "description": "Directory this component's source lives in, so a reader can go from an objective to the code that has to meet it."
+        },
+        "stratum": {
+          "type": "string",
+          "enum": ["0", "1", "2", "3", "4", "mixed"],
+          "description": "Which era this component belongs to, per CLAUDE.md. An objective is only comparable with another in the same stratum by accident."
+        },
+        "exposure": {
+          "type": "string",
+          "enum": ["actuator-endpoint", "admin-listener", "http-server", "node-exporter-textfile"],
+          "description": "How the figures leave the process. A property of the software, not of a deployment - a batch job is gone before anything could scrape it, which is why two of these are not endpoints at all."
+        },
+        "objectives": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "description": "At least one. A component with metrics and no objective is a component nobody has said anything about.",
+          "items": { "$ref": "#/$defs/objective" }
+        },
+        "signals": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "description": "Metrics this component emits that are not themselves an SLI. Catalogued so that every emitted metric is accounted for, and so that the reason a signal carries no objective is written down rather than assumed.",
+          "items": { "$ref": "#/$defs/signal" }
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["objectiveId", "title", "sli", "target", "windowDays", "errorBudget", "introducedBy", "rationale"],
+      "properties": {
+        "objectiveId": {
+          "type": "string",
+          "pattern": "^SLO-[A-Z0-9-]{4,48}$",
+          "description": "Stable identifier. A platform repository names it in whatever alert it builds, so renaming one breaks a link somebody else holds."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z][ -~]+$",
+          "description": "What is being promised, in a sentence a non-engineer can read."
+        },
+        "sli": { "$ref": "#/$defs/sli" },
+        "target": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "The proportion of the window in which the SLI must hold. Expressed as a fraction rather than a percentage, so that the error-budget arithmetic below is one subtraction and cannot be out by a hundred."
+        },
+        "windowDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 90,
+          "description": "The measurement window, in days. An objective with no window is not an objective: a target met over an hour and missed over a month are different claims."
+        },
+        "errorBudget": { "$ref": "#/$defs/errorBudget" },
+        "introducedBy": {
+          "type": "string",
+          "pattern": "^WP-[0-9]{2}[ab]?$",
+          "description": "The work package that added the metric this objective is stated over."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 1200,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "Why this number and not another. An objective with no rationale is a number somebody will relax under pressure without anybody being able to say what was given up."
+        }
+      }
+    },
+    "sli": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "meterName", "exposedName", "tags", "good", "valid"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["eventRatio", "timeRatio"],
+          "description": "eventRatio counts good events against valid events. timeRatio measures the proportion of the window in which a gauge stayed on the right side of a threshold."
+        },
+        "meterName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._]{2,63}$",
+          "description": "The name the code registers, which for the Java tier is dotted and for everything else is the exposed name. check-slo-catalogue.py asserts this string appears in the component's source."
+        },
+        "exposedName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$",
+          "description": "The name a scrape carries. For Micrometer these differ - dots become underscores and a unit or _total is appended - and the mapping is Micrometer's rather than this repository's, so it is asserted against a real scrape by the component's own test and not restated here."
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 8,
+          "description": "Label names carried by the series. Every one must be bounded in cardinality: an account reference or a path as a label gives Prometheus one time series per customer, which is the standard way to take a monitoring system down and is discovered when the monitoring is needed most.",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
+          }
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000,
+          "description": "For a timeRatio, the value the gauge must stay on the right side of, in the metric's own unit. Absent for an eventRatio, and required for a timeRatio - which the schema cannot say and check-slo-catalogue.py therefore does."
+        },
+        "comparison": {
+          "type": "string",
+          "enum": ["<=", ">="],
+          "description": "Which side of the threshold is good. Absent for an eventRatio."
+        },
+        "good": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 400,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "Which events, or which moments, count as good. Written in words rather than as a query, because a query is a property of whatever queries it."
+        },
+        "valid": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 400,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "The denominator. Getting this wrong is how an SLI comes out flattering: excluding the requests that failed to arrive measures the ones that did."
+        }
+      }
+    },
+    "errorBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fraction", "minutesPerWindow"],
+      "description": "What the objective permits, stated arithmetically so that it cannot drift from the target it follows from. check-slo-catalogue.py recomputes both from target and windowDays.",
+      "properties": {
+        "fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "One minus the target."
+        },
+        "minutesPerWindow": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 129600,
+          "description": "The fraction expressed as minutes of the measurement window - how long the component could be entirely outside its objective and still meet it."
+        }
+      }
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meterName", "exposedName", "tags", "meaning", "introducedBy", "noObjectiveBecause"],
+      "properties": {
+        "meterName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._]{2,63}$",
+          "description": "As registered in the source."
+        },
+        "exposedName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$",
+          "description": "As a scrape carries it."
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
+          }
+        },
+        "meaning": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 400,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "What a reader should conclude from it moving."
+        },
+        "introducedBy": {
+          "type": "string",
+          "pattern": "^WP-[0-9]{2}[ab]?$"
+        },
+        "noObjectiveBecause": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 400,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "Why this signal carries no objective. Diagnostic signals genuinely should not have one, and writing the reason down is what stops the category becoming a place to put metrics nobody wanted to think about."
+        }
+      }
+    }
+  }
+}
