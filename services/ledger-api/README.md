@@ -117,7 +117,7 @@ appearing on a wire.
 
 ## Observability
 
-Three signals, each answering a different question. The operator's view is
+Four signals, each answering a different question. The operator's view is
 [`docs/runbooks/ledger-observability.md`](../../docs/runbooks/ledger-observability.md); what follows
 is why it is shaped this way.
 
@@ -137,6 +137,28 @@ idempotency store as a posting would inflate throughput with work nobody did and
 matters, which is clients timing out. Rejections are counted but not timed: mixing a validation
 failure that returns in a millisecond with a transfer that took two locks produces a percentile
 describing neither.
+
+**Metrics about the database, added by WP-23.** Until then this service reported how many transfers
+posted and nothing about the PostgreSQL that posted them, while every transfer takes two row locks
+and one global advisory lock. `DatabaseSignals` publishes per-table size, dead tuples and vacuum
+activity from a **fixed** table list - reading `pg_stat_user_tables` as it comes would grow a time
+series every migration, and unbounded label cardinality is the standard way to take a monitoring
+system down. Pool utilisation and acquire wait are deliberately **not** re-derived here: Boot's
+Hikari binder already publishes them, and a second copy of somebody else's instrument would be one
+that could disagree with the first.
+
+The two lock waits are separate meters and must never be summed. `ledger_lock_chain_seconds` is the
+audit chain's service-wide advisory lock; `ledger_lock_account_seconds` is the row locks a
+transaction takes on its own accounts. Averaged together they move for two unrelated reasons, which
+is what would make **F-27** unanswerable - and F-27 is exactly the question WP-23 measured with them.
+The figures are in [`docs/architecture/estate-under-load.md`](../../docs/architecture/estate-under-load.md);
+what each signal is expected to be is in
+[`docs/ways-of-working/slo-catalogue.md`](../../docs/ways-of-working/slo-catalogue.md).
+
+One trap worth naming: a table that has never been autovacuumed reports **`NaN`, not zero**. Zero
+reads as "vacuumed a moment ago", the exact opposite of the truth, and the first version of this got
+it wrong in a way only a test caught - `ResultSet.wasNull()` reports on the column read immediately
+before it, and five other columns were being read in between.
 
 **Logs are JSON, in one format everywhere.** A pattern locally and JSON in production means the
 format that matters is the one nobody reads during development. Boot gains structured logging

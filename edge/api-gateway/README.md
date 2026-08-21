@@ -36,6 +36,8 @@ They are separate ports on purpose. The ledger serves its actuator endpoints bes
 
 `/healthz` never consults the ledger - an orchestrator restarting a healthy gateway because its downstream is deploying turns a partial outage into a crash loop. `/readyz` dials the ledger's port, and says only what a dial proves: something is listening. Interpreting the ledger's own health document here would put a second opinion about the ledger's state at the edge, and two opinions disagree.
 
+`/metrics` carries five series. Four are WP-12's - requests, duration, refusals and upstream failures - and the fifth, `tessera_gateway_limiter_buckets`, was added by WP-23 for **F-37**: the limiter keeps one bucket per caller and sweeps the idle ones on a clock, and nothing exported how many it was holding, so the memory it uses and the sweep that is meant to bound it were both invisible in production. It reports `NaN` rather than `0` when nothing has been bound to read it - unknown and empty are different readings, and an operator acts differently on each. What each series is expected to be is in [`docs/ways-of-working/slo-catalogue.md`](../../docs/ways-of-working/slo-catalogue.md).
+
 ## Configuration
 
 Read from the environment at boot. A setting that is present but unparseable fails the boot; it never falls back to a default. Every problem is reported at once, so a broken deployment is diagnosed in one restart rather than one variable at a time.
