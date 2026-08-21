@@ -413,7 +413,7 @@ func smallSpec() population.Spec {
 // The layout Accounts yields is the one New computed, not a second derivation of it. The check is
 // that every reference it yields is one Draw could have drawn, and that the cohorts sit where the
 // shares put them - which is the property a loader would silently get wrong on its own.
-func TestAccountsYieldsTheWholePopulationAndTheTreasuryLast(t *testing.T) {
+func TestAccountsYieldsTheTreasuryFirstAndThenTheWholePopulation(t *testing.T) {
 	people, err := population.New(smallSpec())
 	if err != nil {
 		t.Fatalf("building the population: %v", err)
@@ -430,15 +430,15 @@ func TestAccountsYieldsTheWholePopulationAndTheTreasuryLast(t *testing.T) {
 		t.Fatalf("Accounts yielded %d holdings, want %d", len(holdings), want)
 	}
 
-	last := holdings[len(holdings)-1]
+	first := holdings[0]
 	treasuryCustomer, treasuryAccount := people.Treasury()
-	if !last.Treasury || last.AccountRef != treasuryAccount || last.CustomerRef != treasuryCustomer {
-		t.Fatalf("the last holding is %+v, want the treasury %s/%s",
-			last, treasuryCustomer, treasuryAccount)
+	if !first.Treasury || first.AccountRef != treasuryAccount || first.CustomerRef != treasuryCustomer {
+		t.Fatalf("the first holding is %+v, want the treasury %s/%s",
+			first, treasuryCustomer, treasuryAccount)
 	}
 
 	seen := map[string]bool{}
-	for _, holding := range holdings[:len(holdings)-1] {
+	for _, holding := range holdings[1:] {
 		if holding.Treasury {
 			t.Fatalf("%s is marked as the treasury and is held by %s", holding.AccountRef, holding.CustomerRef)
 		}

@@ -269,8 +269,12 @@ type Holding struct {
 	Treasury bool
 }
 
-// Accounts yields every account in the population, customer by customer and slot by slot, with the
-// treasury last.
+// Accounts yields the treasury first and then every customer account, customer by customer and slot
+// by slot.
+//
+// The treasury leads because a bank opens its own account before its customers': a loader funds an
+// opening balance by debiting the treasury, so an order that put it last would ask a loader to post
+// to an account that does not exist yet.
 //
 // A driver never needs this - it opens the accounts a schedule actually names, which is a small
 // fraction of a real population. A bulk loader does: it stands up the whole estate before the first
@@ -282,6 +286,10 @@ type Holding struct {
 // Lazy, because a population is 1.2 million customers and a caller streams them into a file.
 func (p Population) Accounts() iter.Seq[Holding] {
 	return func(yield func(Holding) bool) {
+		treasuryCustomer, treasuryAccount := p.Treasury()
+		if !yield(Holding{CustomerRef: treasuryCustomer, AccountRef: treasuryAccount, Treasury: true}) {
+			return
+		}
 		for _, block := range p.blocks {
 			for customer := block.firstCustomer; customer < block.firstCustomer+block.customers; customer++ {
 				for slot := range p.spec.AccountsPerCustomer {
@@ -296,8 +304,6 @@ func (p Population) Accounts() iter.Seq[Holding] {
 				}
 			}
 		}
-		treasuryCustomer, treasuryAccount := p.Treasury()
-		yield(Holding{CustomerRef: treasuryCustomer, AccountRef: treasuryAccount, Treasury: true})
 	}
 }
 
