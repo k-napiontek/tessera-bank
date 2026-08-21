@@ -63,6 +63,7 @@ var driver = []string{
 	"internal/client",
 	"internal/identity",
 	"internal/metrics",
+	"internal/reconcile",
 	"internal/runner",
 	"internal/seeding",
 }

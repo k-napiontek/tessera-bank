@@ -43,6 +43,7 @@ var floatIsJustified = map[string]string{
 	// WP-21's driver half. The rule is the same one: a float may appear in a file that has said
 	// why, and none of these is an amount.
 	"internal/seeding/seeding.go": "the currency of the estate is chosen by weighting each cohort's mix by its share of the day's events - a share is a ratio, and the opening balance beside it is an int64 throughout",
+	"internal/reconcile/parse.go": "a Prometheus counter is a float64 in the exposition, so the ledger's own totals arrive as floats and are totalled as counts; no amount is ever read from it",
 	"internal/metrics/metrics.go": "the Prometheus exposition format is float64 by specification: bucket boundaries, seconds and counts. No amount is ever published, and a run reports what it did rather than what it moved",
 }
 
@@ -59,6 +60,9 @@ var driverMayCall = map[string]map[string]string{
 	},
 	"internal/metrics/metrics.go": {
 		"strconv.FormatFloat": "a bucket boundary and a lag in seconds are rendered into the exposition; minor units never appear in it",
+	},
+	"internal/reconcile/parse.go": {
+		"strconv.ParseFloat": "a Prometheus counter is a float64 by specification, and the ledger's counter counts requests; nothing here reads an amount",
 	},
 }
 
