@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1023-slo-baseline` |
 | **Stratum** | - |
 | **Depends on** | WP-21, WP-22, WP-13, WP-17 |
-| **Status** | `Not started` |
+| **Status** | `In progress` |
 
 ## Objective
 
