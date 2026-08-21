@@ -92,12 +92,17 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	bank := dataset.Bank{
+		BaseCurrency:        string(base),
+		CustomerAccountType: seeding.Liability,
+		TreasuryAccountType: seeding.Asset,
+	}
 
 	summarise(stream, loaded, scale, os.Stderr)
 
 	out := bufio.NewWriterSize(os.Stdout, 1<<20)
 	written := 0
-	for line, err := range stream.Lines(string(base)) {
+	for line, err := range stream.Lines(bank) {
 		if err != nil {
 			return err
 		}
@@ -109,7 +114,9 @@ func run() error {
 	if err := out.Flush(); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "  Written         %d lines (1 header, %d actions)\n", written, written-1)
+	accounts := stream.People().Size()*loaded.Population.AccountsPerCustomer + 1
+	fmt.Fprintf(os.Stderr, "  Written         %d lines (1 header, %d accounts, %d actions)\n",
+		written, accounts, written-accounts-1)
 	return nil
 }
 

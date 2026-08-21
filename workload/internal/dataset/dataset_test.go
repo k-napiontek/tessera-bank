@@ -14,6 +14,11 @@ import (
 
 const committed = "../../../contracts/workload/tessera-day-v1.json"
 
+// What the driver half decides. Spelled out here rather than imported, because internal/seeding is
+// on the other side of the purity boundary and this package must not reach across it - the command
+// is where the two meet.
+var testBank = dataset.Bank{BaseCurrency: "PLN", CustomerAccountType: "LIABILITY", TreasuryAccountType: "ASSET"}
+
 // A small population and a small scale, so a test emits thousands of lines rather than millions.
 // The cohort shares divide 2 000 customers into whole people, which is the condition population.New
 // enforces and the reason this number rather than a rounder one.
@@ -58,7 +63,7 @@ func spec(t *testing.T, seed uint64, from, to string) dataset.Spec {
 func render(t *testing.T, s dataset.Stream) []byte {
 	t.Helper()
 	var out bytes.Buffer
-	for line, err := range s.Lines("PLN") {
+	for line, err := range s.Lines(testBank) {
 		if err != nil {
 			t.Fatalf("rendering a line: %v", err)
 		}
@@ -238,5 +243,89 @@ func TestAMoneyMovingActionCarriesMinorUnitsAndACurrency(t *testing.T) {
 	}
 	if moving == 0 {
 		t.Fatal("no action in the stream moved money, so nothing above was checked")
+	}
+}
+
+// A loader stands the estate up before it posts to it. If an account could first appear as the
+// counterparty of a transfer, it would have no opening balance and no opened date - and the position
+// report bounds accounts by opened_date, so it would be missing from every report that covered the
+// day it started trading.
+func TestEveryAccountIsOpenedBeforeTheFirstAction(t *testing.T) {
+	built := stream(t, spec(t, 42, "2026-03-02", "2026-03-02"))
+
+	opened := map[string]bool{}
+	for open := range built.Opens(testBank) {
+		if opened[open.AccountRef] {
+			t.Fatalf("%s is opened twice", open.AccountRef)
+		}
+		opened[open.AccountRef] = true
+	}
+	if len(opened) != testCustomers*2+1 {
+		t.Fatalf("%d accounts were opened, want %d customers x 2 plus the treasury",
+			len(opened), testCustomers)
+	}
+
+	for action := range built.Actions() {
+		if !opened[action.AccountRef] {
+			t.Fatalf("%s acts and was never opened", action.AccountRef)
+		}
+		if action.CounterpartyRef != "" && !opened[action.CounterpartyRef] {
+			t.Fatalf("%s is a counterparty and was never opened", action.CounterpartyRef)
+		}
+	}
+}
+
+// The treasury is the one account no customer owns, and it is an asset: debiting it to fund a
+// customer increases it, so it never needs an overdraft. Exactly one account may say so.
+func TestExactlyOneAccountIsTheTreasuryAndItIsAnAsset(t *testing.T) {
+	built := stream(t, spec(t, 42, "2026-03-02", "2026-03-02"))
+
+	treasuries := 0
+	for open := range built.Opens(testBank) {
+		if !open.Treasury {
+			if open.AccountType != testBank.CustomerAccountType {
+				t.Fatalf("%s is opened as %s, want %s", open.AccountRef, open.AccountType,
+					testBank.CustomerAccountType)
+			}
+			if open.Cohort == "" {
+				t.Fatalf("%s belongs to no cohort", open.AccountRef)
+			}
+			continue
+		}
+		treasuries++
+		if open.AccountType != testBank.TreasuryAccountType {
+			t.Fatalf("the treasury is opened as %s, want %s", open.AccountType, testBank.TreasuryAccountType)
+		}
+	}
+	if treasuries != 1 {
+		t.Fatalf("%d accounts claim to be the treasury, want exactly 1", treasuries)
+	}
+}
+
+// The loader scales an opening balance against the size of the money a cohort moves, and the actions
+// carry only a cohort name. A cohort in the stream that the header does not describe would be an
+// account opened at whatever the loader defaulted to.
+func TestTheHeaderDescribesEveryCohortTheStreamNames(t *testing.T) {
+	built := stream(t, spec(t, 42, "2026-03-02", "2026-03-02"))
+
+	medians := map[string]int64{}
+	for _, cohort := range built.Header(testBank).Cohorts {
+		medians[cohort.ID] = cohort.MedianAmountMinor
+	}
+	if len(medians) == 0 {
+		t.Fatal("the header describes no cohorts")
+	}
+	for id, median := range medians {
+		if median <= 0 {
+			t.Fatalf("cohort %s has a median amount of %d", id, median)
+		}
+	}
+	for open := range built.Opens(testBank) {
+		if open.Treasury {
+			continue
+		}
+		if _, found := medians[open.Cohort]; !found {
+			t.Fatalf("%s is in cohort %q, which the header does not describe", open.AccountRef, open.Cohort)
+		}
 	}
 }
