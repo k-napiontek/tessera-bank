@@ -62,6 +62,7 @@ var engine = []string{
 var driver = []string{
 	"internal/client",
 	"internal/identity",
+	"internal/metrics",
 	"internal/runner",
 	"internal/seeding",
 }
