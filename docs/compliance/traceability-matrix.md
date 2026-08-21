@@ -2,7 +2,7 @@
 
 > **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-11b, WP-12, WP-13, WP-14, WP-15, WP-16, WP-17 and WP-19. Every work package adds its own as
+> WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-11b, WP-12, WP-13, WP-14, WP-15, WP-16, WP-17, WP-19, WP-20 and WP-21. Every work package adds its own as
 > part of the Definition of Done, and WP-18 verifies that none is missing.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
@@ -714,3 +714,37 @@ this renders it; the seam between them is a contract rather than an assumption.
 | **REQ-MF-001** Record layouts are defined once and shared | WP-03 | `REJREC` gains its first reader outside stratum 0, and it derives every offset from the contracts checker rather than transcribing them. The 120 bytes of `REJ-MOVEMENT` are read as a whole `MOVEREC`, which is the copybook's own claim about that field made executable | `RejectFileTest.everyOffsetComesFromTheContract` runs `check-copybook-offsets.py --json REJREC` and fails naming the field if one moves | Met at this tier |
 | **REQ-MF-002** Money on the mainframe is packed decimal, not binary or text | WP-03 | A **fourth** independent COMP-3 implementation, after `comp3.py`, `Comp3.java` and `recon/comp3.py`. Deliberate for the reason the reconciliation gives: a decoder that borrowed another tier's would inherit whatever that tier has wrong. Held to the canonical model's worked examples as literals, and the decoded value is rendered through `BigDecimal` - money is never a floating-point number, on a screen least of all | `Comp3Test` at stratum 1, including zero, the maximum, the unsigned nibble and both malformed cases | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | Every account, transfer and operator name in this module is invented. The break report carries account references and balances and **no remittance reference at all** - the one field a paying customer controls has no place in a document the whole back office reads, and the format does not have a field for it | The contract's field list carries no free-text customer field; `BackofficeDeploymentIT` seeds its own fixtures | Met at this tier |
+
+---
+
+## WP-21 - workload-driver: the online day at volume
+
+Ticket TB-1021. Stratum 4, Go 1.25, standard library only. 74 new tests over six packages, none of
+which needs an estate: the driver's own behaviour is exercised against `httptest` handlers, and the
+estate itself is exercised by `workload/scripts/estate-up.sh`, which boots PostgreSQL, the ledger
+and the gateway and drives a compressed bank day at them.
+
+**The first package in this repository that puts the estate under load.** Everything before it was
+verified one request at a time, and the observability WP-09, WP-12, WP-13 and WP-17 installed had
+never had anything to observe. The driver behaves like a customer application rather than like a
+load tool, and that distinction decides every design question in it: a load tool sends requests and
+counts the ones that came back 200, while a client holds an idempotency key across a retry, treats a
+lost response as an unknown outcome rather than a failure, backs off when it is told to, and reads
+back what it created rather than a reference it invented.
+
+### Owned by WP-21
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-003** Offered load is independent of the system's response | The scheduler releases every event at the time WP-20's schedule fixed for it and **never waits for a worker** - [ADR 0016](../governance/adr/0016-the-workload-model-is-open.md). A closed model throttles itself precisely when the estate slows down, so offered load falls exactly when the interesting thing is happening and the latency comes out flattering. The cost the ADR names is paid rather than dodged: concurrency is unbounded in principle, and the run *records* how far past the level it was sized for it went (`tessera_workload_in_flight_peak`, `OverExpected`) instead of capping it, because a pool that blocks the scheduler is a closed model wearing an open model's name. Latency is stamped from the **intended** send time in one function, so no path out of `Send` can quietly measure from somewhere else, and the scheduler's own lateness is published separately as `tessera_workload_schedule_lag_seconds` - the signal that says the driver rather than the bank fell behind | `runner_test.go::TestASlowEstateDoesNotReduceTheOfferedRate` gives every response a 50 ms delay and asks for 700 requests in one second: all 722 are sent, in 1.05 s, with 52 in flight at the peak - a closed model with four workers would take nine seconds; `TestNothingThrottlesWhenTheRunPassesWhatItExpected` sets the expected level to 2 and proves the excess is counted rather than enforced; `send_test.go::TestLatencyIsMeasuredFromTheIntendedSendTimeAndNotFromTheActualOne` freezes the clock and asserts the five seconds the request was late are in the figure; `TestADriverThatCannotKeepUpRecordsItsOwnLag` | **Met** |
+
+### Contributed by WP-21, verified by the owning package
+
+| Requirement | Owner | What WP-21 contributes | Status |
+|---|---|---|---|
+| **REQ-API-001** Money-moving requests are idempotent | WP-08 | The first exercise of the property from a client's side, at volume. One key per scheduled event, derived from the business date and the event's ordinal and **reused by every retry** of it: `send_test.go::TestARetryOfALostRequestCarriesTheKeyTheFirstAttemptUsed` answers the first attempt with a 500 and the second with the ledger's replay, then asserts both attempts carried the same key and that it is inside the contract's 16-to-64 characters. The live run shows the same thing from the other end - the driver counted 24 replays and the ledger's own `ledger_transfers_total{outcome="replayed"}` counted 24 | **Met** in WP-08 |
+| **REQ-EDG-003** A slow dependency cannot exhaust the edge | WP-12 | A 429 is `refused` rather than `failed` and is **never retried immediately**: retrying into a rate limiter converts a working control into a stampede and measures the retry loop rather than the bank. The refusals are counted in their own column and reconciled as never having reached the ledger. The gateway's limiter buckets on subject and route class, which is why a token is minted per synthetic subject rather than once for the run - a population behind one token is one caller being throttled correctly | **Met** in WP-12 |
+| **REQ-INT-007** Contract conformance is checked, not assumed | WP-02 | Every request the driver builds is checked against `contracts/openapi/ledger-core.yaml` **read at test time**: the method and path template of all ten drawn operations, and which of them the contract requires an `Idempotency-Key` on. A route the driver invents fails the test rather than becoming a `no-route` at the gateway during a run. The same idiom as `routing_test.go` at the edge, pointed the other way | **Met** in WP-02 |
+| **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | `tessera_workload_*` published on its own port, in the estate's naming (`tessera_<component>_<thing>_<unit>`) so that a dashboard reads the driver and the bank without translation. Hand-written, because this module carries no dependencies. Every label is bounded - operation, outcome, reason - and a test asserts no account or customer reference reaches one, which in a 1.2 million customer population is the difference between a metric and a monitoring outage | **Met** in WP-09 |
+| **REQ-DP-001** All test data is synthetic | WP-03 | The driver invents nothing. Every account reference comes from the WP-20 population, including the treasury the funding is debited from - generated at the index one past the last customer, so it matches the canonical pattern, cannot collide with a customer the run draws, and is reproducible from the model alone. `request_test.go::TestNoRequestCarriesAnythingResemblingPersonalData` greps the bytes of every request body and path rather than asserting about intent | **Met** in WP-03 |
+| **REQ-LED-003** Money is exact and currency-aware | WP-06 | Extended to the driver half of the module: the amount that goes on the wire is `int64` minor units and an ISO 4217 code, and the source scanner that enforces it now distinguishes the engine from the driver rather than being widened. A run happens in real time and a Prometheus exposition is float64 by specification, so the two calls the engine forbids - `time.Now` and `strconv.FormatFloat` - are permitted per file, with the reason recorded, and a staleness test removes the exemption when the file stops making the call | **Met** in WP-06 |

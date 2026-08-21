@@ -49,9 +49,18 @@ cleanup() {
     # The group first, then the process itself in case it was never given one.
     kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   done
-  # Give the JVM and the gateway a moment to go, so that the next run finds its ports free.
-  sleep 1
-  docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
+  if [ "${TB_KEEP_DATA:-0}" != "1" ]; then
+    docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
+  fi
+  # Wait for the ports rather than sleeping on a guess. A JVM takes a moment to let go of 8080, and
+  # the next run of this script otherwise fails four minutes later with "port already in use", in a
+  # log nobody has opened yet.
+  for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT"; do
+    for _ in $(seq 20); do
+      lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || break
+      sleep 1
+    done
+  done
 }
 trap cleanup EXIT INT TERM
 
@@ -80,16 +89,37 @@ wait_for_file() {
   return 1
 }
 
-step "PostgreSQL"
-docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
-docker run -d --name "$DB_CONTAINER" \
-  -e POSTGRES_PASSWORD=tessera -e POSTGRES_USER=tessera -e POSTGRES_DB=tessera \
-  -p "$DB_PORT":5432 postgres:16-alpine >/dev/null
-for _ in $(seq 60); do
-  docker exec "$DB_CONTAINER" pg_isready -U tessera >/dev/null 2>&1 && break
-  sleep 1
+# A port still held by a previous run is the failure this script is most likely to hit, and the way
+# it presents - a Spring Boot stack trace in a log file, four minutes in - is the least useful one.
+for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT"; do
+  for attempt in $(seq 30); do
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || break
+    if [ "$attempt" = "30" ]; then
+      echo "FAIL  port $port is still in use; stop whatever is holding it and run this again" >&2
+      exit 1
+    fi
+    sleep 1
+  done
 done
-echo "OK    PostgreSQL is ready on $DB_PORT"
+
+step "PostgreSQL"
+# TB_KEEP_DATA=1 keeps the ledger a previous run left behind, idempotency records included - which
+# is what makes a second run of the same seed and date replay rather than post. Without it the
+# container is recreated, because a "keep the data" flag that skipped a TRUNCATE while the volume
+# went with the container would keep nothing.
+if [ "${TB_KEEP_DATA:-0}" = "1" ] && docker ps -q -f "name=^${DB_CONTAINER}$" | grep -q .; then
+  echo "OK    keeping the PostgreSQL this estate already has on $DB_PORT"
+else
+  docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
+  docker run -d --name "$DB_CONTAINER" \
+    -e POSTGRES_PASSWORD=tessera -e POSTGRES_USER=tessera -e POSTGRES_DB=tessera \
+    -p "$DB_PORT":5432 postgres:16-alpine >/dev/null
+  for _ in $(seq 60); do
+    docker exec "$DB_CONTAINER" pg_isready -U tessera >/dev/null 2>&1 && break
+    sleep 1
+  done
+  echo "OK    PostgreSQL is ready on $DB_PORT"
+fi
 
 step "Ledger"
 JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17}" \
@@ -102,8 +132,8 @@ wait_for "the ledger" "http://localhost:$LEDGER_PORT/actuator/health/readiness" 
 
 # A run's idempotency keys are derived from the business date and the event's ordinal, which is what
 # makes it reproducible - and means a second run of the same date against the same ledger replays
-# rather than posts. Starting from an empty ledger keeps a baseline a baseline. Set TB_KEEP_DATA=1
-# to keep what is there and watch the replay column instead.
+# rather than posts. Starting from an empty ledger keeps a baseline a baseline; TB_KEEP_DATA=1 keeps
+# what is there and turns the replay column into the demonstration instead.
 if [ "${TB_KEEP_DATA:-0}" != "1" ]; then
   step "Empty ledger"
   docker exec -e PGPASSWORD=tessera "$DB_CONTAINER" \
