@@ -146,18 +146,29 @@ func printHeader(loaded model.Model, record manifest.Manifest, path string) {
 	// a claim about this estate. They are not: they are what the model asks for. Saying so here is
 	// cheaper than a run report nobody can defend, and it is the Constraint WP-20 is explicit about.
 	if record.Offered.PeakPerSecond > plausiblePeak {
-		fmt.Printf("  NOTE  this asks for %s requests a second at peak, which this estate will not\n"+
-			"        take. That is the model describing a real bank, not a claim about Tessera:\n"+
-			"        lower --scale to offer a fraction of it, or --compress to spread it out.\n"+
-			"        Nothing here claims a throughput a run has produced.\n\n",
-			rate(record.Offered.PeakPerSecond))
+		fmt.Printf("  NOTE  this asks for %s requests a second at peak. Nothing here has been measured\n"+
+			"        serving more than about %s a second - see workload/baselines - so that is the\n"+
+			"        model describing a real bank rather than a claim about Tessera: lower --scale\n"+
+			"        to offer a fraction of it, or --compress to spread it out.\n\n",
+			rate(record.Offered.PeakPerSecond), rate(plausiblePeak))
 	}
 }
 
-// plausiblePeak is the rate above which the note above fires. A round number rather than a measured
-// one, deliberately: WP-23 produces the measured figure, and until it does, a threshold pretending
-// to be one would be the hunch F-27 refuses.
-const plausiblePeak = 2000
+// plausiblePeak is the rate above which the note above fires, and it is now a measured figure.
+//
+// It was 2 000 - a round number, named in this comment as standing in for something nobody had, which
+// F-69 recorded. WP-23 measured it twice, on the same developer machine, and both answers landed in
+// the same place:
+//
+//   - workload/baselines/ceiling-*.json walks a concurrency ladder against the ledger directly and
+//     finds money-moving throughput peaking at about 790 postings a second, flat thereafter;
+//   - workload/baselines/baseline-report.txt is a compressed bank day through the gateway that
+//     sustained 34 323 requests in 45 seconds - about 760 a second - with every objective met.
+//
+// 800 is where those two agree. It is a property of the machine rather than of the design, which is
+// why the note it fires says "nothing here has been measured serving more than this" rather than
+// naming a limit; re-measure with scripts/ceiling.sh on anything else.
+const plausiblePeak = 800
 
 func printDay(loaded model.Model, record manifest.Manifest, date bankday.Date, scale float64) error {
 	curve, err := loaded.Curve()

@@ -38,10 +38,22 @@ func main() {
 	}
 }
 
+// scrapes is a repeatable flag. The estate exposes its metrics in four different places - the
+// ledger's actuator, the gateway's admin listener, and a textfile per batch job - and a report built
+// from one of them says "nothing happened" about three quarters of the catalogue, which reads as an
+// estate that did nothing rather than as a report that looked in one place.
+type scrapes []string
+
+func (s *scrapes) String() string { return strings.Join(*s, ",") }
+func (s *scrapes) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 type options struct {
 	manifestPath  string
 	cataloguePath string
-	before, after string
+	before, after scrapes
 	out           string
 }
 
@@ -52,18 +64,17 @@ func run(args []string, stdout io.Writer) error {
 	flags.StringVar(&opts.manifestPath, "manifest", "", "the run manifest workload-run wrote")
 	flags.StringVar(&opts.cataloguePath, "catalogue", "../contracts/slo/tessera-slo-v1.json",
 		"the committed SLO catalogue")
-	flags.StringVar(&opts.before, "before", "", "a scrape taken before the run")
-	flags.StringVar(&opts.after, "after", "", "a scrape taken after it")
+	flags.Var(&opts.before, "before", "a scrape taken before the run; give it once per component")
+	flags.Var(&opts.after, "after", "the matching scrape taken after it")
 	flags.StringVar(&opts.out, "out", "-", "where to write the report, or - for stdout")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	for name, path := range map[string]string{
-		"--manifest": opts.manifestPath, "--before": opts.before, "--after": opts.after,
-	} {
-		if path == "" {
-			return fmt.Errorf("%s is required", name)
-		}
+	if opts.manifestPath == "" {
+		return fmt.Errorf("--manifest is required")
+	}
+	if len(opts.before) == 0 || len(opts.after) == 0 {
+		return fmt.Errorf("--before and --after are both required")
 	}
 
 	record, err := readManifest(opts.manifestPath)
@@ -78,23 +89,38 @@ func run(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	before, err := os.ReadFile(opts.before)
+	before, err := readAll(opts.before)
 	if err != nil {
-		return fmt.Errorf("reading the opening scrape: %w", err)
+		return fmt.Errorf("reading the opening scrapes: %w", err)
 	}
-	after, err := os.ReadFile(opts.after)
+	after, err := readAll(opts.after)
 	if err != nil {
-		return fmt.Errorf("reading the closing scrape: %w", err)
+		return fmt.Errorf("reading the closing scrapes: %w", err)
 	}
 
 	var page strings.Builder
-	render(&page, record, catalogue, string(before), string(after))
+	render(&page, record, catalogue, before, after)
 
 	if opts.out == "-" {
 		_, err := io.WriteString(stdout, page.String())
 		return err
 	}
 	return os.WriteFile(opts.out, []byte(page.String()), 0o644)
+}
+
+// readAll joins several expositions into one. Metric names are unique across this estate - every one
+// is prefixed with the component that emits it - so concatenating is exact rather than convenient.
+func readAll(paths []string) (string, error) {
+	var joined strings.Builder
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		joined.Write(body)
+		joined.WriteString("\n")
+	}
+	return joined.String(), nil
 }
 
 func readManifest(path string) (manifest.Manifest, error) {

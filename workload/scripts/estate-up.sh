@@ -36,8 +36,10 @@ LEDGER_PORT=8080
 GATEWAY_PORT=8081
 GATEWAY_ADMIN_PORT=9091
 METRICS_PORT=9100
-DB_PORT=5434
-DB_CONTAINER=tessera-workload-db
+# Overridable so that a run can be pointed at a database somebody else loaded - which is what
+# WP-23's baseline does with the WP-22 dataset. Left alone, this boots one of its own.
+DB_PORT=${TB_DB_PORT:-5434}
+DB_CONTAINER=${TB_DB_CONTAINER:-tessera-workload-db}
 PIDS=()
 
 # shellcheck disable=SC2329  # reached through the trap below, never called directly
@@ -155,9 +157,11 @@ go -C "$ROOT/workload" run ./cmd/workload-run \
   --date "$(date +%Y-%m-%d)" \
   --gateway "http://localhost:$GATEWAY_PORT" \
   --ledger-metrics "http://localhost:$LEDGER_PORT/actuator/prometheus" \
+  --edge-metrics "http://localhost:$GATEWAY_ADMIN_PORT/metrics" \
   --keys "$KEYS" \
   --metrics ":$METRICS_PORT" \
-  --manifest "${TMPDIR:-/tmp}/tessera-workload-manifest.json" \
+  --manifest "${TB_MANIFEST:-${TMPDIR:-/tmp}/tessera-workload-manifest.json}" \
+  ${TB_SCRAPE_DIR:+--scrapes "$TB_SCRAPE_DIR"} \
   "$@" >"$RUN_LOG" 2>&1 &
 DRIVER=$!
 PIDS+=("$DRIVER")
@@ -189,6 +193,6 @@ cat "$RUN_LOG"
 echo
 echo "  ledger log   ${TMPDIR:-/tmp}/tessera-workload-ledger.log"
 echo "  gateway log  ${TMPDIR:-/tmp}/tessera-workload-gateway.log"
-echo "  manifest     ${TMPDIR:-/tmp}/tessera-workload-manifest.json"
+echo "  manifest     ${TB_MANIFEST:-${TMPDIR:-/tmp}/tessera-workload-manifest.json}"
 
 exit "$STATUS"
