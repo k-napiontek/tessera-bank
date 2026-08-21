@@ -8,10 +8,13 @@ import bank.tessera.ledger.domain.OverdraftPolicy;
 import bank.tessera.ledger.loader.LedgerRows.AccountRow;
 import bank.tessera.ledger.loader.LedgerRows.BalanceRow;
 import bank.tessera.ledger.loader.LedgerRows.EntryRow;
+import bank.tessera.ledger.loader.LedgerRows.HoldRow;
 import bank.tessera.ledger.loader.LedgerRows.PostingRow;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -66,6 +69,21 @@ public class DatasetLoader implements DatasetVisitor {
     /** Every account the estate holds, and what it is worth so far. */
     private final Map<String, AccountState> accounts = new LinkedHashMap<>();
 
+    /**
+     * Every hold, written once at the end in whatever state it finished in.
+     *
+     * <p>A hold row is inserted and then transitioned, which is an UPDATE - and a bulk loader that
+     * updated rows it had just COPYed would be doing the work twice. Holding the final state here and
+     * writing it once is the same trick the materialised balances use.
+     */
+    private final Map<String, HoldState> holds = new LinkedHashMap<>();
+
+    /** The holds still PLACED on each account, oldest first. A capture or a release takes the oldest. */
+    private final Map<String, Deque<String>> openHolds = new LinkedHashMap<>();
+
+    /** The most recent transfer on each account that nothing has reversed yet. */
+    private final Map<String, PostedTransfer> reversible = new LinkedHashMap<>();
+
     public DatasetLoader(RowSink sink, long checkpointEvery) {
         this.sink = Objects.requireNonNull(sink, "sink");
         if (checkpointEvery <= 0) {
@@ -73,6 +91,25 @@ public class DatasetLoader implements DatasetVisitor {
         }
         this.checkpointEvery = checkpointEvery;
     }
+
+    /** A hold, from placement to whatever ended it. */
+    static final class HoldState {
+        final String accountRef;
+        final long amountMinor;
+        final Instant placedAt;
+        String status = "PLACED";
+        String capturedBy;
+        Instant transitionedAt;
+
+        HoldState(String accountRef, long amountMinor, Instant placedAt) {
+            this.accountRef = accountRef;
+            this.amountMinor = amountMinor;
+            this.placedAt = placedAt;
+        }
+    }
+
+    /** What a reversal needs to know about the entry it reverses. */
+    record PostedTransfer(String entryRef, String debitRef, String creditRef, long amountMinor) {}
 
     /** The state a loader has to carry per account, and nothing more. */
     static final class AccountState {
@@ -180,6 +217,10 @@ public class DatasetLoader implements DatasetVisitor {
         }
         switch (action.operation()) {
             case "createTransfer" -> transfer(action);
+            case "reverseTransfer" -> reverse(action);
+            case "placeHold" -> placeHold(action);
+            case "captureHold" -> captureHold(action);
+            case "releaseHold" -> releaseHold(action);
             default -> count(Counter.READS_IGNORED);
         }
     }
@@ -223,12 +264,146 @@ public class DatasetLoader implements DatasetVisitor {
         postLeg(reference, 2, creditRef, Direction.CREDIT, amount);
         count(Counter.ENTRIES);
         count(Counter.TRANSFERS_POSTED);
+        reversible.put(debitRef, new PostedTransfer(reference, debitRef, creditRef, amount.amountMinor()));
+    }
+
+    /**
+     * Reverses the account's most recent unreversed transfer.
+     *
+     * <p>A correction in a double-entry ledger is a reversing entry, never an edit - which is what
+     * lets {@code posting} be append-only in the schema and the audit trail be a chain rather than a
+     * diff. The entry that is reversed is removed from the reversible set here as well, because
+     * {@code journal_entry_reverses_uq} makes reversing one twice a unique-index violation rather
+     * than a second correction.
+     */
+    private void reverse(DrawnAction action) {
+        PostedTransfer original = reversible.remove(action.accountRef());
+        if (original == null) {
+            count(Counter.NOTHING_TO_REVERSE);
+            return;
+        }
+
+        Money amount = Money.of(original.amountMinor(), baseCurrency);
+        // The mirror: whoever was credited is now debited, and it is that account which has to be
+        // able to cover it. A reversal is refused for want of funds exactly as a transfer is.
+        AccountState debit = require(original.creditRef());
+        Money after = Money.of(
+                debit.bookedMinor + debit.type.signedEffect(Direction.DEBIT, amount).amountMinor(),
+                baseCurrency);
+        if (!CUSTOMER_POLICY.permits(after)) {
+            count(Counter.REFUSED_INSUFFICIENT_FUNDS);
+            return;
+        }
+
+        String reference = action.transferRef();
+        sink.entry(new EntryRow(
+                reference, action.date(), baseCurrency.code(), action.at(), original.entryRef(), null));
+        postLeg(reference, 1, original.creditRef(), Direction.DEBIT, amount);
+        postLeg(reference, 2, original.debitRef(), Direction.CREDIT, amount);
+        count(Counter.ENTRIES);
+        count(Counter.TRANSFERS_REVERSED);
+    }
+
+    /**
+     * Reserves an amount against an account without posting anything.
+     *
+     * <p>Holds are here because the balance read is one of the query plans this package has to
+     * capture, and {@code Balance.of} is the booked balance less the active holds. A plan measured
+     * against a ledger holding no holds would be a plan of the fixture.
+     */
+    private void placeHold(DrawnAction action) {
+        String reference = action.holdRef();
+        if (reference == null || holds.containsKey(reference)) {
+            count(Counter.HOLD_NOT_FOUND);
+            return;
+        }
+        require(action.accountRef());
+        holds.put(reference, new HoldState(action.accountRef(), action.amountMinor(), action.at()));
+        openHolds.computeIfAbsent(action.accountRef(), account -> new ArrayDeque<>()).addLast(reference);
+        count(Counter.HOLDS_PLACED);
+    }
+
+    /**
+     * Captures the oldest open hold on the account.
+     *
+     * <p>The capture is for the smaller of the amount drawn and the amount reserved, because
+     * {@code CaptureHold} permits a partial capture and refuses one that exceeds the hold: capturing
+     * more than was authorised is a different transaction, not a larger one.
+     */
+    private void captureHold(DrawnAction action) {
+        String reference = takeOpenHold(action.accountRef());
+        if (reference == null) {
+            count(Counter.HOLD_NOT_FOUND);
+            return;
+        }
+        HoldState hold = holds.get(reference);
+        long capturedMinor = Math.min(action.amountMinor(), hold.amountMinor);
+        if (capturedMinor <= 0 || action.counterpartyRef() == null) {
+            count(Counter.HOLD_NOT_FOUND);
+            return;
+        }
+
+        Money amount = Money.of(capturedMinor, baseCurrency);
+        AccountState debit = require(hold.accountRef);
+        Money after = Money.of(
+                debit.bookedMinor + debit.type.signedEffect(Direction.DEBIT, amount).amountMinor(),
+                baseCurrency);
+        if (!CUSTOMER_POLICY.permits(after)) {
+            count(Counter.REFUSED_INSUFFICIENT_FUNDS);
+            // The hold stays open: nothing captured it, so saying it was captured would be a lie
+            // the hold_captured_by_consistent constraint could not catch.
+            openHolds.computeIfAbsent(hold.accountRef, account -> new ArrayDeque<>()).addFirst(reference);
+            return;
+        }
+
+        String entryRef = action.transferRef();
+        sink.entry(new EntryRow(entryRef, action.date(), baseCurrency.code(), action.at(), null, null));
+        postLeg(entryRef, 1, hold.accountRef, Direction.DEBIT, amount);
+        postLeg(entryRef, 2, action.counterpartyRef(), Direction.CREDIT, amount);
+        count(Counter.ENTRIES);
+
+        hold.status = "CAPTURED";
+        hold.capturedBy = entryRef;
+        hold.transitionedAt = action.at();
+        count(Counter.HOLDS_CAPTURED);
+    }
+
+    /** Releases the oldest open hold on the account. No posting: nothing moved. */
+    private void releaseHold(DrawnAction action) {
+        String reference = takeOpenHold(action.accountRef());
+        if (reference == null) {
+            count(Counter.HOLD_NOT_FOUND);
+            return;
+        }
+        HoldState hold = holds.get(reference);
+        hold.status = "RELEASED";
+        hold.transitionedAt = action.at();
+        count(Counter.HOLDS_RELEASED);
+    }
+
+    private String takeOpenHold(String accountRef) {
+        Deque<String> open = openHolds.get(accountRef);
+        return open == null ? null : open.pollFirst();
     }
 
     /** Writes the materialised balances and closes the load. Every account gets a row. */
     public LoadSummary finish() {
         requireHeader();
         sink.checkpoint(currentDate);
+
+        for (Map.Entry<String, HoldState> entry : holds.entrySet()) {
+            HoldState hold = entry.getValue();
+            sink.hold(new HoldRow(
+                    entry.getKey(),
+                    hold.accountRef,
+                    hold.amountMinor,
+                    baseCurrency.code(),
+                    hold.status,
+                    hold.placedAt,
+                    null,
+                    hold.capturedBy,
+                    hold.transitionedAt));
+        }
 
         Instant at = header.to().atStartOfDay(ZoneOffset.UTC).toInstant();
         for (Map.Entry<String, AccountState> entry : accounts.entrySet()) {

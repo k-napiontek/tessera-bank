@@ -57,5 +57,15 @@ public enum Counter {
     REFUSED_INSUFFICIENT_FUNDS,
 
     /** Hold operations naming a hold that does not exist yet, which a driver would have 404'd. */
-    HOLD_NOT_FOUND
+    HOLD_NOT_FOUND,
+
+    /**
+     * Reversals drawn against an account that has nothing left to reverse.
+     *
+     * <p>The population draws a fresh reference for a reversal rather than naming an entry, so the
+     * loader reverses the account's most recent unreversed transfer. Early in a load, and on an
+     * account that has only received, there is none - and inventing one would be reversing a payment
+     * that never happened.
+     */
+    NOTHING_TO_REVERSE
 }
