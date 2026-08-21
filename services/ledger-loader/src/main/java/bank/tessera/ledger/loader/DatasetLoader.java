@@ -4,6 +4,7 @@ import bank.tessera.ledger.domain.AccountType;
 import bank.tessera.ledger.domain.CurrencyCode;
 import bank.tessera.ledger.domain.Direction;
 import bank.tessera.ledger.domain.Money;
+import bank.tessera.ledger.domain.OverdraftPolicy;
 import bank.tessera.ledger.loader.LedgerRows.AccountRow;
 import bank.tessera.ledger.loader.LedgerRows.BalanceRow;
 import bank.tessera.ledger.loader.LedgerRows.EntryRow;
@@ -47,6 +48,15 @@ public class DatasetLoader implements DatasetVisitor {
     private final long checkpointEvery;
     private final EnumMap<Counter, Long> counters = new EnumMap<>(Counter.class);
 
+    /**
+     * What a customer account is allowed to do, which is not go below zero.
+     *
+     * <p>Read from the domain rather than written out as {@code newBalance >= 0}. Every account this
+     * loader opens carries a null overdraft limit, and {@code OverdraftPolicy.forbidden()} is what
+     * that column means - so the guard below asks the same object the API's transfer path asks.
+     */
+    private static final OverdraftPolicy CUSTOMER_POLICY = OverdraftPolicy.forbidden();
+
     private Header header;
     private CurrencyCode baseCurrency;
     private LocalDate currentDate;
@@ -70,6 +80,7 @@ public class DatasetLoader implements DatasetVisitor {
         final AccountType type;
         final String cohort;
         long bookedMinor;
+        long postings;
 
         AccountState(String customerRef, AccountType type, String cohort) {
             this.customerRef = customerRef;
@@ -155,6 +166,7 @@ public class DatasetLoader implements DatasetVisitor {
         sink.posting(new PostingRow(
                 entryRef, seq, accountRef, direction.name(), amount.amountMinor(), amount.currency().code()));
         state.bookedMinor += state.type.signedEffect(direction, amount).amountMinor();
+        state.postings++;
         count(Counter.POSTINGS);
     }
 
@@ -166,7 +178,51 @@ public class DatasetLoader implements DatasetVisitor {
             sinceCheckpoint = 0;
             currentDate = action.date();
         }
-        count(Counter.READS_IGNORED);
+        switch (action.operation()) {
+            case "createTransfer" -> transfer(action);
+            default -> count(Counter.READS_IGNORED);
+        }
+    }
+
+    /**
+     * Posts a drawn transfer, or refuses it exactly as the ledger would have.
+     *
+     * <p>Two substitutions happen here and both are counted rather than hidden.
+     *
+     * <p>The estate is opened in one currency, so a transfer drawn in another goes in that one -
+     * WP-21 made the same choice for the same reason, and F-72 records what it would take to resolve
+     * properly. And an account that cannot cover the debit does not get one: nothing in the schema
+     * stops a negative balance, so a loader that posted it anyway would be writing rows
+     * {@code Transfer} would have rejected, and the DoD's "no constraint was disabled to complete a
+     * load" would be true while the data was not.
+     */
+    private void transfer(DrawnAction action) {
+        String debitRef = action.accountRef();
+        String creditRef = action.counterpartyRef();
+        if (debitRef.equals(creditRef)) {
+            throw new IllegalStateException(
+                    "The stream transfers " + debitRef + " to itself, which no drawn action can do.");
+        }
+        if (!baseCurrency.code().equals(action.currency())) {
+            count(Counter.CURRENCY_SUBSTITUTED);
+        }
+
+        Money amount = Money.of(action.amountMinor(), baseCurrency);
+        AccountState debit = require(debitRef);
+        Money after = Money.of(
+                debit.bookedMinor + debit.type.signedEffect(Direction.DEBIT, amount).amountMinor(),
+                baseCurrency);
+        if (!CUSTOMER_POLICY.permits(after)) {
+            count(Counter.REFUSED_INSUFFICIENT_FUNDS);
+            return;
+        }
+
+        String reference = action.transferRef();
+        sink.entry(new EntryRow(reference, action.date(), baseCurrency.code(), action.at(), null, null));
+        postLeg(reference, 1, debitRef, Direction.DEBIT, amount);
+        postLeg(reference, 2, creditRef, Direction.CREDIT, amount);
+        count(Counter.ENTRIES);
+        count(Counter.TRANSFERS_POSTED);
     }
 
     /** Writes the materialised balances and closes the load. Every account gets a row. */
@@ -190,7 +246,13 @@ public class DatasetLoader implements DatasetVisitor {
      * package exists to replace.
      */
     private LoadSummary.Busiest busiestAccount() {
-        return LoadSummary.Busiest.none();
+        LoadSummary.Busiest busiest = LoadSummary.Busiest.none();
+        for (Map.Entry<String, AccountState> entry : accounts.entrySet()) {
+            if (entry.getValue().postings > busiest.postings()) {
+                busiest = new LoadSummary.Busiest(entry.getKey(), entry.getValue().postings);
+            }
+        }
+        return busiest;
     }
 
     private String fundingReference() {
