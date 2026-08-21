@@ -21,6 +21,13 @@
               "operation",
               "outcome"
             ],
+            "computedFrom": "counterLabels",
+            "goodLabel": "outcome",
+            "goodValues": [
+              "posted",
+              "replayed",
+              "rejected"
+            ],
             "good": "money-moving requests whose outcome was posted, replayed or rejected",
             "valid": "every money-moving request the ledger counted, over all five operations"
           },
@@ -47,6 +54,7 @@
             ],
             "threshold": 0.5,
             "comparison": "<=",
+            "computedFrom": "histogramBucket",
             "good": "money-moving requests that did work and completed within the threshold",
             "valid": "money-moving requests that did work - rejections are counted rather than timed, because a validation failure that returns in a millisecond and a transfer that took two locks produce a percentile describing neither"
           },
@@ -70,6 +78,7 @@
             "tags": [],
             "threshold": 60,
             "comparison": "<=",
+            "computedFrom": "seriesOverTime",
             "good": "moments at which the oldest unpublished event was younger than the threshold",
             "valid": "every moment in the measurement window"
           },
@@ -95,6 +104,7 @@
             ],
             "threshold": 0,
             "comparison": "<=",
+            "computedFrom": "seriesOverTime",
             "good": "moments at which no thread was queued waiting for a connection from the pool",
             "valid": "every moment in the measurement window"
           },
@@ -267,6 +277,9 @@
               "method",
               "status"
             ],
+            "computedFrom": "counterLabels",
+            "goodLabel": "status",
+            "badLabelPrefix": "5",
             "good": "requests answered with a status below 500",
             "valid": "every request the gateway answered, including the ones it refused before routing"
           },
@@ -292,6 +305,7 @@
             ],
             "threshold": 1,
             "comparison": "<=",
+            "computedFrom": "histogramBucket",
             "good": "requests answered within the threshold",
             "valid": "every request the gateway answered"
           },
@@ -356,6 +370,10 @@
             "tags": [
               "decision"
             ],
+            "computedFrom": "counterPair",
+            "validAlsoCounts": [
+              "tessera_fraud_malformed_total"
+            ],
             "good": "consumed events that produced a decision",
             "valid": "every event consumed, which is this counter plus tessera_fraud_malformed_total"
           },
@@ -379,6 +397,7 @@
             "tags": [],
             "threshold": 0.05,
             "comparison": "<=",
+            "computedFrom": "histogramBucket",
             "good": "events scored within the threshold, excluding the publish",
             "valid": "every event scored"
           },
@@ -439,6 +458,7 @@
             "tags": [],
             "threshold": 1800,
             "comparison": "<=",
+            "computedFrom": "seriesOverTime",
             "good": "runs whose end-to-end duration was within the threshold",
             "valid": "every reporting run that completed"
           },
@@ -515,6 +535,7 @@
             "tags": [],
             "threshold": 93600,
             "comparison": "<=",
+            "computedFrom": "seriesOverTime",
             "good": "moments at which the age of the last successful reconciliation - the scrape clock minus this timestamp - was within the threshold",
             "valid": "every moment in the measurement window"
           },
@@ -538,6 +559,10 @@
             "tags": [
               "business_date",
               "classification"
+            ],
+            "computedFrom": "counterPair",
+            "validAlsoCounts": [
+              "tessera_recon_accounts_compared"
             ],
             "good": "accounts that matched exactly, or whose only difference was classified TIMING",
             "valid": "every account compared, which is tessera_recon_accounts_compared"

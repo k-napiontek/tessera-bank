@@ -98,6 +98,19 @@ DENIED_PROPERTY_NAMES = frozenset({
     "retention", "replicas", "namespace", "cluster", "environment",
 })
 
+#: The selector fields an SLI may carry, and what each way of computing it requires and refuses.
+SELECTOR_FIELDS = ("goodLabel", "goodValues", "badLabelPrefix", "validAlsoCounts")
+
+SELECTOR_RULES = {
+    # method: (required, forbidden)
+    "counterLabels": ({"goodLabel"}, {"validAlsoCounts"}),
+    "histogramBucket": (set(), {"goodLabel", "goodValues", "badLabelPrefix", "validAlsoCounts"}),
+    "counterPair": ({"validAlsoCounts"}, {"goodLabel", "goodValues", "badLabelPrefix"}),
+    # A proportion of a window needs the window. Two snapshots cannot give one, and a report that
+    # produced a figure anyway would be inventing it.
+    "seriesOverTime": (set(), {"goodLabel", "goodValues", "badLabelPrefix", "validAlsoCounts"}),
+}
+
 MINUTES_PER_DAY = 1440
 TOLERANCE = 1e-9
 
@@ -232,6 +245,56 @@ def check_threshold_pairing(catalogue: dict) -> list[str]:
                 )
     return problems
 
+
+def check_computability(catalogue: dict) -> list[str]:
+    """Each way of arriving at a number needs different things, and a schema cannot say which.
+
+    An objective that names a method it does not carry the inputs for is not merely incomplete: a
+    report reading it would either skip it silently or produce a figure from whatever was there,
+    and both are worse than the objective not existing.
+    """
+    problems: list[str] = []
+    for component in catalogue["components"]:
+        for objective in component["objectives"]:
+            at = f"{component['componentId']}/{objective['objectiveId']}"
+            sli = objective["sli"]
+            method = sli["computedFrom"]
+            present = {field for field in SELECTOR_FIELDS if field in sli}
+            required, forbidden = SELECTOR_RULES[method]
+
+            missing = required - present
+            if missing:
+                problems.append(
+                    f"{at}: computedFrom {method!r} needs {sorted(missing)} and does not carry them"
+                )
+            unwanted = present & forbidden
+            if unwanted:
+                problems.append(
+                    f"{at}: computedFrom {method!r} does not use {sorted(unwanted)}, so a reader "
+                    f"cannot tell which of the two the figure came from"
+                )
+
+            if method == "counterLabels":
+                # Exactly one of the two ways of splitting the label, never both and never neither.
+                enumerated = "goodValues" in sli
+                prefixed = "badLabelPrefix" in sli
+                if enumerated == prefixed:
+                    problems.append(
+                        f"{at}: a label split needs either goodValues or badLabelPrefix, not "
+                        f"{'both' if enumerated else 'neither'}"
+                    )
+                if "goodLabel" in sli and sli["goodLabel"] not in sli["tags"]:
+                    problems.append(
+                        f"{at}: splits on the label {sli['goodLabel']!r}, which the SLI does not "
+                        f"list among its tags"
+                    )
+
+            if method == "histogramBucket" and "threshold" not in sli:
+                problems.append(
+                    f"{at}: a bucket ratio is the count below the threshold, and there is no "
+                    f"threshold"
+                )
+    return problems
 
 def check_tags(catalogue: dict) -> list[str]:
     problems: list[str] = []
@@ -374,6 +437,7 @@ def main() -> int:
             check_identifiers_are_unique(catalogue)
             + check_arithmetic(catalogue)
             + check_threshold_pairing(catalogue)
+            + check_computability(catalogue)
             + check_tags(catalogue)
             + check_coverage(catalogue)
             + check_excluded_directories_still_exist()

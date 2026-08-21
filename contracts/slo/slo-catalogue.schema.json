@@ -169,6 +169,7 @@
         "exposedName",
         "origin",
         "tags",
+        "computedFrom",
         "good",
         "valid"
       ],
@@ -222,6 +223,46 @@
             ">="
           ],
           "description": "Which side of the threshold is good. Absent for an eventRatio."
+        },
+        "computedFrom": {
+          "type": "string",
+          "enum": [
+            "counterLabels",
+            "histogramBucket",
+            "counterPair",
+            "seriesOverTime"
+          ],
+          "description": "How a tool arrives at the number, so that a report derives the SLI instead of a tool transcribing it. counterLabels splits one counter by a label. histogramBucket divides the bucket at the threshold by the count. counterPair divides one counter by itself plus the counters in validAlsoCounts. seriesOverTime cannot be computed from two snapshots at all - a proportion of a window needs the window - and a report that produced a figure anyway would be inventing one."
+        },
+        "goodLabel": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$",
+          "description": "counterLabels: the label whose values decide which side a sample is on."
+        },
+        "goodValues": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,48}$"
+          },
+          "description": "counterLabels: the values of goodLabel that count as good."
+        },
+        "badLabelPrefix": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,16}$",
+          "description": "counterLabels, for a label whose values are open-ended: samples whose goodLabel value starts with this are the bad ones, and everything else is good. An HTTP status is the case this exists for - the 5xx family cannot be enumerated, and listing the good ones would silently reclassify every status nobody thought of."
+        },
+        "validAlsoCounts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{2,63}$"
+          },
+          "description": "counterPair: further metrics that belong in the denominator. The events that never became what the numerator counts are still valid events, and leaving them out is how an SLI comes out flattering."
         },
         "good": {
           "type": "string",

@@ -66,6 +66,28 @@ class CatalogueScrapeTest extends LedgerApiTest {
         return names;
     }
 
+    /** Every objective of this component that counts events on one side of a threshold. */
+    private static List<JsonNode> thresholdObjectives() throws Exception {
+        Path contracts = Path.of(System.getProperty(
+                "tessera.contracts.dir", Path.of("..", "..", "contracts").toString()));
+        JsonNode document = new ObjectMapper()
+                .readTree(Files.readAllBytes(contracts.resolve("slo").resolve("tessera-slo-v1.json")));
+
+        List<JsonNode> found = new ArrayList<>();
+        for (JsonNode component : document.get("components")) {
+            if (!COMPONENT.equals(component.get("componentId").asText())) {
+                continue;
+            }
+            for (JsonNode objective : component.get("objectives")) {
+                JsonNode sli = objective.get("sli");
+                if ("eventRatio".equals(sli.get("kind").asText()) && sli.has("threshold")) {
+                    found.add(objective);
+                }
+            }
+        }
+        return found;
+    }
+
     private String open(String reference, String type) throws Exception {
         mvc.perform(post("/v1/accounts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,6 +137,38 @@ class CatalogueScrapeTest extends LedgerApiTest {
                     .as("the catalogue names %s and the scrape carries it", exposed)
                     .anyMatch(line -> SUFFIXES.stream()
                             .anyMatch(suffix -> line.startsWith(exposed + suffix + "{")));
+        }
+    }
+
+    @Test
+    @DisplayName("a latency objective has a histogram bucket at the boundary it is stated over")
+    void everyThresholdIsMeasurable() throws Exception {
+        // A Micrometer Timer publishes count, sum and max and no buckets at all, so "the proportion
+        // answered within half a second" is not a figure anybody could compute from a scrape - the
+        // objective would be a claim nobody can check, which ADR 0012 names as the dangerous half of
+        // the split it draws. The bucket is configured in application.yml, and this is what keeps
+        // that number and the catalogue's threshold from drifting apart into two plausible answers.
+        List<String> samples = Arrays.stream(
+                        mvc.perform(get("/actuator/prometheus"))
+                                .andReturn().getResponse().getContentAsString().split("\n"))
+                .filter(line -> !line.startsWith("#"))
+                .toList();
+
+        List<JsonNode> objectives = thresholdObjectives();
+        assertThat(objectives).as("this component states at least one threshold objective").isNotEmpty();
+
+        for (JsonNode objective : objectives) {
+            JsonNode sli = objective.get("sli");
+            String exposed = sli.get("exposedName").asText();
+            // Prometheus renders the bound as a plain decimal, so 500ms is le="0.5".
+            String bound = new java.math.BigDecimal(sli.get("threshold").asText())
+                    .stripTrailingZeros().toPlainString();
+
+            assertThat(samples)
+                    .as("%s: %s has a bucket at le=\"%s\"",
+                            objective.get("objectiveId").asText(), exposed, bound)
+                    .anyMatch(line -> line.startsWith(exposed + "_bucket{")
+                            && line.contains("le=\"" + bound + "\""));
         }
     }
 }
