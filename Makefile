@@ -243,7 +243,7 @@ build-integration: jdk8 ## Build the Spring Boot 2.7 tier - esb-adapter
 test-integration: jdk8 docker build-legacy ## esb-adapter, against real Kafka and a really-deployed customer-master
 	@JAVA_HOME="$(JAVA8)" mvn -f integration/esb-adapter/pom.xml verify
 
-test-services: jdk17 docker ## Ledger domain, persistence and API, the last two on real PostgreSQL
+test-services: jdk17 docker ## Ledger domain, persistence, API and bulk loader, the last three on real PostgreSQL
 	@JAVA_HOME="$(JAVA17)" ./gradlew \
 		:services:ledger-core:test :services:ledger-persistence:test :services:ledger-api:test \
 		:services:ledger-loader:test

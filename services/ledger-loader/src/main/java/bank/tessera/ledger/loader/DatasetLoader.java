@@ -5,12 +5,12 @@ import bank.tessera.ledger.domain.CurrencyCode;
 import bank.tessera.ledger.domain.Direction;
 import bank.tessera.ledger.domain.Money;
 import bank.tessera.ledger.domain.OverdraftPolicy;
-import bank.tessera.ledger.port.AuditAction;
 import bank.tessera.ledger.loader.LedgerRows.AccountRow;
 import bank.tessera.ledger.loader.LedgerRows.BalanceRow;
 import bank.tessera.ledger.loader.LedgerRows.EntryRow;
 import bank.tessera.ledger.loader.LedgerRows.HoldRow;
 import bank.tessera.ledger.loader.LedgerRows.PostingRow;
+import bank.tessera.ledger.port.AuditAction;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -33,15 +33,16 @@ import java.util.Objects;
  * are validated by the domain's own types. A loader with its own copy of the sign convention would
  * produce a ledger that reconciles against itself and against nothing else.
  */
-public class DatasetLoader implements DatasetVisitor {
+public final class DatasetLoader implements DatasetVisitor {
 
     /**
      * How many times a cohort's median transfer an account is opened with.
      *
      * <p>A round number, and named as one. It has to be large enough that the year of transfers the
-     * model draws is not refused for want of funds - at 200 the refusal counter reads zero on the
-     * committed model - and small enough that the opening balances are the size of money the cohort
-     * actually moves. It is not a claim about what a Polish retail customer holds.
+     * model draws is not refused for want of funds - at 200, a 250-day load of the committed model
+     * refused 151 transfers out of 2 107 798, which is seven in a hundred thousand - and small enough
+     * that the opening balances are the size of money the cohort actually moves. It is not a claim
+     * about what a Polish retail customer holds.
      */
     static final long OPENING_MULTIPLE = 200;
 
