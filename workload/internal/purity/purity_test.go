@@ -60,6 +60,7 @@ var engine = []string{
 // model: an engine that could open a socket would eventually contain half a driver, and WP-25 would
 // then be written against the other half.
 var driver = []string{
+	"internal/client",
 	"internal/identity",
 }
 
