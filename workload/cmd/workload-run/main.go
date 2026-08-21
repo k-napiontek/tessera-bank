@@ -65,11 +65,13 @@ type options struct {
 
 	gateway       string
 	ledgerMetrics string
+	edgeMetrics   string
 	issuer        string
 	audience      string
 	keysPath      string
 	metricsListen string
 	manifestPath  string
+	scrapeDir     string
 
 	timeout      time.Duration
 	attempts     int
@@ -194,6 +196,14 @@ func run() error {
 	}
 
 	before := scrapeLedger(opts.ledgerMetrics)
+	// Written where the run brackets itself rather than from the shell around it. Seeding opens and
+	// funds accounts through the same ledger, so a scrape taken before the process started would
+	// fold the seeding into the baseline and report a run that moved more than it did.
+	saveScrape(opts.scrapeDir, "before.prom", before.Body)
+	// The edge at the same instant. A report built from the ledger alone says "nothing happened"
+	// about every objective the gateway carries, which reads as an estate that did nothing rather
+	// than as a report that looked in one place.
+	saveScrape(opts.scrapeDir, "before-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
 
 	fmt.Printf("== Run ==\n  %s of business time at %dx, so about %s of wall clock\n",
 		businessSpan(from, to), opts.compress, record.RealDuration.Round(time.Second))
@@ -204,8 +214,10 @@ func run() error {
 	})
 
 	after := scrapeLedger(opts.ledgerMetrics)
+	saveScrape(opts.scrapeDir, "after.prom", after.Body)
+	saveScrape(opts.scrapeDir, "after-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
 	printReport(summary, registry)
-	printReconciliation(summary, before, after, opts.ledgerMetrics)
+	printReconciliation(summary, before.Transfers, after.Transfers, opts.ledgerMetrics)
 
 	if err := writeManifest(record, opts.manifestPath); err != nil {
 		return err
@@ -242,6 +254,10 @@ func parse() options {
 	flag.IntVar(&opts.expected, "expected", 64, "requests this run expects in flight at once - reported, never enforced")
 	flag.IntVar(&opts.seedWorkers, "seed-workers", 8, "how many accounts to open at once before the run")
 	flag.DurationVar(&opts.waitFor, "wait", 90*time.Second, "how long to wait for the gateway to answer")
+	flag.StringVar(&opts.edgeMetrics, "edge-metrics", "",
+		"the gateway's metrics endpoint, scraped at the same two instants as the ledger's")
+	flag.StringVar(&opts.scrapeDir, "scrapes", "",
+		"write the ledger scrapes that bracket the measured run into this directory")
 	flag.BoolVar(&opts.skipSeeding, "skip-seeding", false, "assume the accounts are already open and funded")
 	flag.BoolVar(&opts.skipRun, "seed-only", false, "seed the estate and stop")
 	flag.IntVar(&opts.tokenMinutes, "token-ttl", 60, "minutes a minted token stays valid")
@@ -336,20 +352,42 @@ func waitForGateway(ctx context.Context, origin string, limit time.Duration) err
 	}
 }
 
-func scrapeLedger(url string) reconcile.ByOutcome {
+// scrape is one reading of the ledger: the counter the reconciliation needs, and the whole
+// exposition, which is what WP-23's run report is generated from afterwards.
+type scrape struct {
+	Transfers reconcile.ByOutcome
+	Body      string
+}
+
+func scrapeLedger(url string) scrape {
 	if url == "" {
-		return nil
+		return scrape{}
 	}
 	response, err := (&http.Client{Timeout: 5 * time.Second}).Get(url)
 	if err != nil {
-		return nil
+		return scrape{}
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
+	body, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
 	if err != nil {
-		return nil
+		return scrape{}
 	}
-	return reconcile.Transfers(string(body))
+	return scrape{Transfers: reconcile.Transfers(string(body)), Body: string(body)}
+}
+
+// saveScrape keeps one exposition beside the manifest, so that workload-report can generate the run
+// report from files long after the terminal has gone.
+func saveScrape(dir, name, body string) {
+	if dir == "" || body == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "workload-run: cannot write scrapes to %s: %v\n", dir, err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "workload-run: cannot write %s: %v\n", name, err)
+	}
 }
 
 func printHeader(record manifest.Manifest, opts options, held money.Currency) {

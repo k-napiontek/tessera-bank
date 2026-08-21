@@ -1,0 +1,23 @@
+# HELP ledger_transfers_total Money-moving requests by operation and outcome
+# TYPE ledger_transfers_total counter
+ledger_transfers_total{application="ledger-api",operation="transfer",outcome="posted",} 1090.0
+ledger_transfers_total{application="ledger-api",operation="transfer",outcome="failed",} 6.0
+ledger_transfers_total{application="ledger-api",operation="hold.release",outcome="posted",} 43.0
+ledger_posting_latency_seconds_bucket{application="ledger-api",operation="transfer",outcome="posted",le="0.5",} 866.0
+ledger_posting_latency_seconds_bucket{application="ledger-api",operation="transfer",outcome="posted",le="+Inf",} 1090.0
+ledger_posting_latency_seconds_count{application="ledger-api",operation="transfer",outcome="posted",} 1090.0
+ledger_outbox_lag_seconds{application="ledger-api",} 4.0
+ledger_outbox_pending{application="ledger-api",} 3.0
+hikaricp_connections_pending{application="ledger-api",pool="HikariPool-1",} 2.0
+tessera_gateway_requests_total{route="transfers",method="POST",status="201",} 980.0
+tessera_gateway_requests_total{route="transfers",method="POST",status="503",} 12.0
+tessera_gateway_request_duration_seconds_bucket{route="transfers",le="1",} 958.0
+tessera_gateway_request_duration_seconds_count{route="transfers",} 992.0
+tessera_fraud_decisions_total{decision="allow",} 560.0
+tessera_fraud_malformed_total 3.0
+tessera_fraud_scoring_seconds_bucket{le="0.05",} 551.0
+tessera_fraud_scoring_seconds_count 560.0
+tessera_reporting_duration_seconds 14.0
+tessera_recon_last_success 1.7566e+09
+tessera_recon_breaks{business_date="2026-08-30",classification="VALUE",} 0.0
+tessera_recon_accounts_compared{business_date="2026-08-30",} 4000.0

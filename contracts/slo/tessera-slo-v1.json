@@ -1,0 +1,635 @@
+{
+  "catalogueId": "TB-SLO-CATALOGUE-V1",
+  "catalogueVersion": "1.0.0",
+  "summary": "What good looks like for every component of Tessera Bank that emits a metric. An objective here is a declaration about what the software promises, taken by the people who built it; the committed baseline beside it records what the estate actually did under a named workload model. The two are deliberately separate, and where a baseline cannot meet an objective that is recorded rather than quietly relaxed. Nothing in this document decides when to page, whom to page or at what burn rate: those are properties of a deployment and belong to the platform repositories, per ADR 0012.",
+  "components": [
+    {
+      "componentId": "ledger-api",
+      "path": "services/ledger-api",
+      "stratum": "3",
+      "exposure": "actuator-endpoint",
+      "objectives": [
+        {
+          "objectiveId": "SLO-LEDGER-MOVEMENT-SUCCESS",
+          "title": "A request to move money is answered rather than dropped on the floor",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "ledger.transfers",
+            "exposedName": "ledger_transfers_total",
+            "origin": "source",
+            "tags": [
+              "operation",
+              "outcome"
+            ],
+            "computedFrom": "counterLabels",
+            "goodLabel": "outcome",
+            "goodValues": [
+              "posted",
+              "replayed",
+              "rejected"
+            ],
+            "good": "money-moving requests whose outcome was posted, replayed or rejected",
+            "valid": "every money-moving request the ledger counted, over all five operations"
+          },
+          "target": 0.999,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.001,
+            "minutesPerWindow": 43.2
+          },
+          "introducedBy": "WP-09",
+          "rationale": "A rejection is the ledger working: insufficient funds, a closed account, a currency mismatch are business outcomes and a rise in them is a question for the caller. Only failed is the ledger failing, and the outcome tag exists precisely so the two cannot be averaged into one meaningless graph. That separation is what makes this objective mean anything, and an objective stated over the whole counter instead would be met by a ledger refusing every payment."
+        },
+        {
+          "objectiveId": "SLO-LEDGER-POSTING-LATENCY",
+          "title": "Money moves quickly enough that callers do not time out and retry",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "ledger.posting.latency",
+            "exposedName": "ledger_posting_latency_seconds",
+            "origin": "source",
+            "tags": [
+              "operation",
+              "outcome"
+            ],
+            "threshold": 0.5,
+            "comparison": "<=",
+            "computedFrom": "histogramBucket",
+            "good": "money-moving requests that did work and completed within the threshold",
+            "valid": "money-moving requests that did work - rejections are counted rather than timed, because a validation failure that returns in a millisecond and a transfer that took two locks produce a percentile describing neither"
+          },
+          "target": 0.99,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.01,
+            "minutesPerWindow": 432.0
+          },
+          "introducedBy": "WP-09",
+          "rationale": "Every transfer takes two row locks in a deterministic order and one global advisory lock held to commit, so this figure is where contention shows up first. Half a second is the point at which a caller's own timeout starts producing retries, and a retry arrives as a replay - which means this objective and the replay share of SLO-LEDGER-MOVEMENT-SUCCESS fail in that order, giving an operator one signal before the other."
+        },
+        {
+          "objectiveId": "SLO-LEDGER-OUTBOX-FRESHNESS",
+          "title": "An event the ledger wrote reaches the broker while it is still current",
+          "sli": {
+            "kind": "timeRatio",
+            "meterName": "ledger.outbox.lag",
+            "exposedName": "ledger_outbox_lag_seconds",
+            "origin": "source",
+            "tags": [],
+            "threshold": 60,
+            "comparison": "<=",
+            "computedFrom": "seriesOverTime",
+            "good": "moments at which the oldest unpublished event was younger than the threshold",
+            "valid": "every moment in the measurement window"
+          },
+          "target": 0.995,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.005,
+            "minutesPerWindow": 216.0
+          },
+          "introducedBy": "WP-09",
+          "rationale": "The lag is the figure to state an objective over and the pending count is not, for the reason the runbook gives: a backlog of ten thousand draining steadily is a busy afternoon, and a backlog of one that has not moved in ten minutes is stuck. A minute is roughly one scrape interval, so an event older than that has missed the window in which the fraud scorer downstream would have seen it as part of the same moment."
+        },
+        {
+          "objectiveId": "SLO-LEDGER-POOL-HEADROOM",
+          "title": "No request waits for a database connection that is not there",
+          "sli": {
+            "kind": "timeRatio",
+            "meterName": "hikaricp.connections.pending",
+            "exposedName": "hikaricp_connections_pending",
+            "origin": "framework",
+            "tags": [
+              "pool"
+            ],
+            "threshold": 0,
+            "comparison": "<=",
+            "computedFrom": "seriesOverTime",
+            "good": "moments at which no thread was queued waiting for a connection from the pool",
+            "valid": "every moment in the measurement window"
+          },
+          "target": 0.99,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.01,
+            "minutesPerWindow": 432.0
+          },
+          "introducedBy": "WP-23",
+          "rationale": "A pool larger than the database can serve turns a slow query into a queue of held connections, and every transfer then waits behind it - which is why the pool is deliberately small and says so where it is configured. Pending is where that queue becomes visible, before latency moves and long before anything fails, so this objective is the earliest of the ledger's four to break. It is stated over the framework's own gauge rather than over a copy of it: Boot's Hikari binder already publishes this, and re-deriving it here would be a second instrument that could disagree with the first."
+        }
+      ],
+      "signals": [
+        {
+          "meterName": "ledger.outbox.pending",
+          "exposedName": "ledger_outbox_pending",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Events written but not yet published. Read from the table rather than accumulated in memory, so a restarted instance reports the truth immediately instead of starting again from zero.",
+          "introducedBy": "WP-09",
+          "noObjectiveBecause": "A count cannot tell a busy afternoon from a stuck relay, and an objective over it would fire on the first busy afternoon and be relaxed until it never fired at all. The objective is stated over the lag, which can tell them apart."
+        },
+        {
+          "meterName": "hikaricp.connections.acquire",
+          "exposedName": "hikaricp_connections_acquire_seconds",
+          "origin": "framework",
+          "tags": [
+            "pool"
+          ],
+          "meaning": "How long a caller waited to be handed a connection. The other half of pool pressure: pending says how many are queued, this says what the queue cost them.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "It is the same pressure SLO-LEDGER-POOL-HEADROOM is stated over, seen as a duration rather than as a queue. Two objectives over one condition can disagree about whether it happened."
+        },
+        {
+          "meterName": "hikaricp.connections.active",
+          "exposedName": "hikaricp_connections_active",
+          "origin": "framework",
+          "tags": [
+            "pool"
+          ],
+          "meaning": "Connections currently checked out. Against the maximum below, this is pool utilisation.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "Utilisation has no bad value on its own - a pool at ninety per cent is a pool being used. What matters is whether anybody had to wait, which is the objective above."
+        },
+        {
+          "meterName": "hikaricp.connections.idle",
+          "exposedName": "hikaricp_connections_idle",
+          "origin": "framework",
+          "tags": [
+            "pool"
+          ],
+          "meaning": "Connections open and unused.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "It is the complement of active against the maximum, and an objective over it would be an objective about how quiet the bank is."
+        },
+        {
+          "meterName": "hikaricp.connections.max",
+          "exposedName": "hikaricp_connections_max",
+          "origin": "framework",
+          "tags": [
+            "pool"
+          ],
+          "meaning": "The pool's configured ceiling, which is the denominator of every utilisation figure above.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "It is configuration read back, not behaviour. An objective over a setting is a category error."
+        },
+        {
+          "meterName": "ledger.db.table.size",
+          "exposedName": "ledger_db_table_size_bytes",
+          "origin": "source",
+          "tags": [
+            "table"
+          ],
+          "meaning": "Heap size of each table the ledger owns, excluding its indexes.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "Growth is expected and unbounded growth is the concern, which needs a recorded normal and a trend rather than a threshold. F-28 records that nothing prunes outbox_record or idempotency_record, and the retention period that would justify a threshold is a regulatory question rather than an engineering one."
+        },
+        {
+          "meterName": "ledger.db.index.size",
+          "exposedName": "ledger_db_index_size_bytes",
+          "origin": "source",
+          "tags": [
+            "table"
+          ],
+          "meaning": "Size of every index on each table. Against the heap size beside it, this is what an index set costs.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "The same reason as the heap size: a figure to trend, and F-24 is the open question it informs rather than a promise anybody can make about it."
+        },
+        {
+          "meterName": "ledger.db.dead.tuples",
+          "exposedName": "ledger_db_dead_tuples",
+          "origin": "source",
+          "tags": [
+            "table"
+          ],
+          "meaning": "Rows superseded or deleted and not yet reclaimed. Against the live count beside it, this is how far behind vacuuming has fallen.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "A bulk load legitimately spikes this and autovacuum legitimately takes its time about it, so a threshold would fire on correct behaviour. What it needs is the recorded normal this package commits."
+        },
+        {
+          "meterName": "ledger.db.live.tuples",
+          "exposedName": "ledger_db_live_tuples",
+          "origin": "source",
+          "tags": [
+            "table"
+          ],
+          "meaning": "Rows PostgreSQL estimates are live, which is the denominator the dead-tuple count is read against.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "It is a volume, and a volume moves with the bank's day rather than with the health of anything."
+        },
+        {
+          "meterName": "ledger.db.autovacuums",
+          "exposedName": "ledger_db_autovacuums",
+          "origin": "source",
+          "tags": [
+            "table"
+          ],
+          "meaning": "Autovacuums run against each table since the statistics were last reset.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "A count that resets when the statistics do cannot carry an objective across a restart without reading as a catastrophe."
+        },
+        {
+          "meterName": "ledger.db.autovacuum.age",
+          "exposedName": "ledger_db_autovacuum_age_seconds",
+          "origin": "source",
+          "tags": [
+            "table"
+          ],
+          "meaning": "Age of the last autovacuum. NaN means never - reported as NaN and never as zero, because zero reads as vacuumed a moment ago, which is the exact opposite of the truth.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "How long is too long depends on the table's write rate, which differs by two orders of magnitude across the eight tables here. One threshold across all of them would be wrong for seven."
+        },
+        {
+          "meterName": "ledger.lock.chain",
+          "exposedName": "ledger_lock_chain_seconds",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Time a money-moving transaction spent waiting for the audit chain's advisory lock. Service-wide: one writer at a time, across every account and every instance.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "The threshold worth promising is the one F-27 has been asking for since WP-09, and it is measured by this package rather than guessed at here. A number set before the measurement would be the invented constant F-69 records, in the file that records it."
+        },
+        {
+          "meterName": "ledger.lock.account",
+          "exposedName": "ledger_lock_account_seconds",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Time a transaction spent taking row locks on the accounts it touches, timed as one acquisition because that is what a transfer actually waits for.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "This rises with how concentrated the day's traffic is rather than with how much of it there is, so a threshold would be a statement about the customers rather than about the ledger. It is kept apart from the chain wait above precisely so the two cannot be averaged."
+        }
+      ]
+    },
+    {
+      "componentId": "api-gateway",
+      "path": "edge/api-gateway",
+      "stratum": "4",
+      "exposure": "admin-listener",
+      "objectives": [
+        {
+          "objectiveId": "SLO-GATEWAY-AVAILABILITY",
+          "title": "The edge answers a customer request rather than failing on its own account",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "tessera_gateway_requests_total",
+            "exposedName": "tessera_gateway_requests_total",
+            "origin": "source",
+            "tags": [
+              "route",
+              "method",
+              "status"
+            ],
+            "computedFrom": "counterLabels",
+            "goodLabel": "status",
+            "badLabelPrefix": "5",
+            "good": "requests answered with a status below 500",
+            "valid": "every request the gateway answered, including the ones it refused before routing"
+          },
+          "target": 0.999,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.001,
+            "minutesPerWindow": 43.2
+          },
+          "introducedBy": "WP-12",
+          "rationale": "The gateway validates and forwards, so a 4xx is the edge refusing something it was right to refuse. A 429 is deliberately on the good side of this line: retrying into a limiter converts a working control into a stampede, which is why the workload driver never retries one either. Only a 5xx is the edge failing, and a request refused before routing is counted under the unrouted class rather than excluded - excluding it would measure only the requests that got far enough to succeed."
+        },
+        {
+          "objectiveId": "SLO-GATEWAY-LATENCY",
+          "title": "A customer gets an answer within a second, ledger included",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "tessera_gateway_request_duration_seconds",
+            "exposedName": "tessera_gateway_request_duration_seconds",
+            "origin": "source",
+            "tags": [
+              "route"
+            ],
+            "threshold": 1,
+            "comparison": "<=",
+            "computedFrom": "histogramBucket",
+            "good": "requests answered within the threshold",
+            "valid": "every request the gateway answered"
+          },
+          "target": 0.99,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.01,
+            "minutesPerWindow": 432.0
+          },
+          "introducedBy": "WP-12",
+          "rationale": "One second is a bucket boundary of the histogram this is computed from, and that is not a detail: a threshold between two boundaries cannot be computed from a histogram at all, so an objective set at 750 ms would be an objective nobody could measure without changing the instrument. The buckets were chosen for a request that crosses one network hop and a database, with the tail placed where a customer starts to notice."
+        }
+      ],
+      "signals": [
+        {
+          "meterName": "tessera_gateway_refusals_total",
+          "exposedName": "tessera_gateway_refusals_total",
+          "origin": "source",
+          "tags": [
+            "reason"
+          ],
+          "meaning": "Requests the edge refused itself, by reason. A ledger failure is deliberately not one of these.",
+          "introducedBy": "WP-12",
+          "noObjectiveBecause": "A refusal is the edge working. An objective over it would be an objective about how well behaved the callers are, which is not a promise this component can make or keep."
+        },
+        {
+          "meterName": "tessera_gateway_upstream_failures_total",
+          "exposedName": "tessera_gateway_upstream_failures_total",
+          "origin": "source",
+          "tags": [
+            "kind"
+          ],
+          "meaning": "Calls to the ledger that produced no usable answer, by kind. The edge's view of a ledger that is failing, timing out or unreachable.",
+          "introducedBy": "WP-12",
+          "noObjectiveBecause": "This is the ledger's failure seen from one hop away, and SLO-LEDGER-MOVEMENT-SUCCESS already carries that promise. Stating it twice lets one be met while the other is missed, and then the argument is about which number is right rather than about the outage."
+        },
+        {
+          "meterName": "tessera_gateway_limiter_buckets",
+          "exposedName": "tessera_gateway_limiter_buckets",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Rate-limit buckets currently held. The limiter keeps one per caller and sweeps the idle ones on a clock rather than on a request count, and this is the only thing that would show the sweep having stopped. NaN means nothing has been bound to read it.",
+          "introducedBy": "WP-23",
+          "noObjectiveBecause": "How many buckets is too many depends on how many callers there are, which is a property of the deployment rather than of the software - ADR 0006 makes the same argument about the rate limit itself being per instance. What this needs is the recorded normal this package commits, so that a limiter whose sweep has stopped is visible as a shape rather than as a threshold."
+        }
+      ]
+    },
+    {
+      "componentId": "fraud-scoring",
+      "path": "edge/fraud-scoring",
+      "stratum": "4",
+      "exposure": "http-server",
+      "objectives": [
+        {
+          "objectiveId": "SLO-FRAUD-DECISION-COMPLETENESS",
+          "title": "Every transfer event the scorer consumes produces a decision",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "tessera_fraud_decisions_total",
+            "exposedName": "tessera_fraud_decisions_total",
+            "origin": "source",
+            "tags": [
+              "decision"
+            ],
+            "computedFrom": "counterPair",
+            "validAlsoCounts": [
+              "tessera_fraud_malformed_total"
+            ],
+            "good": "consumed events that produced a decision",
+            "valid": "every event consumed, which is this counter plus tessera_fraud_malformed_total"
+          },
+          "target": 0.9999,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.0001,
+            "minutesPerWindow": 4.32
+          },
+          "introducedBy": "WP-13",
+          "rationale": "A malformed message is a producer sending something this consumer cannot read, so any non-zero value is a contract violation upstream rather than a fault here. The budget is deliberately small and deliberately not zero: zero is a wish rather than an objective, and an objective nobody can ever meet is one everybody learns to ignore, which is the failure mode a control least survives."
+        },
+        {
+          "objectiveId": "SLO-FRAUD-SCORING-LATENCY",
+          "title": "Scoring keeps up with the topic rather than falling behind it",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "tessera_fraud_scoring_seconds",
+            "exposedName": "tessera_fraud_scoring_seconds",
+            "origin": "source",
+            "tags": [],
+            "threshold": 0.05,
+            "comparison": "<=",
+            "computedFrom": "histogramBucket",
+            "good": "events scored within the threshold, excluding the publish",
+            "valid": "every event scored"
+          },
+          "target": 0.99,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.01,
+            "minutesPerWindow": 432.0
+          },
+          "introducedBy": "WP-13",
+          "rationale": "The rules are pure functions over an event with no I/O inside them, so this figure bounds the rule set rather than a dependency - which makes it the one signal that says a new rule made scoring expensive. Fifty milliseconds is a bucket boundary of the histogram it is computed from, and it is the point above which a single consumer stops keeping pace with the topic it reads."
+        }
+      ],
+      "signals": [
+        {
+          "meterName": "tessera_fraud_score",
+          "exposedName": "tessera_fraud_score",
+          "origin": "source",
+          "tags": [],
+          "meaning": "The distribution of scores produced, bucketed on the two decision thresholds and either side of them, so a rule set drifting towards a boundary is visible long before any outcome changes.",
+          "introducedBy": "WP-13",
+          "noObjectiveBecause": "A distribution has no good side. What this needs is a recorded normal to compare against, which is what the baseline this package commits provides, and an objective invented for it would be a number describing the rule set rather than a promise to anybody."
+        },
+        {
+          "meterName": "tessera_fraud_malformed_total",
+          "exposedName": "tessera_fraud_malformed_total",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Messages that could not be read as a transfer event and were skipped. Any non-zero value is a producer emitting something this consumer cannot parse.",
+          "introducedBy": "WP-13",
+          "noObjectiveBecause": "It is the other half of SLO-FRAUD-DECISION-COMPLETENESS's denominator, and an objective stated over both would double-count the same events."
+        },
+        {
+          "meterName": "tessera_fraud_publish_failures_total",
+          "exposedName": "tessera_fraud_publish_failures_total",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Attempts to publish a decision that failed. The event is redelivered rather than lost.",
+          "introducedBy": "WP-13",
+          "noObjectiveBecause": "Redelivery means a failure here costs latency rather than a decision, so the promise worth making is about the decision arriving at all - which is the objective above."
+        }
+      ]
+    },
+    {
+      "componentId": "reporting",
+      "path": "batch/reporting",
+      "stratum": "mixed",
+      "exposure": "node-exporter-textfile",
+      "objectives": [
+        {
+          "objectiveId": "SLO-REPORTING-RUN-DURATION",
+          "title": "A reporting run finishes quickly enough to be re-run when a cut is disputed",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "tessera_reporting_duration_seconds",
+            "exposedName": "tessera_reporting_duration_seconds",
+            "origin": "source",
+            "tags": [],
+            "threshold": 1800,
+            "comparison": "<=",
+            "computedFrom": "seriesOverTime",
+            "good": "runs whose end-to-end duration was within the threshold",
+            "valid": "every reporting run that completed"
+          },
+          "target": 0.98,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.02,
+            "minutesPerWindow": 864.0
+          },
+          "introducedBy": "WP-17",
+          "rationale": "A report here is cut at an audit position and is byte-identical on a re-run over the same inputs, so the thing this objective protects is the re-run: when a figure is disputed, an operator reproduces the cut rather than arguing about it. Thirty minutes is what makes that a conversation rather than a morning. This repository does not know any receiver's submission deadline and deliberately does not invent one."
+        }
+      ],
+      "signals": [
+        {
+          "meterName": "tessera_reporting_position",
+          "exposedName": "tessera_reporting_position",
+          "origin": "source",
+          "tags": [],
+          "meaning": "The ledger audit position the last run was cut at. A figure that does not advance between nightly runs means nothing posted.",
+          "introducedBy": "WP-17",
+          "noObjectiveBecause": "Nothing posting is a quiet day as often as it is an upstream that stopped, and this component cannot tell which. An objective over it would fire on the first bank holiday and be relaxed until it never fired."
+        },
+        {
+          "meterName": "tessera_reporting_accounts_read",
+          "exposedName": "tessera_reporting_accounts_read",
+          "origin": "source",
+          "tags": [
+            "business_date"
+          ],
+          "meaning": "Accounts in scope for the reported business date.",
+          "introducedBy": "WP-17",
+          "noObjectiveBecause": "A volume has no good side. It is one of the figures a disputed report is investigated with, and what it needs is a recorded normal rather than a promise."
+        },
+        {
+          "meterName": "tessera_reporting_movements_read",
+          "exposedName": "tessera_reporting_movements_read",
+          "origin": "source",
+          "tags": [
+            "business_date"
+          ],
+          "meaning": "Postings in scope for the reported business date.",
+          "introducedBy": "WP-17",
+          "noObjectiveBecause": "A volume has no good side, and this one moves with the bank's day rather than with the health of the job that reads it."
+        },
+        {
+          "meterName": "tessera_reporting_records_written",
+          "exposedName": "tessera_reporting_records_written",
+          "origin": "source",
+          "tags": [
+            "business_date",
+            "report"
+          ],
+          "meaning": "Records written to each report file, which is what a receiver can be told to expect.",
+          "introducedBy": "WP-17",
+          "noObjectiveBecause": "A volume has no good side. Whether it agrees with the movements read is a reconciliation the run itself performs, not an objective a platform could alert on."
+        }
+      ]
+    },
+    {
+      "componentId": "recon",
+      "path": "batch/recon",
+      "stratum": "mixed",
+      "exposure": "node-exporter-textfile",
+      "objectives": [
+        {
+          "objectiveId": "SLO-RECON-CONTROL-RUNS",
+          "title": "The two cores are checked against each other every banking day",
+          "sli": {
+            "kind": "timeRatio",
+            "meterName": "tessera_recon_last_success",
+            "exposedName": "tessera_recon_last_success",
+            "origin": "source",
+            "tags": [],
+            "threshold": 93600,
+            "comparison": "<=",
+            "computedFrom": "seriesOverTime",
+            "good": "moments at which the age of the last successful reconciliation - the scrape clock minus this timestamp - was within the threshold",
+            "valid": "every moment in the measurement window"
+          },
+          "target": 0.99,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.01,
+            "minutesPerWindow": 432.0
+          },
+          "introducedBy": "WP-16",
+          "rationale": "A control that stops running still passes its audit, and this is the control that keeps the strangler fig safe: without it the claim that the mainframe master and the ledger still agree is a plan rather than a checked property. Twenty-six hours is one daily cycle plus the two hours the overnight schedule can slip without the morning being affected."
+        },
+        {
+          "objectiveId": "SLO-RECON-ACCOUNTS-AGREE",
+          "title": "The mainframe master and the ledger agree about what an account holds",
+          "sli": {
+            "kind": "eventRatio",
+            "meterName": "tessera_recon_breaks",
+            "exposedName": "tessera_recon_breaks",
+            "origin": "source",
+            "tags": [
+              "business_date",
+              "classification"
+            ],
+            "computedFrom": "counterPair",
+            "validAlsoCounts": [
+              "tessera_recon_accounts_compared"
+            ],
+            "good": "accounts that matched exactly, or whose only difference was classified TIMING",
+            "valid": "every account compared, which is tessera_recon_accounts_compared"
+          },
+          "target": 0.9999,
+          "windowDays": 30,
+          "errorBudget": {
+            "fraction": 0.0001,
+            "minutesPerWindow": 4.32
+          },
+          "introducedBy": "WP-16",
+          "rationale": "TIMING is on the good side and that is the whole design of this control. A timing difference is expected - the cut-off is the movement file, and a movement posted after it is correctly in one core and not yet the other - so an objective that counted one as a break would fire every morning and train operators to ignore the report, which is worse than having no report. TIMING is still reported rather than suppressed, because a difference nobody can see cannot be confirmed as understood."
+        }
+      ],
+      "signals": [
+        {
+          "meterName": "tessera_recon_duration_seconds",
+          "exposedName": "tessera_recon_duration_seconds",
+          "origin": "source",
+          "tags": [],
+          "meaning": "Wall-clock seconds the last reconciliation took.",
+          "introducedBy": "WP-16",
+          "noObjectiveBecause": "The promise worth making about this control is that it ran and that it agreed, and both are stated above. How long it took is how the first of those is diagnosed when it fails."
+        },
+        {
+          "meterName": "tessera_recon_position",
+          "exposedName": "tessera_recon_position",
+          "origin": "source",
+          "tags": [],
+          "meaning": "The ledger audit position the comparison was taken at, so a break can be tied to the exact cut it was found in.",
+          "introducedBy": "WP-16",
+          "noObjectiveBecause": "It identifies a cut rather than describing health, and an objective over an identifier is a category error."
+        },
+        {
+          "meterName": "tessera_recon_accounts_compared",
+          "exposedName": "tessera_recon_accounts_compared",
+          "origin": "source",
+          "tags": [
+            "business_date"
+          ],
+          "meaning": "Accounts the run compared, which is the denominator SLO-RECON-ACCOUNTS-AGREE is stated over.",
+          "introducedBy": "WP-16",
+          "noObjectiveBecause": "It is that objective's denominator, and stating an objective over a denominator as well as over the ratio lets the two disagree."
+        },
+        {
+          "meterName": "tessera_recon_accounts_matched",
+          "exposedName": "tessera_recon_accounts_matched",
+          "origin": "source",
+          "tags": [
+            "business_date"
+          ],
+          "meaning": "Accounts that agreed exactly. Compared with the accounts compared, it is the shape of a morning at a glance.",
+          "introducedBy": "WP-16",
+          "noObjectiveBecause": "It is the same statement as SLO-RECON-ACCOUNTS-AGREE without the TIMING classification, and an objective over it would put expected differences on the bad side, which is exactly what that objective's rationale refuses."
+        },
+        {
+          "meterName": "tessera_recon_absolute_drift_minor",
+          "exposedName": "tessera_recon_absolute_drift_minor",
+          "origin": "source",
+          "tags": [
+            "business_date"
+          ],
+          "meaning": "The total absolute difference across every break, in minor units. A hundred breaks of one minor unit and one break of a hundred thousand are the same count and very different mornings.",
+          "introducedBy": "WP-16",
+          "noObjectiveBecause": "Money drift is a finding rather than a rate: any non-zero value that is not classified TIMING is investigated whatever its size, so a threshold here would say some amount of unexplained money is acceptable."
+        }
+      ]
+    }
+  ]
+}

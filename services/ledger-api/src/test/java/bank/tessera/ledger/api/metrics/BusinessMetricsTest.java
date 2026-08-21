@@ -2,6 +2,8 @@ package bank.tessera.ledger.api.metrics;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -174,5 +176,67 @@ class BusinessMetricsTest extends LedgerApiTest {
                 .contains("ledger_outbox_pending")
                 .contains("ledger_outbox_lag_seconds")
                 .contains("application=\"ledger-api\"");
+    }
+
+    @Test
+    @DisplayName("a first releaseHold is a posting, and only the second one is a replay")
+    void releasingAHoldIsNotAReplayTheFirstTime() throws Exception {
+        // F-71. releaseHold creates nothing, so it answers 200 whether it did the work or replayed
+        // an earlier answer - and this filter used to read every 200 as a replay. A run that
+        // released thirty holds reported thirty retries nobody made, and the workload driver
+        // inferred it the same way, so the two agreed and the reconciliation looked perfect.
+        String vault = open(freshAccountReference(), "ASSET");
+        String alice = open(freshAccountReference(), "LIABILITY");
+        mvc.perform(post("/v1/transfers")
+                        .header("Idempotency-Key", freshIdempotencyKey())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(transferBody(vault, alice, 500_00)))
+                .andExpect(status().isCreated());
+
+        String holdRef = json.readTree(mvc.perform(post("/v1/accounts/" + alice + "/holds")
+                                .header("Idempotency-Key", freshIdempotencyKey())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        { "amount": { "amountMinor": 100, "currency": "PLN" } }
+                                        """))
+                        .andExpect(status().isCreated())
+                        .andReturn().getResponse().getContentAsString())
+                .get("holdRef").asText();
+
+        double postedBefore = releaseCount("posted");
+        double replayedBefore = releaseCount("replayed");
+
+        String key = freshIdempotencyKey();
+        mvc.perform(post("/v1/holds/" + holdRef + "/release").header("Idempotency-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Idempotency-Replayed"));
+
+        assertThat(releaseCount("posted"))
+                .as("the release happened, so it is a posting")
+                .isEqualTo(postedBefore + 1);
+        assertThat(releaseCount("replayed")).isEqualTo(replayedBefore);
+
+        // The same key again is the retry a client makes after a timeout, and that one is a replay.
+        mvc.perform(post("/v1/holds/" + holdRef + "/release").header("Idempotency-Key", key))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Idempotency-Replayed", "true"));
+
+        assertThat(releaseCount("replayed")).isEqualTo(replayedBefore + 1);
+        assertThat(releaseCount("posted"))
+                .as("the retry did no work, so it is not a second posting")
+                .isEqualTo(postedBefore + 1);
+    }
+
+    /** The counter for one release outcome, or zero before it has ever been incremented. */
+    private double releaseCount(String outcome) throws Exception {
+        var result = mvc.perform(get("/actuator/metrics/ledger.transfers")
+                        .param("tag", "operation:hold.release")
+                        .param("tag", "outcome:" + outcome))
+                .andReturn();
+        if (result.getResponse().getStatus() != 200) {
+            return 0;
+        }
+        return json.readTree(result.getResponse().getContentAsString())
+                .get("measurements").get(0).get("value").asDouble();
     }
 }

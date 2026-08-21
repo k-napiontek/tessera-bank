@@ -48,6 +48,17 @@ var floatIsJustified = map[string]string{
 	"internal/reconcile/parse.go": "a Prometheus counter is a float64 in the exposition, so the ledger's own totals arrive as floats and are totalled as counts; no amount is ever read from it",
 	"cmd/workload-run/main.go":    "the run report prints offered rates and latency quantiles, both of which are rates; it prints no amount at all - a run reports what it did, never what it moved",
 	"internal/metrics/metrics.go": "the Prometheus exposition format is float64 by specification: bucket boundaries, seconds and counts. No amount is ever published, and a run reports what it did rather than what it moved",
+
+	// WP-23's reporting half. An objective is a proportion and an SLI is a ratio of counts; the
+	// catalogue holds no amount and could not carry one - contracts/slo/slo-catalogue.schema.json
+	// bounds every field it has.
+	"internal/slo/catalogue.go":   "a target, an error budget and a threshold are all proportions or seconds, arriving from the catalogue as JSON numbers; no field in that contract is money",
+	"internal/slo/evaluate.go":    "an SLI is good events over valid events, and a Prometheus counter is a float64 by specification. Nothing here reads an amount",
+	"cmd/workload-report/main.go": "the report prints proportions, offered rates and event counts. It prints no amount: a report says what a run did, never what it moved",
+
+	// WP-23's measurement harness. A saturation point is a rate; the one amount it names is an
+	// int64 of minor units that nothing divides.
+	"cmd/workload-ceiling/main.go": "throughput per second, mean latency and lock wait per posting are rates and durations; the transfer amount is an int64 constant and no arithmetic touches it",
 }
 
 // The driver half of this module does two things the engine may not, and each is named per file
@@ -69,6 +80,9 @@ var driverMayCall = map[string]map[string]string{
 	},
 	"cmd/workload-run/main.go": {
 		"time.Now": "a run happens in real time: this is where the wall clock enters, and the schedule it executes was computed without one",
+	},
+	"cmd/workload-ceiling/main.go": {
+		"time.Now": "a saturation point is a rate and a rate needs a real clock. Nothing here is reproducible from a seed and nothing here claims to be: this measures a machine, it does not describe a bank's day",
 	},
 }
 

@@ -145,3 +145,40 @@ func TestTheProcessIsMeasuredToo(t *testing.T) {
 		t.Errorf("no runtime metrics are exposed:\n%s", body)
 	}
 }
+
+// F-37: the limiter's memory was invisible in production. WP-12 counted refusals and left out the
+// gauge that says how much the limiter is holding to produce them, so the sweep that is supposed to
+// bound that memory could stop working without anything showing it.
+func TestTheLimiterSizeIsExportedOnceSomethingIsBoundToIt(t *testing.T) {
+	m := metrics.New()
+
+	// Nothing bound yet. Unknown is not the same reading as empty, and reporting zero here would
+	// tell an operator the limiter is holding nothing when in fact nobody has asked it.
+	if got := scrape(t, m); !strings.Contains(got, "tessera_gateway_limiter_buckets NaN") {
+		t.Fatalf("an unbound gauge should report NaN, got:\n%s", filterLimiter(got))
+	}
+
+	held := 0
+	m.TrackLimiter(func() int { return held })
+
+	if got := scrape(t, m); !strings.Contains(got, "tessera_gateway_limiter_buckets 0") {
+		t.Fatalf("a bound gauge holding nothing should report 0, got:\n%s", filterLimiter(got))
+	}
+
+	// Read at scrape time rather than cached at bind time: a gauge that reported the number of
+	// buckets there were when the process started would be exactly as useful as no gauge.
+	held = 3
+	if got := scrape(t, m); !strings.Contains(got, "tessera_gateway_limiter_buckets 3") {
+		t.Fatalf("the gauge should follow its source, got:\n%s", filterLimiter(got))
+	}
+}
+
+func filterLimiter(exposition string) string {
+	var kept []string
+	for _, line := range strings.Split(exposition, "\n") {
+		if strings.Contains(line, "limiter") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}

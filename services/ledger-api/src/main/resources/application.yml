@@ -90,6 +90,19 @@ management:
     readinessstate:
       enabled: true
   metrics:
+    distribution:
+      # A bucket at the boundary SLO-LEDGER-POSTING-LATENCY is stated over.
+      #
+      # A Micrometer Timer publishes count, sum and max and nothing else, so "the proportion of
+      # requests answered within half a second" could not be computed from a scrape at all - the
+      # objective would have been a claim nobody could check, which is exactly the state ADR 0012
+      # calls the dangerous one. This publishes le="0.5" beside them.
+      #
+      # The number here and the threshold in contracts/slo/tessera-slo-v1.json are one statement in
+      # two files, and CatalogueScrapeTest fails if they stop agreeing: a threshold with no bucket
+      # at it is unmeasurable, and a bucket at the wrong place answers a different question.
+      slo:
+        ledger.posting.latency: 500ms
     tags:
       application: ledger-api
 

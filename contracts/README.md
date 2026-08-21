@@ -15,6 +15,7 @@ Every interface in the estate, defined before it is implemented, in the contract
 | `reporting/` | ~2025 | Fixed-width outbound file formats | `batch/reporting`, and whoever receives the submission |
 | `recon/` | ~2026 | The reconciliation break report | `batch/recon` writes it, `legacy/backoffice` renders it |
 | `workload/` | ~2026 | The bank day as a versioned demand model | `workload/` drives the modern spine from it, WP-25 the older strata |
+| `slo/` | ~2026 | What good looks like for every component that emits a metric | a platform repository consumes it; `workload-report` derives a run report from it |
 
 ## The source
 
@@ -26,8 +27,8 @@ It defines `Money`, `Account`, `Movement`, `Transfer`, `Hold` and `FraudDecision
 each field's representation in all four eras side by side. Every field in every contract here traces
 back to it, and no contract invents a concept of its own.
 
-The three that follow them - `reporting/`, `recon/` and `workload/` - are not era contracts. Each
-crosses the strata rather than joining two of them, and each says so in its own README.
+The four that follow them - `reporting/`, `recon/`, `workload/` and `slo/` - are not era contracts.
+Each crosses the strata rather than joining two of them, and each says so in its own README.
 
 ## The rules
 
@@ -48,8 +49,11 @@ Runs XML well-formedness, the OpenAPI and AsyncAPI linters,
 [`check-copybook-offsets.py`](check-copybook-offsets.py), which asserts that every copybook field
 still sits where the canonical model says it does,
 [`check-extract-layout.py`](check-extract-layout.py), which asserts the same of the outbound
-regulatory extract, and [`check-workload-model.py`](check-workload-model.py), which validates the
-committed workload model against its schema and then checks the arithmetic a schema cannot express.
+regulatory extract, [`check-workload-model.py`](check-workload-model.py), which validates the
+committed workload model against its schema and then checks the arithmetic a schema cannot express,
+and [`check-slo-catalogue.py`](check-slo-catalogue.py), which validates the SLO catalogue and then
+asserts in **both directions** that every metric this estate emits owes an entry and every entry
+names a metric it emits.
 
 A green run proves each contract is well-formed. It does **not** prove the four agree with each
 other - only reading them beside the canonical model proves that.

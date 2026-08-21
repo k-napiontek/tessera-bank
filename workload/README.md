@@ -65,6 +65,28 @@ The run publishes `tessera_workload_*` on its own port while it runs, and prints
 a latency summary and a reconciliation against the ledger's own `ledger_transfers_total` when it
 finishes.
 
+## Reporting a run afterwards
+
+`workload-run` prints its outcome as it finishes, and that report dies with the terminal.
+`workload-report` generates one from files instead, so a run can be read months later and compared
+with the committed baseline:
+
+```bash
+go -C workload run ./cmd/workload-report \
+  --manifest run.json --before before.prom --after after.prom \
+  --catalogue ../contracts/slo/tessera-slo-v1.json
+```
+
+Every objective it prints comes out of [`contracts/slo/`](../contracts/slo/) rather than out of this
+module: the targets, the thresholds, the error budgets and **how each figure is arrived at** are all
+in the catalogue, so the report cannot drift from the objectives it reports on.
+
+Two things it deliberately will not do. It **reads no clock** - a generation timestamp is what makes
+a byte-identical rerun impossible by construction, which `batch/reporting` already pays for on
+purpose. And it refuses to answer an objective stated over a proportion of a measurement window: two
+scrapes are two points, and a figure produced from them would be invented rather than measured. It
+prints the two points instead and says which objective needed the window.
+
 ## What is in here
 
 | Package | What it does |
@@ -83,7 +105,9 @@ finishes.
 | `internal/reconcile` | Reads the ledger's own counter and lines it up against the driver's. |
 | `internal/purity` | The architectural controls. The engine reaches no `net`, `os` or database driver; the driver is named. |
 | `cmd/workload-plan` | Prints the model as a day. Touches one file and no network. |
+| `internal/slo` | Reads the committed SLO catalogue and works out what a run did against it. |
 | `cmd/workload-run` | Executes a day against a running estate. |
+| `cmd/workload-report` | Turns a manifest and two scrapes into a report. Reads no clock, so a rerun is byte-identical. |
 
 ## What the driver does that a load tool does not
 
