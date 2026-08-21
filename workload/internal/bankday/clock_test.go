@@ -162,3 +162,42 @@ func TestVirtualTimeOfDayWrapsAtMidnight(t *testing.T) {
 		t.Errorf("MinuteAt(20:00, 10m real) = %d, want 480", got)
 	}
 }
+
+func TestADateStepsByCalendarDaysAndNotByHours(t *testing.T) {
+	// The last Sunday in March 2026 is when most of Europe moves its clocks. A step written as
+	// +24h would land on the 29th at 23:00 or on the 30th at 01:00 depending on the location; a
+	// calendar step lands on the 30th everywhere.
+	start := NewDate(2026, time.March, 29)
+	if got := start.AddDays(1).String(); got != "2026-03-30" {
+		t.Fatalf("a day after 2026-03-29 is %s, want 2026-03-30", got)
+	}
+	if got := NewDate(2026, time.February, 28).AddDays(1).String(); got != "2026-03-01" {
+		t.Fatalf("2026 is not a leap year, so a day after 28 February is %s, want 2026-03-01", got)
+	}
+	if got := NewDate(2024, time.February, 28).AddDays(1).String(); got != "2024-02-29" {
+		t.Fatalf("2024 is a leap year, so a day after 28 February is %s, want 2024-02-29", got)
+	}
+	if got := start.AddDays(-29).String(); got != "2026-02-28" {
+		t.Fatalf("29 days before 2026-03-29 is %s, want 2026-02-28", got)
+	}
+	if got := start.AddDays(0); got != start {
+		t.Fatalf("stepping by no days moved %s to %s", start, got)
+	}
+}
+
+func TestADateKnowsWhichSideOfAnotherItFallsOn(t *testing.T) {
+	earlier := NewDate(2026, time.August, 20)
+	later := NewDate(2026, time.August, 21)
+
+	if !earlier.Before(later) {
+		t.Fatal("20 August does not fall before 21 August")
+	}
+	if later.Before(earlier) {
+		t.Fatal("21 August falls before 20 August")
+	}
+	// A range that runs from a date to itself is one day long, not zero, so the comparison a caller
+	// loops on has to be exclusive rather than inclusive.
+	if earlier.Before(earlier) {
+		t.Fatal("a date falls before itself")
+	}
+}

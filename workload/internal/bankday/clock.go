@@ -119,6 +119,21 @@ func (d Date) DaysFromMonthEnd() int {
 	return int(lastOfThisMonth.Sub(d.t).Hours()) / 24
 }
 
+// AddDays steps the calendar, not the clock.
+//
+// A dataset spans a year of business dates and something has to walk them. Adding 24 hours to a
+// wall clock is the obvious way and it is wrong twice a year in most of Europe: the day the clocks
+// move is 23 or 25 hours long, so the walk drifts an hour and eventually a whole date. AddDate steps
+// the calendar, which is right in every location and every month, for the same reason
+// DaysFromMonthEnd derives February rather than tabulating it.
+func (d Date) AddDays(days int) Date { return Date{t: d.t.AddDate(0, 0, days)} }
+
+// Before reports whether d falls earlier in the calendar than other.
+//
+// Exclusive, so a caller walking "from up to and including to" loops while !to.Before(current) and a
+// range of one date is one day rather than none.
+func (d Date) Before(other Date) bool { return d.t.Before(other.t) }
+
 // String renders the ISO date.
 func (d Date) String() string { return d.t.Format("2006-01-02") }
 
