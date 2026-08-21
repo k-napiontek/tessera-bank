@@ -1,6 +1,6 @@
 # services - the modern tier
 
-**Stratum 3** | **Vintage ~2023** | **Java 17, Spring Boot 3.2, PostgreSQL, Flyway, Kafka, Gradle** | **Built by WP-06 to WP-09**
+**Stratum 3** | **Vintage ~2023** | **Java 17, Spring Boot 3.2, PostgreSQL, Flyway, Kafka, Gradle** | **Built by WP-06 to WP-09 and WP-22**
 
 The new double-entry ledger - the strangler fig growing around the mainframe core. Real-time, idempotent, audited, and reconciled against the old core every morning.
 
@@ -13,6 +13,7 @@ The new double-entry ledger - the strangler fig growing around the mainframe cor
 | `ledger-core/` | The double-entry ledger domain. Pure Java, no framework on its classpath at all. |
 | `ledger-persistence/` | PostgreSQL adapters behind the ledger's ports: schema, locking, reconciliation. |
 | `ledger-api/` | The REST adapter: controllers, wire types, RFC 9457 errors, idempotency. The only Spring Boot application here. |
+| `ledger-loader/` | A bulk loader that stands a production-shaped ledger up from the workload model. A fixture, not a component of the bank. |
 | `payment-engine/` | ISO 20022 outbound payments. On the map, out of initial scope. |
 
 ## Architecture
@@ -48,4 +49,12 @@ make test-services # all three modules
 ```
 
 The audit chain, the transactional outbox, metrics and structured logging are WP-09.
+
+WP-22 added [`ledger-loader`](ledger-loader/), which is **not part of the bank**. Every query in
+this repository had only ever run against about three accounts, so the plans they get said nothing
+about the plans they get at a year of postings. The loader turns a WP-20 population into a few
+hundred thousand accounts and millions of postings with `COPY`, writes the audit chain the reports
+bound their figures by, and is then checked by `BalanceReconciliation` and `AuditChain.verify()` -
+the ledger's own controls rather than its own arithmetic. The plans it made measurable are in
+[`docs/architecture/query-plans-at-volume.md`](../docs/architecture/query-plans-at-volume.md).
 

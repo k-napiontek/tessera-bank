@@ -748,3 +748,38 @@ back what it created rather than a reference it invented.
 | **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | `tessera_workload_*` published on its own port, in the estate's naming (`tessera_<component>_<thing>_<unit>`) so that a dashboard reads the driver and the bank without translation. Hand-written, because this module carries no dependencies. Every label is bounded - operation, outcome, reason - and a test asserts no account or customer reference reaches one, which in a 1.2 million customer population is the difference between a metric and a monitoring outage | **Met** in WP-09 |
 | **REQ-DP-001** All test data is synthetic | WP-03 | The driver invents nothing. Every account reference comes from the WP-20 population, including the treasury the funding is debited from - generated at the index one past the last customer, so it matches the canonical pattern, cannot collide with a customer the run draws, and is reproducible from the model alone. `request_test.go::TestNoRequestCarriesAnythingResemblingPersonalData` greps the bytes of every request body and path rather than asserting about intent | **Met** in WP-03 |
 | **REQ-LED-003** Money is exact and currency-aware | WP-06 | Extended to the driver half of the module: the amount that goes on the wire is `int64` minor units and an ISO 4217 code, and the source scanner that enforces it now distinguishes the engine from the driver rather than being widened. A run happens in real time and a Prometheus exposition is float64 by specification, so the two calls the engine forbids - `time.Now` and `strconv.FormatFloat` - are permitted per file, with the reason recorded, and a staleness test removes the exemption when the file stops making the call | **Met** in WP-06 |
+
+---
+
+## WP-22 - ledger data volume: a production-shaped database
+
+Ticket TB-1022. Stratum 3, Java 17. A new module, `services/ledger-loader`, and a new command in the
+Go half, `workload-dataset`. **Neither is a component of the bank**: they sit in the category
+`workload/` and `walkthrough.sh` already occupy, and nothing in the estate depends on them.
+
+**Every query in this repository had only ever run against about three accounts.** The plans they get
+at that size say nothing about the plans they get at a year of postings, and a recorded normal
+captured against a fixture is a recorded normal of the fixture. This package is what makes WP-23's
+baseline mean anything, and what gives **F-24** the evidence it asked for.
+
+The loader is a Java module rather than a Go command because of what it must not restate. The audit
+trail's canonical form is `AuditEntry`'s - what is hashed decides whether two different entries can
+produce the same bytes, and a second implementation would agree with the first until the day it did
+not. The sign convention is `AccountType.signedEffect`'s. The population still comes from WP-20, over
+a pipe, so neither side draws the day twice.
+
+### Owned by WP-22
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-004** Query cost is measured at production cardinality, not at fixture size | A bulk loader that turns a WP-20 population into 300 001 accounts and roughly five million postings over 250 business dates, written with `COPY` and committed **per business date** - `posting_entry_balances` is a `DEFERRABLE INITIALLY DEFERRED` constraint trigger fired for each row, so PostgreSQL queues one pending event per posting until commit and a year in one transaction is a queue that spills. Nothing is disabled to avoid it. The plans are then captured with `EXPLAIN (ANALYZE, BUFFERS)` for the statement page at its first page and at a deep cursor, the balance read, and both queries `batch/reporting` bounds a business date by - against **the busiest account the load actually produced**, whose reference and depth the manifest names, because an account planted to be deep would be a plan of the fixture this package replaces | `LoadedLedgerTest` loads into real PostgreSQL and then runs the ledger's own controls over what was written: `BalanceReconciliation.breaks()` is empty, `AuditChain.verify()` is empty, `pg_trigger.tgenabled` is `O` for every trigger, and a planted single-leg entry is still refused at commit with "does not balance"; `theSameStreamLoadedTwiceProducesTheSameDigest` compares a SHA-256 over every row in write order rather than row counts; the captured plans and the cardinality they were measured at are recorded in [`../architecture/query-plans-at-volume.md`](../architecture/query-plans-at-volume.md) | **Met** |
+
+### Contributed by WP-22, verified by the owning package
+
+| Requirement | Owner | What WP-22 contributes | Status |
+|---|---|---|---|
+| **REQ-LED-006** A materialised balance is reconciled against its postings | WP-07 | The first exercise of the control at a size where it could plausibly fail. `BalanceReconciliation` sums the postings in SQL, reimplementing the sign convention independently of the Java that wrote them, over 300 001 accounts and millions of postings rather than over three - and it is the loader's acceptance test rather than a check the loader performs on itself | **Met** |
+| **REQ-AUD-001** The audit trail is append-only and tamper-evident | WP-09 | The chain is written by a second producer for the first time, and verified by the same `AuditChain` an operator would run. `ChainWriter` reuses `AuditEntry`'s canonical form rather than restating it, so a loaded row is the row the API would have left; a report joining on `subject_ref` cannot tell the two apart, which is the point of loading rather than of inventing | **Met** |
+| **REQ-LED-002** An account may not go below its overdraft limit | WP-06 | Enforced on the bulk path, where nothing in the schema enforces it. The loader carries a running balance and asks `OverdraftPolicy.forbidden()` itself, so a drawn transfer that would take an account below zero is **counted and not written** - a loader that posted it anyway would leave a ledger full of rows `Transfer` would have rejected while every constraint remained enabled | **Met** |
+| **REQ-DP-001** All test data is synthetic | WP-03 | The loader invents no reference. Accounts, customers, transfers, holds and the treasury all come from the WP-20 population, and the two references the loader does mint - the opening entries - are `TB` plus the day before the range, which is what keeps them from colliding with a drawn one | **Met** |
+| **REQ-LED-003** Money is exact and currency-aware | WP-06 | `long` minor units from the stream to the `COPY` buffer. No `double` and no `BigDecimal` on the amount path, and the one place a balance moves consults `AccountType.signedEffect` rather than reproducing it | **Met** |

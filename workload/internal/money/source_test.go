@@ -38,7 +38,9 @@ var floatIsJustified = map[string]string{
 	"internal/population/population.go": "the log-normal amount draw and the weighted picks - a distribution is continuous. The float ends at drawMinor, which hands back int64 minor units and nothing else",
 	"internal/model/model.go":           "weights, multipliers and the diurnal curve arrive from the model as JSON numbers; the one money field in the document is decoded as int64 and stays one",
 	"internal/manifest/manifest.go":     "every figure in a manifest is a rate - events per second at one of two clocks - and none of them is money",
+	"internal/dataset/dataset.go":       "the scale dial is a fraction of the model's volume, which is a ratio; an Action carries the int64 minor units population.Draw produced and nothing arithmetic happens to it on the way out",
 	"cmd/workload-plan/main.go":         "the summary prints rates per second, which are not money; the one amount it prints arrives from the engine as an int64",
+	"cmd/workload-dataset/main.go":      "the scale dial and the event estimate printed beside it are fractions and rates; the stream carries the int64 minor units the engine produced and this file does no arithmetic on them",
 
 	// WP-21's driver half. The rule is the same one: a float may appear in a file that has said
 	// why, and none of these is an amount.

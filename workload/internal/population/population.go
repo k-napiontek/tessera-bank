@@ -19,6 +19,7 @@ package population
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -256,6 +257,54 @@ func (p Population) EventShare(id string) float64 {
 // claim grows as it funds its customers, which is what the sign convention is for.
 func (p Population) Treasury() (customerRef, accountRef string) {
 	return customerRefOf(p.spec.Size), accountRefOf(p.spec.Size, 0, p.spec.AccountsPerCustomer)
+}
+
+// Holding is one account the population holds, and who holds it.
+type Holding struct {
+	CustomerRef string
+	AccountRef  string
+	// Cohort is the cohort of the customer holding it, or an empty string for the treasury, which
+	// belongs to the bank and to no cohort.
+	Cohort   string
+	Treasury bool
+}
+
+// Accounts yields the treasury first and then every customer account, customer by customer and slot
+// by slot.
+//
+// The treasury leads because a bank opens its own account before its customers': a loader funds an
+// opening balance by debiting the treasury, so an order that put it last would ask a loader to post
+// to an account that does not exist yet.
+//
+// A driver never needs this - it opens the accounts a schedule actually names, which is a small
+// fraction of a real population. A bulk loader does: it stands up the whole estate before the first
+// posting, so it has to be told what the whole estate is, and the alternative is that it derives the
+// cohort layout from the shares itself. That derivation already exists here, in New, and a second
+// copy of it in another language would be wrong in a way nothing could detect - the loaded ledger
+// would simply have its cohorts in slightly the wrong places.
+//
+// Lazy, because a population is 1.2 million customers and a caller streams them into a file.
+func (p Population) Accounts() iter.Seq[Holding] {
+	return func(yield func(Holding) bool) {
+		treasuryCustomer, treasuryAccount := p.Treasury()
+		if !yield(Holding{CustomerRef: treasuryCustomer, AccountRef: treasuryAccount, Treasury: true}) {
+			return
+		}
+		for _, block := range p.blocks {
+			for customer := block.firstCustomer; customer < block.firstCustomer+block.customers; customer++ {
+				for slot := range p.spec.AccountsPerCustomer {
+					holding := Holding{
+						CustomerRef: customerRefOf(customer),
+						AccountRef:  accountRefOf(customer, slot, p.spec.AccountsPerCustomer),
+						Cohort:      block.ID,
+					}
+					if !yield(holding) {
+						return
+					}
+				}
+			}
+		}
+	}
 }
 
 // CustomerOf returns the customer an account reference belongs to.
