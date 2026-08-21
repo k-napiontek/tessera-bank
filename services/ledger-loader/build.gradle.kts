@@ -42,7 +42,6 @@ dependencies {
     // BalanceReconciliation and AuditChain are given a NamedParameterJdbcTemplate, so verification
     // runs the ledger's own controls rather than a second implementation of them.
     implementation("org.springframework:spring-jdbc")
-    implementation("com.zaxxer:HikariCP")
     // A compile dependency rather than a runtime one, deliberately: CopyManager is the API this
     // module is built around, and loading through anything else would take days and measure itself.
     implementation("org.postgresql:postgresql")
