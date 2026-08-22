@@ -68,6 +68,10 @@ var engine = []string{
 var driver = []string{
 	"internal/client",
 	"internal/identity",
+	// WP-24a. It signals process groups and shells out to docker, so it is as far from the engine as
+	// anything in this module gets - and it is a fixture acting on a fixture, never on the estate's
+	// own configuration or code, which is the line WP-24's Constraint draws.
+	"internal/injector",
 	"internal/metrics",
 	// WP-24a. It listens, dials and forwards, so it is a driver by purity as well as by role - the
 	// only new package in this module that would fail the engine list on its imports alone.
