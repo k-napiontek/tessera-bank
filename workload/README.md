@@ -1,6 +1,6 @@
 # workload - the bank day, and the driver that executes it
 
-**Stratum 4 - Go 1.25, ~2025** | **Built by WP-20 and WP-21** | **A fixture, not a component of the bank**
+**Stratum 4 - Go 1.25, ~2025** | **Built by WP-20 and WP-21, extended by WP-24a** | **A fixture, not a component of the bank**
 
 Tessera Bank has no such module. This one exists so that the estate can be put under demand that
 looks like a bank's rather than like a loop, and it is the same kind of artefact as
@@ -44,15 +44,16 @@ actions, `--manifest run.json` (or `-` for stdout) to write the run record.
 
 ## Driving the estate
 
-One command boots PostgreSQL, the ledger and the gateway, seeds the accounts the run will use, and
-executes a compressed bank day against them. Ctrl-C stops everything it started.
+One command boots PostgreSQL, Kafka, the ledger, the fraud scorer and the gateway, seeds the
+accounts the run will use, and executes a compressed bank day against them. Ctrl-C stops everything
+it started.
 
 ```bash
 bash workload/scripts/estate-up.sh --scale 0.0002 --compress 720 --window branch-hours
 ```
 
-Needs Docker, a JDK 17 and Go. Every argument is passed through to `workload-run`, whose `--help`
-lists the rest. To drive an estate that is already running, skip the script:
+Needs Docker, a JDK 17, Go and uv. Every argument is passed through to `workload-run`, whose
+`--help` lists the rest. To drive an estate that is already running, skip the script:
 
 ```bash
 go -C workload run ./cmd/workload-run \
@@ -64,6 +65,36 @@ go -C workload run ./cmd/workload-run \
 The run publishes `tessera_workload_*` on its own port while it runs, and prints an outcome table,
 a latency summary and a reconciliation against the ledger's own `ledger_transfers_total` when it
 finishes.
+
+## What the fixture boots, and why each piece is there
+
+| Piece | Why |
+|---|---|
+| PostgreSQL | the ledger's own store, `postgres:16-alpine` |
+| **Kafka** | the outbox relay has to have somewhere to publish, or its lag only ever grows |
+| the ledger | the component under measurement |
+| **`edge/fraud-scoring`** | a broker with no consumer is a broker nothing is measured through |
+| the gateway | the edge the driver talks to, so latency is measured where the customer is |
+
+The two in bold were added by **WP-24a**, and closing the broker half of **F-77** is the whole
+reason. Before them the recorded normal covered two of the five components in the SLO catalogue, and
+`SLO-LEDGER-OUTBOX-FRESHNESS` was permanently *missed* - 140 s against a 60 s target - because with
+no broker the relay could not drain at all. That was the fixture rather than the ledger, and it went
+unnoticed for a package and a half because **an unreachable broker and a working one produce exactly
+the same ledger log line.** So the script now asserts the drain instead of assuming it: at the end of
+every run it reads `ledger_outbox_pending` out of the ledger's own exposition and fails if anything
+is still unpublished. `TB_EXPECT_OUTBOX_BACKLOG=1` is how an injected condition says a backlog is the
+point.
+
+Neither component was changed to make this work. Both already read their configuration from the
+environment, which is the line between extending the fixture and modifying the estate - `workload/`
+is a fixture and says so in its first paragraph.
+
+Two environment variables are worth knowing. `TB_FRAUD_METRICS_PORT` defaults to **9102** here
+because the scorer's own default is 9100, which is the driver's, and two processes cannot both have
+it. `TB_SETTLE` defaults to **15s**: the scorer sits behind a relay and a broker, so closing the
+scrape bracket the instant the last request is answered would report a scorer that fell behind when
+what actually happened is that nobody waited.
 
 ## Reporting a run afterwards
 
@@ -103,11 +134,13 @@ prints the two points instead and says which objective needed the window.
 | `internal/runner` | The open-model executor: releases every event at its intended time, whatever is outstanding. |
 | `internal/metrics` | `tessera_workload_*`, hand-written because this module carries no dependencies. |
 | `internal/reconcile` | Reads the ledger's own counter and lines it up against the driver's. |
+| `internal/scenario` | Decodes the failure-scenario catalogue and refuses a condition the injector cannot run. |
 | `internal/purity` | The architectural controls. The engine reaches no `net`, `os` or database driver; the driver is named. |
 | `cmd/workload-plan` | Prints the model as a day. Touches one file and no network. |
 | `internal/slo` | Reads the committed SLO catalogue and works out what a run did against it. |
 | `cmd/workload-run` | Executes a day against a running estate. |
 | `cmd/workload-report` | Turns a manifest and two scrapes into a report. Reads no clock, so a rerun is byte-identical. |
+| `cmd/workload-ceiling` | A saturation ladder straight at the ledger, with no gateway, to find where throughput stops rising. |
 
 ## What the driver does that a load tool does not
 

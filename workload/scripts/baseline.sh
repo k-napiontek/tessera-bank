@@ -13,7 +13,7 @@
 # Why it composes rather than copies: three scripts in this repository already boot a database and
 # a JVM, and F-61 records what the fourth copy of that scaffolding costs when one of them is fixed.
 #
-# Needs: Docker, a JDK 17, Go. Takes several minutes - most of it is the load.
+# Needs: Docker, a JDK 17, Go and uv. Takes several minutes - most of it is the load.
 
 set -euo pipefail
 
@@ -69,10 +69,13 @@ TB_SCRAPE_DIR="$WORK" \
   | tee "$WORK/run.log"
 
 step "Generate the report"
+# Three pairs since WP-24a. The estate exposes its metrics in three places and a report built from
+# one of them says "nothing happened" about the other two, which reads as an estate that did nothing
+# rather than as a report that looked in one place.
 go -C "$ROOT/workload" run ./cmd/workload-report \
   --manifest "$WORK/run-manifest.json" \
-  --before "$WORK/before.prom" --before "$WORK/before-edge.prom" \
-  --after "$WORK/after.prom" --after "$WORK/after-edge.prom" \
+  --before "$WORK/before.prom" --before "$WORK/before-edge.prom" --before "$WORK/before-fraud.prom" \
+  --after "$WORK/after.prom" --after "$WORK/after-edge.prom" --after "$WORK/after-fraud.prom" \
   --catalogue "$ROOT/contracts/slo/tessera-slo-v1.json" \
   --out "$OUT/baseline-report.txt"
 
@@ -82,6 +85,8 @@ cp "$WORK/before.prom" "$OUT/baseline-before.prom"
 cp "$WORK/after.prom" "$OUT/baseline-after.prom"
 cp "$WORK/before-edge.prom" "$OUT/baseline-before-edge.prom"
 cp "$WORK/after-edge.prom" "$OUT/baseline-after-edge.prom"
+cp "$WORK/before-fraud.prom" "$OUT/baseline-before-fraud.prom"
+cp "$WORK/after-fraud.prom" "$OUT/baseline-after-fraud.prom"
 
 step "Captured"
 echo "  $OUT/baseline-report.txt"

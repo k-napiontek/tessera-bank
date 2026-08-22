@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Boot the modern spine and drive a compressed bank day at it.
+# Boot the modern spine, the broker behind it and the scorer behind that, and drive a compressed
+# bank day at the lot.
 #
 # **A test fixture, not a component of the bank.** It is the same kind of artefact as
 # edge/web-banking/scripts/walkthrough.sh and dev-token.mjs: something that makes a manual step
@@ -13,7 +14,13 @@
 # Every argument is passed straight through to workload-run, so its --help is this script's help
 # for everything except the four variables below.
 #
-# Needs: Docker, a JDK 17, Go 1.25. Ctrl-C stops everything it started.
+# Needs: Docker, a JDK 17, Go 1.25 and uv. Ctrl-C stops everything it started.
+#
+# Kafka and edge/fraud-scoring were added by WP-24a, which closes the broker half of F-77. Without
+# them the estate exercised two of the five components in the SLO catalogue, and three of WP-24's
+# seven injected conditions had no observable at all: consumer lag has no consumer, and a stuck
+# outbox row was this fixture's permanent state rather than an injected condition. Neither component
+# changed to make that work - both already read their configuration from the environment.
 #
 # The ordering matters and is the one thing this script exists to get right. The gateway verifies
 # tokens against a public key file that has to exist before it starts, and the driver is what mints
@@ -36,10 +43,20 @@ LEDGER_PORT=8080
 GATEWAY_PORT=8081
 GATEWAY_ADMIN_PORT=9091
 METRICS_PORT=9100
+# The scorer's own default is 9100, which is the driver's. Two processes cannot both have it, and
+# the collision presents as a scorer that will not start in a log nobody has opened yet.
+FRAUD_METRICS_PORT=${TB_FRAUD_METRICS_PORT:-9102}
 # Overridable so that a run can be pointed at a database somebody else loaded - which is what
 # WP-23's baseline does with the WP-22 dataset. Left alone, this boots one of its own.
 DB_PORT=${TB_DB_PORT:-5434}
 DB_CONTAINER=${TB_DB_CONTAINER:-tessera-workload-db}
+# Overridable for the same reason the database is: a second estate has to be able to run beside the
+# first without either of them noticing.
+KAFKA_PORT=${TB_KAFKA_PORT:-9092}
+KAFKA_CONTAINER=${TB_KAFKA_CONTAINER:-tessera-workload-kafka}
+# The scorer is behind a relay and a broker, so the closing scrape has to be taken after both have
+# had somewhere to deliver. Stated rather than guessed, and passed through to the driver.
+SETTLE=${TB_SETTLE:-15s}
 PIDS=()
 
 # shellcheck disable=SC2329  # reached through the trap below, never called directly
@@ -51,13 +68,16 @@ cleanup() {
     # The group first, then the process itself in case it was never given one.
     kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
   done
+  # The broker goes whatever TB_KEEP_DATA says: it holds no state anybody wants to keep, and a
+  # paused container left behind by an interrupted injection is the next run's mystery.
+  docker rm -f "$KAFKA_CONTAINER" >/dev/null 2>&1 || true
   if [ "${TB_KEEP_DATA:-0}" != "1" ]; then
     docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
   fi
   # Wait for the ports rather than sleeping on a guess. A JVM takes a moment to let go of 8080, and
   # the next run of this script otherwise fails four minutes later with "port already in use", in a
   # log nobody has opened yet.
-  for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT"; do
+  for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT" "$FRAUD_METRICS_PORT"; do
     for _ in $(seq 20); do
       lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || break
       sleep 1
@@ -81,6 +101,19 @@ wait_for() {
   return 1
 }
 
+# One gauge out of the ledger's own exposition. A metric the scrape does not carry reads as "?"
+# rather than as 0, because a missing reading and a reading of zero are different answers and only
+# one of them means the relay drained.
+ledger_gauge() {
+  # A Micrometer series carries its labels in the first field - `ledger_outbox_pending{application=
+  # "ledger-api",} 0.0` - so matching the bare name finds nothing and the check reports "?" for a
+  # relay that was working perfectly. Found by running this.
+  curl -fsS "http://localhost:$LEDGER_PORT/actuator/prometheus" 2>/dev/null \
+    | awk -v name="$1" '$1 == name || index($1, name "{") == 1 { print $2; found = 1 }
+                        END { if (!found) print "?" }' \
+    | head -1
+}
+
 wait_for_file() {
   local what="$1" path="$2" attempts=${3:-60}
   for _ in $(seq "$attempts"); do
@@ -93,7 +126,7 @@ wait_for_file() {
 
 # A port still held by a previous run is the failure this script is most likely to hit, and the way
 # it presents - a Spring Boot stack trace in a log file, four minutes in - is the least useful one.
-for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT"; do
+for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT" "$FRAUD_METRICS_PORT"; do
   for attempt in $(seq 30); do
     lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || break
     if [ "$attempt" = "30" ]; then
@@ -123,11 +156,60 @@ else
   echo "OK    PostgreSQL is ready on $DB_PORT"
 fi
 
+step "Kafka"
+# CLUSTER_ID is a base64-encoded UUID because that is what kafka-storage format requires; a readable
+# name there fails the format step and the container exits before anything says why.
+# confluentinc/cp-kafka:7.6.1 is the image four Testcontainers suites in this repository already
+# pull, so a fixture that booted a different one would be exercising a broker nothing else here has
+# ever run against. Single-node KRaft: no ZooKeeper, and two listeners rather than one - clients on
+# the host reach PLAINTEXT through the published port, and the broker reaches itself on INTERNAL,
+# which is what stops a non-default TB_KAFKA_PORT breaking the traffic it sends to itself.
+#
+# Every in-container address is localhost rather than the container's name. A container on the
+# default bridge network cannot resolve its own name - there is no DNS there, only on a user-defined
+# network - and the symptom is a broker that starts, logs UnknownHostException in a loop and never
+# answers a metadata request. Found by running this.
+docker rm -f "$KAFKA_CONTAINER" >/dev/null 2>&1 || true
+docker run -d --name "$KAFKA_CONTAINER" \
+  -e CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk \
+  -e KAFKA_NODE_ID=1 \
+  -e KAFKA_PROCESS_ROLES=broker,controller \
+  -e KAFKA_CONTROLLER_QUORUM_VOTERS="1@localhost:9093" \
+  -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,INTERNAL://0.0.0.0:9094 \
+  -e KAFKA_ADVERTISED_LISTENERS="PLAINTEXT://localhost:$KAFKA_PORT,INTERNAL://localhost:9094" \
+  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT \
+  -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+  -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+  -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+  -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+  -e KAFKA_AUTO_CREATE_TOPICS_ENABLE=true \
+  -p "$KAFKA_PORT":9092 confluentinc/cp-kafka:7.6.1 >/dev/null
+# Waited on rather than slept on, and waited on with a client call rather than with a log grep: a
+# broker that has printed "started" is not necessarily one that will answer a metadata request.
+kafka_up=0
+for _ in $(seq 90); do
+  if docker exec "$KAFKA_CONTAINER" \
+      kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1; then
+    kafka_up=1
+    break
+  fi
+  sleep 1
+done
+if [ "$kafka_up" != "1" ]; then
+  echo "FAIL  the broker never answered a metadata request on $KAFKA_PORT" >&2
+  echo "      docker logs $KAFKA_CONTAINER" >&2
+  exit 1
+fi
+echo "OK    Kafka is ready on $KAFKA_PORT"
+
 step "Ledger"
 JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17}" \
 LEDGER_DB_URL="jdbc:postgresql://localhost:$DB_PORT/tessera" \
 LEDGER_DB_USER=tessera \
 LEDGER_DB_PASSWORD=tessera \
+LEDGER_KAFKA_BOOTSTRAP="localhost:$KAFKA_PORT" \
   "$ROOT/gradlew" -p "$ROOT" :services:ledger-api:bootRun >"${TMPDIR:-/tmp}/tessera-workload-ledger.log" 2>&1 &
 PIDS+=("$!")
 wait_for "the ledger" "http://localhost:$LEDGER_PORT/actuator/health/readiness" 240
@@ -145,6 +227,17 @@ if [ "${TB_KEEP_DATA:-0}" != "1" ]; then
   echo "OK    the ledger holds nothing; this run starts from zero"
 fi
 
+step "Fraud scoring"
+# uv run syncs and then execs the console script. The scorer needs exactly one variable it has no
+# default for, and it refuses to boot on a setting it cannot parse rather than falling back - which
+# is why nothing here has to check that it read what it was given.
+TB_FRAUD_BROKERS="localhost:$KAFKA_PORT" \
+TB_FRAUD_METRICS_PORT="$FRAUD_METRICS_PORT" \
+  uv run --project "$ROOT/edge/fraud-scoring" fraud-scoring \
+  >"${TMPDIR:-/tmp}/tessera-workload-fraud.log" 2>&1 &
+PIDS+=("$!")
+wait_for "the scorer" "http://localhost:$FRAUD_METRICS_PORT/metrics" 120
+
 step "Driver"
 echo "  it writes the public key, then waits for the gateway - its output follows below"
 # The key from a previous run is removed first. Without this, wait_for_file sees the old file
@@ -158,6 +251,8 @@ go -C "$ROOT/workload" run ./cmd/workload-run \
   --gateway "http://localhost:$GATEWAY_PORT" \
   --ledger-metrics "http://localhost:$LEDGER_PORT/actuator/prometheus" \
   --edge-metrics "http://localhost:$GATEWAY_ADMIN_PORT/metrics" \
+  --fraud-metrics "http://localhost:$FRAUD_METRICS_PORT/metrics" \
+  --settle "$SETTLE" \
   --keys "$KEYS" \
   --metrics ":$METRICS_PORT" \
   --manifest "${TB_MANIFEST:-${TMPDIR:-/tmp}/tessera-workload-manifest.json}" \
@@ -190,9 +285,40 @@ set -e
 
 echo
 cat "$RUN_LOG"
+
+step "Outbox"
+# The assertion this fixture most needed and did not have. An unreachable broker and a working one
+# produce the same ledger log line, and the only place the difference shows is the age of the oldest
+# unpublished row - so WP-23's committed baseline recorded SLO-LEDGER-OUTBOX-FRESHNESS as missed, at
+# 140 s against a 60 s target, and that was the fixture rather than the ledger. Nobody noticed,
+# because nothing checked. Now something does.
+pending=$(ledger_gauge ledger_outbox_pending)
+lag=$(ledger_gauge ledger_outbox_lag_seconds)
+if [ "${TB_EXPECT_OUTBOX_BACKLOG:-0}" = "1" ]; then
+  echo "OK    pending $pending, lag ${lag}s - a backlog this run was told to expect"
+elif [ "$pending" = "?" ]; then
+  echo "FAIL  the ledger's exposition carries no ledger_outbox_pending, so the relay is unchecked" >&2
+  echo "      A missing reading and a reading of zero are different answers, and only one of" >&2
+  echo "      them means the relay drained." >&2
+  [ "$STATUS" -eq 0 ] && STATUS=1
+# Numerically. A Prometheus gauge is a float by specification, so the value is "0.0" and a string
+# comparison against "0" fails on a relay that worked perfectly - a control firing on a healthy
+# estate, which is worse than no control. Found by running this.
+elif awk -v value="$pending" 'BEGIN { exit !(value + 0 == 0) }'; then
+  echo "OK    the relay drained everything this run produced; lag ${lag}s"
+else
+  echo "FAIL  $pending events are still unpublished after ${SETTLE} of settling, oldest ${lag}s old" >&2
+  echo "      The ledger cannot reach the broker, or the relay is not running. Every objective this" >&2
+  echo "      run reports is a measurement of that rather than of the estate." >&2
+  echo "      ledger log  ${TMPDIR:-/tmp}/tessera-workload-ledger.log" >&2
+  echo "      broker log  docker logs $KAFKA_CONTAINER" >&2
+  [ "$STATUS" -eq 0 ] && STATUS=1
+fi
+
 echo
 echo "  ledger log   ${TMPDIR:-/tmp}/tessera-workload-ledger.log"
 echo "  gateway log  ${TMPDIR:-/tmp}/tessera-workload-gateway.log"
+echo "  scorer log   ${TMPDIR:-/tmp}/tessera-workload-fraud.log"
 echo "  manifest     ${TB_MANIFEST:-${TMPDIR:-/tmp}/tessera-workload-manifest.json}"
 
 exit "$STATUS"

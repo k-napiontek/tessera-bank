@@ -66,6 +66,7 @@ type options struct {
 	gateway       string
 	ledgerMetrics string
 	edgeMetrics   string
+	fraudMetrics  string
 	issuer        string
 	audience      string
 	keysPath      string
@@ -81,6 +82,7 @@ type options struct {
 	skipSeeding  bool
 	skipRun      bool
 	tokenMinutes int
+	settle       time.Duration
 }
 
 func run() error {
@@ -204,6 +206,10 @@ func run() error {
 	// about every objective the gateway carries, which reads as an estate that did nothing rather
 	// than as a report that looked in one place.
 	saveScrape(opts.scrapeDir, "before-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
+	// And the scorer, which is only running when the fixture booted a broker for it. Left empty the
+	// scrape is empty, and the report says "nothing happened" about fraud-scoring exactly as it did
+	// before there was one to look at.
+	saveScrape(opts.scrapeDir, "before-fraud.prom", scrapeLedger(opts.fraudMetrics).Body)
 
 	fmt.Printf("== Run ==\n  %s of business time at %dx, so about %s of wall clock\n",
 		businessSpan(from, to), opts.compress, record.RealDuration.Round(time.Second))
@@ -213,9 +219,23 @@ func run() error {
 		Sender: sender, Observer: registry, Expected: opts.expected,
 	})
 
+	// The scorer sits behind the outbox relay and the broker, so at the instant the last request is
+	// answered it has consumed less than the run produced. Closing the bracket immediately would
+	// report a scorer that fell behind when what happened is that nobody waited - a measurement of
+	// the fixture rather than of the estate. The wait is stated rather than guessed, and the ledger
+	// is scraped after it too, because the outbox lag at that moment is the one worth recording.
+	if opts.settle > 0 {
+		fmt.Printf("\n  settling for %s so the relay and the scorer can catch up\n", opts.settle)
+		select {
+		case <-time.After(opts.settle):
+		case <-ctx.Done():
+		}
+	}
+
 	after := scrapeLedger(opts.ledgerMetrics)
 	saveScrape(opts.scrapeDir, "after.prom", after.Body)
 	saveScrape(opts.scrapeDir, "after-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
+	saveScrape(opts.scrapeDir, "after-fraud.prom", scrapeLedger(opts.fraudMetrics).Body)
 	printReport(summary, registry)
 	printReconciliation(summary, before.Transfers, after.Transfers, opts.ledgerMetrics)
 
@@ -256,6 +276,11 @@ func parse() options {
 	flag.DurationVar(&opts.waitFor, "wait", 90*time.Second, "how long to wait for the gateway to answer")
 	flag.StringVar(&opts.edgeMetrics, "edge-metrics", "",
 		"the gateway's metrics endpoint, scraped at the same two instants as the ledger's")
+	flag.StringVar(&opts.fraudMetrics, "fraud-metrics", "",
+		"the scorer's metrics endpoint, scraped at the same two instants as the ledger's")
+	flag.DurationVar(&opts.settle, "settle", 0,
+		"wait this long after the run before the closing scrapes, so that what the run handed to a "+
+			"relay and a consumer has somewhere to arrive")
 	flag.StringVar(&opts.scrapeDir, "scrapes", "",
 		"write the ledger scrapes that bracket the measured run into this directory")
 	flag.BoolVar(&opts.skipSeeding, "skip-seeding", false, "assume the accounts are already open and funded")
