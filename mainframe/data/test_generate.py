@@ -230,5 +230,139 @@ class TheAwkwardBalancesStay(unittest.TestCase):
             self.assertIn(value, booked)
 
 
+def a_stream(actions, opens=None, base="PLN"):
+    """A minimal workload-dataset day, as the three record kinds the writer reads."""
+    header = {
+        "kind": "population",
+        "modelId": "TB-WORKLOAD-DAY-V1",
+        "seed": 42,
+        "from": "2026-03-02",
+        "to": "2026-03-02",
+        "baseCurrency": base,
+        "treasuryAccountRef": "TB000000000001JK",
+        "treasuryCustomerRef": "CU0000001000",
+    }
+    if opens is None:
+        opens = [
+            {"kind": "open", "customerRef": "CU0000001000", "accountRef": "TB000000000001JK",
+             "accountType": "ASSET", "treasury": True},
+            {"kind": "open", "customerRef": "CU0000000001", "accountRef": "TB00000000000001",
+             "accountType": "LIABILITY", "cohort": "retail"},
+            {"kind": "open", "customerRef": "CU0000000002", "accountRef": "TB00000000000002",
+             "accountType": "LIABILITY", "cohort": "retail"},
+        ]
+    return header, opens, actions
+
+
+def transfer(account, counterparty, amount, currency="PLN"):
+    return {
+        "kind": "action", "date": "2026-03-02", "operation": "createTransfer",
+        "accountRef": account, "counterpartyRef": counterparty,
+        "amountMinor": amount, "currency": currency,
+    }
+
+
+class TheVolumeWriter(unittest.TestCase):
+    """The WP-20 stream, written as stratum-0 files. WP-25a's task 3."""
+
+    def write(self, header, opens, actions):
+        accounts = generate.accounts_from_stream(header, opens)
+        master = [generate.acctrec(**account) for account in accounts]
+        movements, counts = generate.movements_from_stream(header, actions, accounts)
+        return master, movements, counts, accounts
+
+    def test_a_transfer_becomes_two_legs_sharing_one_reference(self):
+        master, movements, counts, _ = self.write(
+            *a_stream([transfer("TB00000000000001", "TB00000000000002", 5_00)])
+        )
+        self.assertEqual(counts["transfers"], 1)
+        self.assertEqual(len(movements), 2)
+        references = {record[MOV_TRANSFER].decode() for record in movements}
+        self.assertEqual(len(references), 1)
+        self.assertEqual(
+            {record[MOV_DIRECTION].decode() for record in movements}, {"D", "C"}
+        )
+
+    def test_the_records_are_the_contract_length(self):
+        master, movements, _, _ = self.write(
+            *a_stream([transfer("TB00000000000001", "TB00000000000002", 5_00)])
+        )
+        self.assertTrue(all(len(record) == 100 for record in master))
+        self.assertTrue(all(len(record) == 120 for record in movements))
+
+    def test_every_account_opens_in_the_base_currency_and_substitutions_are_counted(self):
+        """F-72's convention, one stratum down. The count is what says how much of the day this is."""
+        _, movements, counts, accounts = self.write(
+            *a_stream([
+                transfer("TB00000000000001", "TB00000000000002", 5_00, currency="EUR"),
+                transfer("TB00000000000002", "TB00000000000001", 7_00, currency="PLN"),
+            ])
+        )
+        self.assertEqual({one["currency"] for one in accounts}, {"PLN"})
+        self.assertEqual({record[MOV_CURRENCY].decode() for record in movements}, {"PLN"})
+        self.assertEqual(counts["currencySubstituted"], 1)
+
+    def test_the_treasury_carries_what_it_funded(self):
+        """Every opening balance came from somewhere, which is how WP-22's loader states it too."""
+        _, _, _, accounts = self.write(*a_stream([]))
+        treasury = next(one for one in accounts if one["ref"] == "TB000000000001JK")
+        customers = [one for one in accounts if one["ref"] != "TB000000000001JK"]
+        self.assertEqual(treasury["booked"], sum(one["booked"] for one in customers))
+
+    def test_everything_that_is_not_a_movement_is_counted_rather_than_dropped(self):
+        actions = [
+            transfer("TB00000000000001", "TB00000000000002", 5_00),
+            {"kind": "action", "operation": "getBalance", "accountRef": "TB00000000000001"},
+            {"kind": "action", "operation": "placeHold", "accountRef": "TB00000000000001"},
+        ]
+        _, _, counts, _ = self.write(*a_stream(actions))
+        self.assertEqual(counts["actions"], 3)
+        self.assertEqual(counts["transfers"], 1)
+        self.assertEqual(counts["notAMovement"], 2)
+
+    def test_a_debit_that_would_overdraw_is_refused_rather_than_written(self):
+        """ACCTPOST would reject it R005. A file of those measures the overdraft path."""
+        actions = [transfer("TB00000000000001", "TB00000000000002", generate.OPENING_BALANCE + 1)]
+        _, movements, counts, _ = self.write(*a_stream(actions))
+        self.assertEqual(movements, [])
+        self.assertEqual(counts["wouldOverdraw"], 1)
+
+    def test_a_transfer_to_an_account_the_stream_never_opened_is_counted(self):
+        actions = [transfer("TB00000000000001", "TB00000000000999", 5_00)]
+        _, movements, counts, _ = self.write(*a_stream(actions))
+        self.assertEqual(movements, [])
+        self.assertEqual(counts["unknownAccount"], 1)
+
+    def test_the_master_is_sorted_as_the_match_merge_requires(self):
+        master, _, _, _ = self.write(*a_stream([]))
+        refs = [record[ACCT_REF] for record in master]
+        self.assertEqual(refs, sorted(refs))
+
+    def test_the_movements_are_sorted_by_account_reference(self):
+        _, movements, _, _ = self.write(
+            *a_stream([
+                transfer("TB00000000000002", "TB00000000000001", 5_00),
+                transfer("TB00000000000001", "TB00000000000002", 7_00),
+            ])
+        )
+        refs = [record[MOV_ACCOUNT] for record in movements]
+        self.assertEqual(refs, sorted(refs))
+
+    def test_a_stream_with_no_header_is_refused(self):
+        import io as _io
+        with self.assertRaises(ValueError):
+            generate.read_stream(_io.StringIO('{"kind":"open","accountRef":"X"}\n'))
+
+    def test_nothing_the_writer_produces_would_be_rejected(self):
+        """The predictor over the whole file: the point of the mode is that the cycle posts it."""
+        master, movements, _, _ = self.write(
+            *a_stream([
+                transfer("TB00000000000001", "TB00000000000002", 5_00),
+                transfer("TB00000000000002", "TB00000000000001", 7_00, currency="USD"),
+            ])
+        )
+        self.assertEqual(predict_rejects(master, movements), {})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
