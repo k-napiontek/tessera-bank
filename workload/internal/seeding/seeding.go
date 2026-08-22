@@ -182,7 +182,17 @@ func (r Report) Total() int { return r.Opened + r.AlreadyOpen + r.Failed }
 //
 // The plan's first entry is the treasury and it is opened alone, before anything else: funding
 // debits it, and a worker that raced ahead would be funding from an account that did not exist yet.
-func Run(ctx context.Context, sender Sender, plan []Account, opening money.Amount, workers int) (Report, error) {
+//
+// date is the business date the run is about to execute. Funding is dated the day before it - see
+// client.Fund and F-103.
+func Run(
+	ctx context.Context,
+	sender Sender,
+	plan []Account,
+	opening money.Amount,
+	workers int,
+	date bankday.Date,
+) (Report, error) {
 	if len(plan) == 0 {
 		return Report{}, fmt.Errorf("seeding: nothing to seed")
 	}
@@ -222,7 +232,8 @@ func Run(ctx context.Context, sender Sender, plan []Account, opening money.Amoun
 
 				// Funded even when the account was already open: a re-run against a seeded estate
 				// replays the funding under the same key rather than crediting it twice.
-				funded, err := client.Fund(treasury.AccountRef, account.AccountRef, account.CustomerRef, opening)
+				funded, err := client.Fund(
+					treasury.AccountRef, account.AccountRef, account.CustomerRef, opening, date)
 				if err != nil {
 					mu.Lock()
 					report.Failed++

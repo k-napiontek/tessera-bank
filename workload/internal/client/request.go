@@ -147,6 +147,7 @@ func Build(action population.Action, date bankday.Date, seq int64, held money.Cu
 			CreditAccountRef: action.CounterpartyRef,
 			Amount:           minor(amount),
 			Reference:        remittance(action.Cohort),
+			ValueDate:        date.String(),
 		})
 		if err != nil {
 			return Request{}, err
@@ -262,12 +263,20 @@ func OpenAccount(customerRef, accountRef string, accountType string, currency mo
 //
 // The key is derived from the account being funded, so that a second seeding pass over an estate
 // that is already seeded replays rather than funding it twice.
-func Fund(treasuryRef, accountRef, subject string, amount money.Amount) (Request, error) {
+//
+// Dated the day *before* the run, which is the rule services/ledger-loader already follows in
+// Header.openingDate: an opening balance is the position the day starts from rather than part of it.
+// batch/recon counts a posting towards what the master ought to hold when its reference is in the
+// movement file or its value date is earlier than the business date, and funding is in neither the
+// movement file nor the day - so dated on the day it would be left out and every account would drift
+// by exactly its opening balance. F-103.
+func Fund(treasuryRef, accountRef, subject string, amount money.Amount, date bankday.Date) (Request, error) {
 	body, err := json.Marshal(transferRequest{
 		DebitAccountRef:  treasuryRef,
 		CreditAccountRef: accountRef,
 		Amount:           minor(amount),
 		Reference:        "opening balance",
+		ValueDate:        date.AddDays(-1).String(),
 	})
 	if err != nil {
 		return Request{}, err
@@ -300,6 +309,10 @@ type transferRequest struct {
 	CreditAccountRef string     `json:"creditAccountRef"`
 	Amount           amountJSON `json:"amount"`
 	Reference        string     `json:"reference,omitempty"`
+	// ValueDate is the business day the movement belongs to. Optional in the contract and defaulted
+	// by the ledger to LocalDate.now, which is why a driven day used to be dated by the clock of the
+	// machine that drove it rather than by the day it was driving. F-103.
+	ValueDate string `json:"valueDate,omitempty"`
 }
 
 type holdRequest struct {

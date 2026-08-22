@@ -242,7 +242,7 @@ func run() error {
 		fmt.Printf("== Seeding ==\n  %d accounts %s, opening balance %s each, %d at a time\n",
 			len(plan), scope, opening, opts.seedWorkers)
 		started := time.Now()
-		report, err := seeding.Run(ctx, sender, plan, opening, opts.seedWorkers)
+		report, err := seeding.Run(ctx, sender, plan, opening, opts.seedWorkers, date)
 		if err != nil {
 			return err
 		}

@@ -266,7 +266,7 @@ func TestSeedingOpensEveryAccountAndFundsItFromTheTreasury(t *testing.T) {
 	plan := seeding.Plan(built, schedule(60), 5, date(t))
 	fake := accepting()
 
-	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 1_000_000), 4)
+	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 1_000_000), 4, date(t))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestTheTreasuryIsOpenedBeforeAnythingIsFundedFromIt(t *testing.T) {
 	plan := seeding.Plan(built, schedule(40), 9, date(t))
 	fake := accepting()
 
-	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 8); err != nil {
+	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 8, date(t)); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -331,7 +331,7 @@ func TestAnAccountThatAlreadyExistsIsNotAFailure(t *testing.T) {
 		return client.Result{Outcome: client.Replayed, Status: 200}
 	}}
 
-	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 2)
+	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 2, date(t))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestARunAgainstAnEstateThatCannotBeSeededStopsRatherThanStarting(t *testing
 		return client.Result{Outcome: client.Posted, Status: 201}
 	}}
 
-	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 1)
+	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 1, date(t))
 	if err == nil {
 		t.Fatal("seeding reported success against an estate that refused to open accounts")
 	}
@@ -374,7 +374,7 @@ func TestATreasuryThatCannotBeOpenedStopsImmediately(t *testing.T) {
 		return client.Result{Outcome: client.Unknown, Status: 500}
 	}}
 
-	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 100), 4); err == nil {
+	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 100), 4, date(t)); err == nil {
 		t.Fatal("carried on funding from a treasury that does not exist")
 	}
 	if count := len(fake.requests()); count != 1 {
