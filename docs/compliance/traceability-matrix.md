@@ -848,3 +848,51 @@ written from reasoning were corrected against what was observed.
 |---|---|---|---|
 | **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | What those metrics **mean** under degradation, measured rather than reasoned, and four claims in `docs/runbooks/` corrected against it - each naming the capture that forced it. `ledger-observability.md`: `outcome="replayed"` rising does **not** mean clients timed out, because a run that re-offered a day it had already posted drove it to 9 080 replays out of 9 080 with nothing having timed out; and `ledger_outbox_lag_seconds` survives as the signal to page on, but only read as a **series** - `SCN-OUTBOX-STUCK` froze the broker for its whole window and the gauge read 0 at both ends. `edge-refusing-requests.md`: a 502 means the ledger is down and **the converse does not hold** - suspending the ledger produced no 502s at all and full availability; and the two signals it sent an operator to, `ledger.posting.latency` and the Hikari pool, are the two that stayed flat through pool exhaustion while the edge's own latency missed at 5.71x its budget | **Met** |
 | **REQ-DP-001** All test data is synthetic | WP-03 | Nothing in a signature capture is a customer's. The scrapes are Prometheus expositions of counters and gauges, the manifests carry account **references** and no holder, and the schema that governs the revised catalogue is still incapable of carrying personal data - re-demonstrated against a planted `holderName` | **Met** |
+
+---
+
+## WP-24b - failure injection: the migration under traffic and the soak run
+
+Ticket TB-1024. The half that changes something while the bank is running. Two new packages in
+`workload/`, two committed SQL migrations that are **not** the ledger's, two driving scripts, and a
+runbook page this repository did not have at all. **None of it is a component of the bank**: it
+extends the fixture WP-20, WP-21 and WP-24a built.
+
+`master-plan.md` names *"schema migration under load"* as one of the reasons this repository exists
+and says nothing here puts anything under load. WP-21 to WP-24c built the load and the degradation;
+this is the first change made to the estate **while money was moving through it**.
+
+[ADR 0018](../governance/adr/0018-the-migration-exercise-is-not-a-condition.md) records why the
+migration is an exercise of its own rather than an eighth entry in `TB-SCENARIOS-V1`: the catalogue
+digest covers the whole catalogue, so an eighth entry would have made every one of WP-24c's seven
+committed captures unreportable against the catalogue in the tree.
+
+**Two of this package's three deliverables own no requirement in this catalogue, and that is stated
+rather than papered over.**
+
+The **soak run** measures resource growth, and there is no `REQ-*` about growth, retention or storage
+lifecycle. The nearest, `REQ-PERF-004`, is WP-22's and is about query cost at production cardinality.
+
+The **schema-change runbook** documents an operator procedure, and the nearest requirements are
+`REQ-OPS-001` (*every scheduled process has a runbook* - WP-05's, and a migration is not a scheduled
+process) and `REQ-OPS-005` (*the incident process is exercised* - WP-18's, and a runbook does not
+make an exercise happen). Neither fits.
+
+Both satisfy WP-24's Definition of Done, and both are recorded here as what they are rather than
+mapped to an id stretched to fit. Inventing one is the mistake WP-02 made fourteen times and
+`CLAUDE.md` keeps a trap entry about; stretching one is the same mistake with better manners. **The
+gap itself is logged as a follow-up** - a catalogue with no requirement about data growth in a bank
+whose two busiest tables are pruned by nothing is a gap in the catalogue rather than in the work.
+
+### Owned by WP-24b
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-007** Degradation is exercised, not assumed | WP-24c met this with seven injected conditions; this adds the one degradation that is a **deliberate operator action** rather than a fault. Two captures under `workload/baselines/migration/`: the **same index** built against a live ledger part way through a compressed bank day, once with `CREATE INDEX` and once with `CREATE INDEX CONCURRENTLY`. Everything else is held identical - 338 052 accounts, 6 616 226 postings, scale 0.002, 720x, seed 42, applied 15 s into a 45 s day - so the difference between the two is a consequence of that one keyword and of nothing else. The migration is the exercise's own, under its own Flyway history table and dropped again, so `services/ledger-persistence`'s set is untouched; the index is deliberately **not** the one F-24 asks for, which WP-22's Out of scope forbade. The lock is read from `pg_locks` **while it is held**, sampled every 250 ms, and the customer-side figures are computed over a scrape pair bracketing the **migration** rather than the run - the run's own brackets average a lock held for seconds across nine business hours. **The blocking build held `ShareLock` for 2.25 s with `RowExclusiveLock` queued behind it and exactly 16 backends waiting - the whole Hikari pool, in every one of the nine samples it was held; the concurrent build held `ShareUpdateExclusiveLock` for 3.5 s with nothing queued at all.** `SLO-GATEWAY-LATENCY` missed at 0.85744 over the migration window and 0.88996 over the day - **11.0x its error budget** - against 1.00000 for the concurrent run, while `SLO-GATEWAY-AVAILABILITY` was 1.00000 in both. **The safer migration is the slower one**, which is the finding the pair exists to produce and which neither capture could have produced alone | The two `migration.json` records, the `locks.txt` sample series each is derived from, and the four extra scrape files each is regenerable from, committed beside them. `migration_test.go` pins the controls against a recording fixture, so `make test-workload` still needs no Docker: `TestARunThatAppliedNothingIsRefusedRatherThanReported` over real "No migration necessary" output, `TestTheConcurrentVariantDisablesFlywaysTransactionalLock`, `TestEveryRunBaselinesItsOwnHistoryTable`, `TestTheIndexIsVerifiedInTheDatabaseRatherThanTakenFromFlyway`, `TestAnInvalidIndexIsRefused`, `TestARunLogThatDoesNotExistYetIsADayThatHasNotStarted`, and `TestNewRefusesAMigrationItCouldNotApply` over eight settings including a refusal to be pointed at the ledger's own history table. `locks_test.go::TestAConcurrentBuildIsNotMistakenForABlockingOne` and `TestTheLockWindowIsSeparatedFromTheWholeInvocation` pin the two ways the lock reading could have been read wrong | **Met** |
+
+### Contributed by WP-24b, verified by the owning package
+
+| Requirement | Owner | What WP-24b contributes | Status |
+|---|---|---|---|
+| **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | A third independent confirmation that **a ledger-side latency objective is not a detector for anything that blocks the ledger from being asked**. `SLO-LEDGER-POSTING-LATENCY` was **met at 0.99321** through the blocking migration, with a third of its budget spent, while every writer in the bank was queued behind a table lock and the edge missed at 11.0x. The ledger times the posting it performed, not the wait to perform it in - F-83's mechanism, now seen for a condition that has nothing to do with the connection pool, so it is a property of the metric rather than of that scenario. The soak adds what the `ledger_db_*` signals mean over time rather than at an instant: which of them are PostgreSQL's estimates and which are exact, and why dead tuples have to be read against the autovacuum count. Both are written into `docs/runbooks/` at the point an operator would be reading them | Met at this tier |
+| **REQ-DP-001** All test data is synthetic | WP-03 | Nothing in either capture is a customer's. The migrations create an index over a currency code and an integer count of minor units and read no row; the lock samples carry backend counts, lock modes and a clock; the soak captures carry table sizes and row-count estimates. No account holder, no identifier and no authentication material anywhere in the exercise or in its error paths, which are where a leak hides | Met at this tier |
