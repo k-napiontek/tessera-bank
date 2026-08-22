@@ -174,8 +174,9 @@ func renderSignature(out *strings.Builder, record manifest.Manifest, each scenar
 		fmt.Fprintf(out, "  is a finding about the objective rather than about the condition.\n")
 	}
 
-	fmt.Fprintf(out, "\n  %-32s  %-9s  %-18s  %-18s  %s\n",
-		"objective", "declared", "baseline", "this run", "")
+	header := fmt.Sprintf("  %-32s  %-9s  %-18s  %-18s",
+		"objective", "declared", "baseline", "this run")
+	fmt.Fprintf(out, "\n%s\n", strings.TrimRight(header, " "))
 	for _, entry := range signatures(each, catalogue, run, baseline) {
 		line := fmt.Sprintf("  %-32s  %-9s  %-18s  %-18s  %s",
 			entry.objectiveID, entry.declared, entry.baseline, entry.run, entry.verdict)

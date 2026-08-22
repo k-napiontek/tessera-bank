@@ -356,7 +356,7 @@ func parse() options {
 	flag.StringVar(&opts.scenarioID, "scenario-id", "",
 		"which condition in that catalogue to inject during this run")
 	flag.StringVar(&opts.runDir, "run-dir", "",
-		"where the fixture wrote one <role>.pgid per process it started, so a condition can signal one")
+		"where the fixture wrote one <role>.pid per component, so a condition can signal one")
 	flag.StringVar(&opts.brokerContainer, "broker-container", "tessera-workload-kafka",
 		"the broker container a condition may pause")
 	flag.StringVar(&opts.dbContainer, "db-container", "tessera-workload-db",

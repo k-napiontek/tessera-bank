@@ -31,7 +31,7 @@
       "title": "The ledger is gone and its own success rate looks perfect",
       "condition": "partial-outage",
       "target": "ledger-api",
-      "mechanism": "The fixture stops the ledger process for the declared window and starts it again afterwards. The gateway, the database and the broker keep running, so the estate is partially rather than wholly down and the driver keeps offering the day it planned.",
+      "mechanism": "The fixture sends SIGSTOP to the ledger's process group for the declared window and SIGCONT afterwards. The group rather than the process, because gradlew execs a JVM and signalling the wrapper leaves the JVM running. The gateway, the database and the broker keep running, so the estate is partially rather than wholly down and the driver keeps offering the day it planned. A suspended process is not an unreachable one - it holds its listening socket and the kernel keeps accepting - and what that costs the signature is the point of running it.",
       "startsAtMinute": 660,
       "holdsForMinutes": 30,
       "parameters": {},
@@ -133,7 +133,7 @@
       "title": "The two sides of the cut-off disagree about which day it is",
       "condition": "clock-skew",
       "target": "recon",
-      "mechanism": "The fixture offsets the business date the driver executes against the date the estate is stamping, by the declared number of minutes, so a transfer lands on one side of the batch boundary and is accounted for on the other. Skewing the estate's own clock instead was refused: PostgreSQL stamps the value date from its own `now()`, and moving that would mean granting a container SYS_TIME on a shared kernel or building a faketime shim into the image, both of which are changes to the estate rather than to the fixture.",
+      "mechanism": "This fixture cannot produce this condition and the injector says so rather than pretending. PostgreSQL stamps the value date from its own `now()`, so moving the two sides of the boundary apart means moving a clock inside a container - which needs SYS_TIME on a kernel shared with the host, or a faketime shim in the image. Both change the estate rather than the fixture, and WP-24's Constraint refuses them. Skewing the driver's own date is not the same condition: the ledger stamps its value dates itself.",
       "startsAtMinute": 960,
       "holdsForMinutes": 120,
       "parameters": {

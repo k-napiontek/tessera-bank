@@ -3,7 +3,7 @@
   "modelId": "TB-WORKLOAD-DAY-V1",
   "modelVersion": "1.0.0",
   "modelDigest": "d887de999bad57ba1cd02962836b16fef66132c7a55b0ff1862e8290218b377e",
-  "gitSha": "1f95419",
+  "gitSha": "30af797",
   "hardware": "darwin arm64, 10 cores, go1.25.6",
   "businessDate": "2026-08-21",
   "weekday": "Friday",

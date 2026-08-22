@@ -9,7 +9,7 @@ Run
   Scale           0.002    Compression 720x
   Events          34083
   Offered rate    757.4/s mean, 862.2/s peak
-  Commit          1f95419
+  Commit          30af797
   Hardware        darwin arm64, 10 cores, go1.25.6
 
   Catalogue       TB-SLO-CATALOGUE-V1 1.0.0
@@ -27,8 +27,8 @@ Objectives
     SLO-GATEWAY-LATENCY               met        target 0.99000   1.00000 of 34323 events   budget untouched
 
   fraud-scoring (edge/fraud-scoring, stratum 4)
-    SLO-FRAUD-DECISION-COMPLETENESS   met        target 0.99990   1.00000 of 21483 events   budget untouched
-    SLO-FRAUD-SCORING-LATENCY         met        target 0.99000   1.00000 of 21483 events   budget untouched
+    SLO-FRAUD-DECISION-COMPLETENESS   met        target 0.99990   1.00000 of 23588 events   budget untouched
+    SLO-FRAUD-SCORING-LATENCY         met        target 0.99000   1.00000 of 23588 events   budget untouched
 
   reporting (batch/reporting, stratum mixed)
     SLO-REPORTING-RUN-DURATION        no figure  target 0.98000   see below
@@ -44,7 +44,7 @@ Objectives this report cannot answer
 
     SLO-LEDGER-OUTBOX-FRESHNESS (ledger-api)
       a proportion of a window needs the window, and this run supplies two samples
-      ledger_outbox_lag_seconds was 53 at the start and 0 at the end
+      ledger_outbox_lag_seconds was 54 at the start and 0 at the end
       the objective wants it <= 60
 
     SLO-LEDGER-POOL-HEADROOM (ledger-api)

@@ -76,10 +76,19 @@ DRAIN=${TB_DRAIN:-180s}
 if [ "${TB_EXPECT_OUTBOX_BACKLOG:-0}" = "1" ]; then
   DRAIN=0
 fi
-# One <role>.pgid per process this script starts, so that an injected condition can suspend the
-# ledger or the scorer. The **group** rather than the process: `go run`, `gradlew` and `uv run` each
-# exec a child, and signalling the parent alone stops a wrapper and leaves the thing that matters
-# running. F-73 records the same trap costing a whole run when it was teardown rather than injection.
+# One <role>.pid per component an injected condition may suspend, holding the pid of the process
+# that is actually **listening on that component's port**.
+#
+# Not the pid this script backgrounded, and not its process group either. `gradlew bootRun` forks the
+# application into a JVM owned by the **Gradle daemon**, which is in a process group of its own -
+# measured here at launcher pgid 23780 against JVM pgid 9371 - so `kill -STOP` on the launcher's
+# group suspends a wrapper and the ledger carries on answering. An injector that reported the
+# condition as applied would then produce a signature of a healthy estate under the name of a
+# degraded one, which is the confident wrong answer this repository keeps a trap list about. F-73 is
+# the same trap one level shallower, where it cost a teardown rather than a measurement.
+#
+# The port is what defines the component here, so the pid behind the port is the right process by
+# construction rather than by assumption.
 RUN_DIR=${TB_RUN_DIR:-${TMPDIR:-/tmp}/tessera-workload-run}
 PIDS=()
 
@@ -139,6 +148,18 @@ ledger_gauge() {
     | awk -v name="$1" '$1 == name || index($1, name "{") == 1 { print $2; found = 1 }
                         END { if (!found) print "?" }' \
     | head -1
+}
+
+# shellcheck disable=SC2329  # called below, after each component reports ready
+record_pid() {
+  local role="$1" port="$2" pid
+  pid=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+  if [ -z "$pid" ]; then
+    echo "FAIL  nothing is listening on $port, so the $role process cannot be addressed" >&2
+    return 1
+  fi
+  echo "$pid" >"$RUN_DIR/$role.pid"
+  echo "OK    the $role process is $pid, on port $port"
 }
 
 wait_for_file() {
@@ -231,6 +252,26 @@ if [ "$kafka_up" != "1" ]; then
 fi
 echo "OK    Kafka is ready on $KAFKA_PORT"
 
+# Created here rather than left to auto-creation, and this is not tidiness.
+#
+# The scorer subscribes as it starts. Auto-creation makes a topic when a *producer* first sends to
+# it, which is after the ledger has relayed its first event - so on a run whose accounts are already
+# open, and which therefore relays nothing during seeding, the scorer subscribes to a topic that does
+# not exist yet, caches UNKNOWN_TOPIC_OR_PART, and does not look again until librdkafka's metadata
+# refresh five minutes later. The run is forty-five seconds long. It consumes nothing, publishes
+# nothing, and - because a prometheus_client counter has no series until its first increment - its
+# metrics are *absent* rather than zero, so the report says "nothing happened" about a scorer that
+# was running the whole time.
+#
+# It went unnoticed in the first capture because seeding there did relay events, in the first
+# seconds of the scorer's life. That is a race, and a fixture whose measurement depends on one is a
+# fixture that will produce a different answer on a faster machine.
+for topic in tessera.ledger.transfer-posted.v1 tessera.fraud.decision.v1; do
+  docker exec "$KAFKA_CONTAINER" kafka-topics --bootstrap-server localhost:9092 \
+    --create --if-not-exists --topic "$topic" --partitions 1 --replication-factor 1 >/dev/null 2>&1 || true
+done
+echo "OK    the two topics exist before anything subscribes to them"
+
 step "Ledger"
 JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17}" \
 LEDGER_DB_URL="jdbc:postgresql://localhost:$DB_PORT/tessera" \
@@ -239,8 +280,8 @@ LEDGER_DB_PASSWORD=tessera \
 LEDGER_KAFKA_BOOTSTRAP="localhost:$KAFKA_PORT" \
   "$ROOT/gradlew" -p "$ROOT" :services:ledger-api:bootRun >"${TMPDIR:-/tmp}/tessera-workload-ledger.log" 2>&1 &
 PIDS+=("$!")
-echo "$!" >"$RUN_DIR/ledger.pgid"
 wait_for "the ledger" "http://localhost:$LEDGER_PORT/actuator/health/readiness" 240
+record_pid ledger "$LEDGER_PORT"
 
 # A run's idempotency keys are derived from the business date and the event's ordinal, which is what
 # makes it reproducible - and means a second run of the same date against the same ledger replays
@@ -264,8 +305,8 @@ TB_FRAUD_METRICS_PORT="$FRAUD_METRICS_PORT" \
   uv run --project "$ROOT/edge/fraud-scoring" fraud-scoring \
   >"${TMPDIR:-/tmp}/tessera-workload-fraud.log" 2>&1 &
 PIDS+=("$!")
-echo "$!" >"$RUN_DIR/fraud-scoring.pgid"
 wait_for "the scorer" "http://localhost:$FRAUD_METRICS_PORT/metrics" 120
+record_pid fraud-scoring "$FRAUD_METRICS_PORT"
 
 step "Driver"
 echo "  it writes the public key, then waits for the gateway - its output follows below"

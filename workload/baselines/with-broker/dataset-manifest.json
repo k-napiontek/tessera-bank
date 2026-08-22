@@ -31,10 +31,10 @@
     "TRANSFERS_REVERSED" : 3609
   },
   "rowsWritten" : 14491832,
-  "datasetDigest" : "35747263bb99a04ecec0a761e853adb94581cddbd384a1e1737e631fafbf1c05",
+  "datasetDigest" : "04f66ddab0199de8bf34e2c4cd58c7374f63b69983083f7f24df8117ea8d7161",
   "chainLength" : 3804955,
   "chainHead" : "0a993c8a32f431ce57bcfc7f7ae0c8e5a45f18a9a74b10e462b10abe23899a7c",
   "busiestAccountRef" : "TB00000000006DI2",
   "busiestAccountPostings" : 76,
-  "loadSeconds" : 455
+  "loadSeconds" : 454
 }

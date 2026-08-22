@@ -321,12 +321,16 @@ func wait(ctx context.Context, d time.Duration) error {
 
 // Local acts on the containers and processes workload/scripts/estate-up.sh started on this machine.
 //
-// Processes are addressed by process **group**, read from a file the script writes. `go run` and
-// `gradlew` both exec a child - a compiled binary and a JVM - so signalling the parent alone stops
-// a wrapper and leaves the thing that matters running. F-73 records the same trap costing a whole
-// run when it was teardown rather than injection.
+// A process is addressed by the pid the script read out of **the port that component listens on**,
+// not by the pid it backgrounded and not by that pid's process group. `gradlew bootRun` forks the
+// application into a JVM owned by the Gradle daemon, which is in a process group of its own, so a
+// signal sent to the launcher's group suspends a wrapper while the ledger carries on answering -
+// and the injector, whose kill succeeded, reports the condition as applied. That produces a
+// signature of a healthy estate filed under the name of a degraded one, which is worse than no
+// signature. Measured while writing this: launcher pgid 23780, ledger JVM pgid 9371, and a SIGSTOP
+// to the first left the readiness probe answering. F-73 is the same trap one level shallower.
 type Local struct {
-	// RunDir is where estate-up.sh writes one <role>.pgid per process it started.
+	// RunDir is where estate-up.sh writes one <role>.pid per component it can address.
 	RunDir string
 }
 
@@ -339,7 +343,7 @@ func (l Local) ResumeContainer(ctx context.Context, name string) error {
 }
 
 func (l Local) SignalProcess(_ context.Context, role Role, signal Signal) error {
-	group, err := l.group(role)
+	pid, err := l.pid(role)
 	if err != nil {
 		return err
 	}
@@ -347,8 +351,10 @@ func (l Local) SignalProcess(_ context.Context, role Role, signal Signal) error 
 	if number == 0 {
 		return fmt.Errorf("injector: no signal called %q", signal)
 	}
-	if err := syscall.Kill(-group, number); err != nil {
-		return fmt.Errorf("injector: SIG%s to the %s process group %d: %w", signal, role, group, err)
+	// The process itself, deliberately not its group - see the type comment. A positive pid here is
+	// the whole point.
+	if err := syscall.Kill(pid, number); err != nil {
+		return fmt.Errorf("injector: SIG%s to the %s process %d: %w", signal, role, pid, err)
 	}
 	return nil
 }
@@ -371,21 +377,23 @@ func (l Local) StartInContainer(ctx context.Context, container string, argv ...s
 	return nil
 }
 
-func (l Local) group(role Role) (int, error) {
+func (l Local) pid(role Role) (int, error) {
 	if l.RunDir == "" {
 		return 0, fmt.Errorf("injector: no run directory, so the %s process cannot be addressed", role)
 	}
-	path := filepath.Join(l.RunDir, string(role)+".pgid")
+	path := filepath.Join(l.RunDir, string(role)+".pid")
 	body, err := os.ReadFile(path)
 	if err != nil {
-		return 0, fmt.Errorf("injector: reading %s: %w - estate-up.sh writes it when it starts the "+
-			"process, so a run driven against an estate somebody else booted cannot signal it", path, err)
+		return 0, fmt.Errorf("injector: reading %s: %w - estate-up.sh writes it once the component "+
+			"answers on its port, so a run driven against an estate somebody else booted cannot "+
+			"signal it", path, err)
 	}
-	group, err := strconv.Atoi(strings.TrimSpace(string(body)))
-	if err != nil || group <= 0 {
-		return 0, fmt.Errorf("injector: %s holds %q, which is not a process group", path, strings.TrimSpace(string(body)))
+	pid, err := strconv.Atoi(strings.TrimSpace(string(body)))
+	if err != nil || pid <= 0 {
+		return 0, fmt.Errorf("injector: %s holds %q, which is not a process id", path,
+			strings.TrimSpace(string(body)))
 	}
-	return group, nil
+	return pid, nil
 }
 
 func docker(ctx context.Context, argv ...string) error {
