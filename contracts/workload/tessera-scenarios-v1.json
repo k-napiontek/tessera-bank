@@ -1,0 +1,153 @@
+{
+  "catalogueId": "TB-SCENARIOS-V1",
+  "catalogueVersion": "1.0.0",
+  "summary": "Seven conditions an operator would recognise, each declared with the objectives it is expected to move and the objectives expected to stay flat. The flat list is the half that makes a signature falsifiable: three of these conditions move nothing this estate has an objective for, and each of those says why rather than being left out. Injecting one is the fixture's job and changing the estate to make one injectable is refused - where that refusal costs a condition, the mechanism records it.",
+
+  "scenarios": [
+    {
+      "scenarioId": "SCN-SLOW-DEPENDENCY",
+      "title": "The ledger answers correctly and far too slowly",
+      "condition": "slow-dependency",
+      "target": "ledger-api",
+      "mechanism": "A TCP proxy in the fixture sits between the gateway and the ledger and holds every response for the declared delay before forwarding it. Nothing in the estate is reconfigured beyond the address the gateway is given, which is already an environment variable it reads at boot.",
+      "startsAtMinute": 600,
+      "holdsForMinutes": 60,
+      "parameters": {
+        "extraLatencyMillis": 1500
+      },
+      "movesObjectives": [
+        "SLO-GATEWAY-LATENCY"
+      ],
+      "flatObjectives": [
+        "SLO-GATEWAY-AVAILABILITY",
+        "SLO-LEDGER-MOVEMENT-SUCCESS",
+        "SLO-LEDGER-POSTING-LATENCY"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "The misleading graph here is the ledger's own. `ledger_posting_latency_seconds` times what the ledger did, and the ledger did it just as fast as ever - the delay is in front of it. An operator reading the ledger's dashboard during this condition sees a component in perfect health while every customer waits a second and a half, and the only place the truth appears is the edge. That is the whole argument for measuring latency where the customer is, which is also why the workload driver stamps it from the intended send time."
+    },
+    {
+      "scenarioId": "SCN-LEDGER-OUTAGE",
+      "title": "The ledger is gone and its own success rate looks perfect",
+      "condition": "partial-outage",
+      "target": "ledger-api",
+      "mechanism": "The fixture stops the ledger process for the declared window and starts it again afterwards. The gateway, the database and the broker keep running, so the estate is partially rather than wholly down and the driver keeps offering the day it planned.",
+      "startsAtMinute": 660,
+      "holdsForMinutes": 30,
+      "parameters": {},
+      "movesObjectives": [
+        "SLO-GATEWAY-AVAILABILITY"
+      ],
+      "flatObjectives": [
+        "SLO-LEDGER-MOVEMENT-SUCCESS",
+        "SLO-LEDGER-POSTING-LATENCY"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "A ratio computed from a component's own counters cannot fall while the component is not counting. `ledger_transfers_total` stops advancing entirely, so the ledger's success rate over the window is whatever it was before the outage started - which reads as a healthy ledger rather than an absent one. This is the single most important thing to have seen before reading a dashboard under pressure, and the reason a component's availability has to be judged from outside it."
+    },
+    {
+      "scenarioId": "SCN-OUTBOX-STUCK",
+      "title": "Money moves, events stop, and only one graph notices",
+      "condition": "stuck-outbox",
+      "target": "kafka",
+      "mechanism": "The fixture pauses the broker container for the declared window. The relay's send times out, the batch stops at the first failure to preserve per-key order, and the rows stay undispatched - which is the real production shape of this failure rather than a simulation of it.",
+      "startsAtMinute": 720,
+      "holdsForMinutes": 90,
+      "parameters": {},
+      "movesObjectives": [
+        "SLO-LEDGER-OUTBOX-FRESHNESS"
+      ],
+      "flatObjectives": [
+        "SLO-GATEWAY-AVAILABILITY",
+        "SLO-LEDGER-MOVEMENT-SUCCESS",
+        "SLO-LEDGER-POSTING-LATENCY"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "The outbox exists so that the domain event is written in the same transaction as the postings, which means a broker outage costs the estate nothing at the moment it happens - every transfer still commits, and every customer-facing objective holds. The cost is entirely downstream and entirely invisible until somebody looks at the age of the oldest unpublished row. `ledger-observability.md` claims the lag rather than the count is the one to page on; this is the condition that either demonstrates that or corrects it."
+    },
+    {
+      "scenarioId": "SCN-CONSUMER-LAG",
+      "title": "The scorer stops consuming and its completeness stays at one",
+      "condition": "consumer-lag",
+      "target": "fraud-scoring",
+      "mechanism": "The fixture suspends the scorer process for the declared window with SIGSTOP and resumes it afterwards. The broker keeps accepting, the ledger keeps relaying, and the consumer group's committed offset stops advancing - a real lag rather than a stopped producer.",
+      "startsAtMinute": 780,
+      "holdsForMinutes": 90,
+      "parameters": {},
+      "movesObjectives": [],
+      "movesNothingBecause": "The scorer publishes no consumer-lag metric, and `SLO-FRAUD-DECISION-COMPLETENESS` is decisions over decisions plus malformed - a ratio of what was consumed, not of what was offered. Consuming nothing leaves it exactly where it was. Nothing in the catalogue is stated over the gap between what the ledger published and what the scorer read, so this condition is invisible to every objective the estate declares.",
+      "flatObjectives": [
+        "SLO-FRAUD-DECISION-COMPLETENESS",
+        "SLO-FRAUD-SCORING-LATENCY",
+        "SLO-LEDGER-MOVEMENT-SUCCESS"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "A completeness ratio over consumed events is the classic denominator mistake: it answers `of the work I did, how much did I finish` when the question is `did I do the work`. The objective is not wrong - it catches a malformed producer, which is what it was written for - it simply cannot see a consumer that has stopped. Recording that here is worth more than adding a metric, because the gap is the finding and closing it silently would hide what the exercise was for."
+    },
+    {
+      "scenarioId": "SCN-LIMITER-STORM",
+      "title": "The edge refuses thousands of customers at full availability",
+      "condition": "rate-limit-storm",
+      "target": "api-gateway",
+      "mechanism": "The fixture offers the declared rate through the gateway across the declared number of token subjects, alongside the day the driver is already executing. The limiter is per subject and route class per ADR 0006, so a single subject exhausts one bucket and the storm is a customer; spread across many it is an outage.",
+      "startsAtMinute": 840,
+      "holdsForMinutes": 30,
+      "parameters": {
+        "requestsPerSecond": 200,
+        "subjects": 1
+      },
+      "movesObjectives": [],
+      "movesNothingBecause": "A 429 is deliberately on the good side of `SLO-GATEWAY-AVAILABILITY` - its own rationale says so, because retrying into a limiter converts a working control into a stampede. Refusals are counted by `tessera_gateway_refusals_total`, which the catalogue carries as a signal with no objective. So a storm that turns customers away at any volume moves nothing the estate has promised anything about.",
+      "flatObjectives": [
+        "SLO-GATEWAY-AVAILABILITY",
+        "SLO-GATEWAY-LATENCY",
+        "SLO-LEDGER-MOVEMENT-SUCCESS"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "This is the flattest of the seven and the most useful to have seen. Every objective holds, the error budget is untouched, and a proportion of customers cannot use the bank. The decision to count a refusal as success is right and is argued in the objective's own rationale; what it costs is that availability alone cannot distinguish a working estate from a throttled one, and only the refusal signal beside it can."
+    },
+    {
+      "scenarioId": "SCN-POOL-EXHAUSTION",
+      "title": "Every transfer queues for a connection that is not free",
+      "condition": "pool-exhaustion",
+      "target": "postgresql",
+      "mechanism": "The injector opens a session on the database container and holds the declared lock on the declared table for the window, then rolls back. Writers block inside the ledger while holding a pooled connection, so the pool drains from the inside rather than from a changed pool size - the ledger's Hikari configuration is not touched.",
+      "startsAtMinute": 900,
+      "holdsForMinutes": 30,
+      "parameters": {
+        "lockMode": "SHARE",
+        "lockTable": "balance"
+      },
+      "movesObjectives": [
+        "SLO-LEDGER-POOL-HEADROOM",
+        "SLO-LEDGER-POSTING-LATENCY"
+      ],
+      "flatObjectives": [
+        "SLO-LEDGER-MOVEMENT-SUCCESS"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "`SLO-LEDGER-POOL-HEADROOM` is stated as the earliest of the ledger's four objectives to break, before latency moves and long before anything fails. This condition is the test of that ordering, and the order the two move in is the finding rather than the fact that they moved. SHARE rather than ACCESS EXCLUSIVE is deliberate: readers keep passing, so the ledger stays visibly alive and the signature is a queue rather than an outage, which is the harder one to recognise."
+    },
+    {
+      "scenarioId": "SCN-CLOCK-SKEW",
+      "title": "The two sides of the cut-off disagree about which day it is",
+      "condition": "clock-skew",
+      "target": "recon",
+      "mechanism": "The fixture offsets the business date the driver executes against the date the estate is stamping, by the declared number of minutes, so a transfer lands on one side of the batch boundary and is accounted for on the other. Skewing the estate's own clock instead was refused: PostgreSQL stamps the value date from its own `now()`, and moving that would mean granting a container SYS_TIME on a shared kernel or building a faketime shim into the image, both of which are changes to the estate rather than to the fixture.",
+      "startsAtMinute": 960,
+      "holdsForMinutes": 120,
+      "parameters": {
+        "skewMinutes": 120
+      },
+      "movesObjectives": [],
+      "movesNothingBecause": "The two objectives a boundary disagreement would break belong to `recon` and `reporting`, and both are batch jobs that do not run inside a compressed nine-hour window - F-77's remaining half. Their metrics go to a node_exporter textfile rather than to anything a run scrapes, so a report over this run answers `nothing happened` for both no matter what the skew did.",
+      "flatObjectives": [
+        "SLO-RECON-CONTROL-RUNS",
+        "SLO-RECON-ACCOUNTS-AGREE",
+        "SLO-REPORTING-RUN-DURATION"
+      ],
+      "introducedBy": "WP-24a",
+      "rationale": "ADR 0015 defines the cut-off as the set of transfer references in the movement file rather than as a time of day, precisely so that a clock disagreement cannot silently move the boundary. This condition exercises the claim from the other side: a skew that would break a timestamp-based cut-off should leave a reference-based one intact. That it cannot be observed inside a compressed window is the second finding, and the one that says what closing the rest of F-77 is worth."
+    }
+  ]
+}
