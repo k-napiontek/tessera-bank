@@ -1,0 +1,9 @@
+== The constraint under load ==
+
+  movement records                    48046
+  distinct transfers in the file      24023
+  transfers the system of record has  24023
+  in the file, not in the master      0
+  in the master, not yet in the file  0
+
+OK    every transfer in the movement file was accepted by the system of record first.

@@ -1,0 +1,51 @@
+== Conditions ==
+
+  machine       darwin arm64, 10 cores, go1.25.6
+  endpoint      http://localhost:18080/customer-master/services/CustomerMasterService
+  business date 2026-03-02
+  population    8000 customers, 16001 accounts
+  dials         scale 0.002, 720x, seed 42
+  transport     1 partition(s), listener concurrency 1, relay 100 rows / 500 ms
+
+== The hop ==
+
+  crossed to stratum 0    24023
+  already in the file     0
+  redelivered (transient) 0
+  dead-lettered           0
+  peak consumer lag       7983
+  closing consumer lag    0
+
+== The three legs ==
+
+  leg          count    mean ms     p95 ms     max ms
+  file         24023        8.2       15.0       38.0
+  inbound      24022        2.9        5.0      199.0
+  service      24022       11.0       18.0      200.0
+
+  file: measured directly between two logged instants: the movement-file append, its de-duplication scan over every record already there, and the fsync
+  inbound: a difference, not a measurement - nothing is logged when a message is picked up. It holds the poll, the XSLT transform, the schema validation, the JAXB unmarshal and the SOAP call, so it is not the SOAP call alone
+  service: one crossing to the next: what the hop takes per transfer end to end, whose reciprocal is its throughput
+
+== What it cost across the day ==
+
+  transfers             file ms     service ms   per second
+  1-2402                    1.1            5.9        169.5
+  2403-4804                 2.6            5.9        169.5
+  4805-7206                 4.3            7.0        142.9
+  7207-9608                 5.9            8.5        117.6
+  9609-12010                7.6           10.3         97.1
+  12011-14412               9.3           12.2         82.0
+  14413-16814              10.4           12.7         78.7
+  16815-19216              11.9           14.3         69.9
+  19217-21618              13.5           16.0         62.5
+  21619-24023              15.0           17.6         56.8
+
+== What the hop shows ==
+
+  A backlog of 7983 formed and drained. The hop kept up in the end; what it cost to
+  do so is the service leg below.
+
+  Appending to the movement file got 13.6x dearer between the first slice of the day
+  and the last. The writer scans every record already in the file before it appends,
+  so the cost of writing transfer n is proportional to n.

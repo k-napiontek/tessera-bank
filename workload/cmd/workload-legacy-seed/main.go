@@ -33,6 +33,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 )
 
 // The constant that fills the columns a 2011 core will not accept as null. Not a name: a marker.
@@ -58,6 +59,30 @@ type header struct {
 	Kind         string `json:"kind"`
 	From         string `json:"from"`
 	BaseCurrency string `json:"baseCurrency"`
+}
+
+// openingDate is the day before the stream's first business date, and it is the date this fixture
+// opens every account and onboards every customer on.
+//
+// **WP-25d found out why it has to be.** internal/client.Fund dates the opening credit the day
+// before the run - F-103's rule, and the one services/ledger-loader already follows in
+// Header.openingDate: an opening balance is the position the day starts from rather than part of it.
+// legacy/customer-master's schema then declares
+//
+//	CONSTRAINT account_movement_ck CHECK (last_movement_date IS NULL OR last_movement_date >= opened_date)
+//
+// so an account opened on the business date cannot receive its own opening balance. Both rules are
+// right on their own and they are jointly impossible, and nothing had ever run them against each
+// other: the four-era hop refused every funding posting ORA-02290 and retried it for ever.
+//
+// Parsed rather than computed with time, because internal/purity forbids this module's engine the
+// clock and there is no reason for a renderer to read one either - the date arrives in the stream.
+func (h header) openingDate() (string, error) {
+	day, err := time.Parse("2006-01-02", h.From)
+	if err != nil {
+		return "", fmt.Errorf("the population header carries no usable business date (%q): %w", h.From, err)
+	}
+	return day.AddDate(0, 0, -1).Format("2006-01-02"), nil
 }
 
 type open struct {
@@ -134,11 +159,17 @@ func emit(out *bufio.Writer, line []byte, head *header, customers map[string]boo
 		if err := json.Unmarshal([]byte(trimmed), &record); err != nil {
 			return err
 		}
+		// Refused rather than rendered as DATE '', which sqlplus rejects with a message about a
+		// date format three steps from the cause.
+		opened, err := head.openingDate()
+		if err != nil {
+			return err
+		}
 		if !customers[record.CustomerRef] {
 			customers[record.CustomerRef] = true
-			writeCustomer(out, record.CustomerRef, len(customers), head.From)
+			writeCustomer(out, record.CustomerRef, len(customers), opened)
 		}
-		writeAccount(out, record, head)
+		writeAccount(out, record, head, opened)
 		*accounts++
 	}
 	return nil
@@ -159,7 +190,7 @@ func writeCustomer(out *bufio.Writer, ref string, ordinal int, onboarded string)
 		ref, markerName, markerName, markerBirth, markerIDPrefix, ordinal, onboarded)
 }
 
-func writeAccount(out *bufio.Writer, record open, head *header) {
+func writeAccount(out *bufio.Writer, record open, head *header, opened string) {
 	balance := openingBalance
 	if record.Treasury {
 		balance = 0
@@ -167,5 +198,5 @@ func writeAccount(out *bufio.Writer, record open, head *header) {
 	fmt.Fprintf(out,
 		"INSERT INTO account (account_ref, customer_ref, account_type, currency, status, booked_balance, opened_date) "+
 			"VALUES ('%s', '%s', '%s', '%s', 'OPEN', %d, DATE '%s');\n",
-		record.AccountRef, record.CustomerRef, record.AccountType, head.BaseCurrency, balance, head.From)
+		record.AccountRef, record.CustomerRef, record.AccountType, head.BaseCurrency, balance, opened)
 }
