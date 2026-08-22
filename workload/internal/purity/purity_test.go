@@ -96,6 +96,11 @@ var driver = []string{
 	// the model bytes - but it is classified by role rather than by purity, like internal/reconcile
 	// beside it: both read what a run produced, and neither describes what a bank's day looks like.
 	"internal/slo",
+	// WP-25b. It posts SOAP envelopes to Tomcat 8.5, so it fails the engine list on its imports the
+	// way internal/proxy and internal/migration do. It is also the point this boundary was drawn
+	// for: WP-20's comment above says two drivers can share one model precisely because the model
+	// cannot open a socket, and this is the second driver arriving to prove it.
+	"internal/soap",
 }
 
 // cmd is a main rather than a library: it reads the model from a path, writes a manifest to one,
