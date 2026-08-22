@@ -812,6 +812,135 @@ is the control that finding produced.
   filling the columns with a marker, because the 2011 schema requires an identity (**F-99**), and
   `legacy-up.sh` cannot ask Tomcat what its pools are actually doing, because the WAR exposes no
   metrics at all (**F-100**).
+- **F-98 is closed and two more defects were found closing it.** The opening balance travels with the
+  day; the emitter draws the date the driver draws (**F-102**); and a driven day is dated by the day
+  it drives rather than by the machine's clock (**F-103**). All three were invisible until something
+  compared the ledger against a stratum-0 master, and each on its own made the reconciliation useless.
+- **The two cores agree, at eighty thousand accounts and zero tolerance.** 80 001 compared, 80 001
+  matched, total absolute drift zero.
+- **Two new findings.** A capture and a reversal cannot be dated by their caller at all, so the
+  reconciliation agreed about them only because the business date was in the past (**F-104**), and
+  stratum 0's `ACCT-BOOKED-BAL` caps the master at 99 999 accounts at the opening figure the model
+  implies (**F-101**).
+
+## 11. One day, both phases, and a reconciliation that matched every account
+
+Every measurement in sections 1 to 10 stops at a boundary. The online day stops at the edge; the
+batch window stops at the movement file; the SOAP ladder stops at Tomcat. This one crosses: the
+online phase runs against the live estate, the cut-off ends it, the COBOL cycle applies the same day
+to the account master, and `batch/recon` compares the master that cycle produced against the ledger
+that fed it. It is the first run in this repository where the two cores are held against each other
+under a day's worth of load rather than under the single transfer WP-16 built the control with.
+
+> One business day driven end to end by `workload/scripts/two-phase-day.sh`. 40 000 customers,
+> **80 001 accounts**, scale 0.002, 720x, seed 42, business date 2026-03-02 reconciled on 2026-03-03.
+> darwin arm64, 10 cores. PostgreSQL 16, GnuCOBOL, JDK 17. Captured in
+> [`two-phase-day/`](../../workload/baselines/two-phase-day/).
+
+### What the run did
+
+| Phase | Window | What happened | Elapsed |
+|---|---|---|---|
+| Seeding | before the day | 80 001 accounts opened, 80 000 funded, 0 replayed | 4 min 21 s |
+| Online | minute 0 to 1 200 | 44 767 scheduled, 44 762 sent, 12 007 money movements, 0 failed | 1 min 40 s |
+| Movement file | at the cut-off | 10 877 transfers as 21 754 records, 80 001 master records | - |
+| `STEP010` SORT | overnight-batch | 21 754 movements into account-reference order | 0.037 s |
+| `STEP020` ACCTPOST | overnight-batch | 21 754 read, **21 754 applied, 0 rejected**, BALANCED | 0.465 s |
+| `STEP030` SORT | overnight-batch | 80 001 records into currency order | 0.057 s |
+| `STEP040` EODREPT | overnight-batch | 80 001 accounts, 1 currency, 0 rejected, BALANCED | 0.411 s |
+| `recon` | morning-reconciliation | **80 001 compared, 80 001 matched, 0 broken** | - |
+
+**Total absolute drift: zero minor units.** Not one account of eighty thousand disagreed, and the
+break report is committed with an empty `breaks` array rather than summarised.
+
+**A run that reconciles exactly is a stronger claim than one that was made to**, and it is worth
+saying what was *not* done to get it: no tolerance, no window, no account excluded, and the
+comparison is the real `compare` against a master a real `ACCTPOST` wrote. `batch/recon` sums
+balances from postings rather than reading the `balance` table, so the figure it checked is not the
+ledger's own cache of the answer.
+
+### Three defects stood between the two halves, and each one made the control useless
+
+None of them was visible until something compared the two sides. Each produced a reconciliation that
+ran, exited 0, and measured nothing.
+
+**F-98 - three components, three opening balances.** The driver funded twenty times the largest
+transfer the model can draw, `services/ledger-loader` loaded two hundred times a cohort median, and
+`mainframe/data/generate.py` wrote a constant. The stream carried none of them, so nothing built from
+it could agree with the driver about a single account. The figure now travels in the header as
+`openingBalanceMinor` and every consumer reads it.
+
+**F-102 - the two halves drew different days from the same seed.** `internal/dataset` derives a
+per-date seed so that a year of dates does not give one small cast of accounts every day's history;
+`cmd/workload-run` drives one date and draws it from the run seed itself. Pointed at the same date
+they disagree about every event in it, and the first run that compared them said so out loud: the
+driver scheduled **17 658** actions and the stream, bounded identically, drew **17 871**. Neither
+number was wrong. They were different days. `--driver-seed` makes the emitter draw the date the way
+the driver draws it, and the counts then agree exactly.
+
+**F-103 - a driven day was dated by the machine's clock.** The ledger defaults `valueDate` to
+`LocalDate.now` when a request omits one, and this driver omitted it while already holding the
+business date it mints references and idempotency keys from. A run of 2026-03-02 therefore wrote
+journal entries dated **2026-08-22**, and a reconciliation asking the ledger for the business date's
+postings got *none of them* - 80 001 accounts, every one `VALUE_DRIFT`, total drift 200 000 000 000
+000 minor units, which is the whole bank. The field is in `contracts/openapi/ledger-core.yaml`
+already, optional, described as *"defaults to the current business date when omitted"*. Nothing had
+to change but the sending of it. Seeding is dated the day **before** the run, which is the rule
+`services/ledger-loader` already follows in `Header.openingDate`: an opening balance is the position
+the day starts from, not part of it.
+
+### The arithmetic closes, and the part that does not reach stratum 0 is the interesting part
+
+The driver posted **12 007** money movements and the movement file carries **10 877** transfers. The
+difference is not a loss, and the ledger accounts for all of it:
+
+| | Count | Reaches the movement file |
+|---|---:|---|
+| `createTransfer` | 10 877 | yes, two legs each |
+| `placeHold` | 603 | no - reserves, posts nothing |
+| `releaseHold` | 355 | no - releases, posts nothing |
+| `captureHold` | 161 | **no, and it posts** |
+| `reverseTransfer` | 11 | **no, and it posts** |
+| **Total** | **12 007** | |
+
+`MOVEREC` has one shape - a debit and a credit sharing a transfer reference - so a hold transition
+has no record to be written as, and `generate.py` counts each rather than dropping it. That is
+correct and deliberate. But **172 of those movements did post to the ledger and never reached the
+master**, and the reconciliation agreed anyway. That is ADR 0015's two-figure design working: a
+posting counts towards what the master *ought* to hold only when its reference is in the movement
+file or its value date precedes the business date, so a capture is timing rather than drift.
+
+### The reconciliation agreed about the captures for the wrong reason
+
+**F-104.** `CaptureRequest` and `ReversalRequest` declare no `valueDate` and are both
+`additionalProperties: false`, so a caller *cannot* date them - F-103 was only fixable for transfers
+and funding. The 161 captures and 11 reversals therefore carry the ledger's own clock, 2026-08-22,
+and the reconciliation excluded them from **both** of its figures because its query bounds everything
+at `value_date <= business_date`. They agreed because the business date is in the past. Drive a
+business date later than today - which nothing forbids and `--date` makes trivial - and the same 172
+entries land inside the bound on one side only, and read as drift. The exercise measured the good
+case; the bad one is one flag away.
+
+### What stratum 0 costs when the population is capped by its own record
+
+**F-101.** The treasury carries one leg of every funding, so its balance is the account count times
+the opening figure, and `ACCT-BOOKED-BAL` is `PIC S9(13)V99 COMP-3` - fifteen digits. At
+`seeding.Opening`'s figure of 10 000 000 000 minor units the master tops out at **99 999 accounts**:
+
+| Accounts | Treasury contra | Fits `S9(13)V99` |
+|---:|---:|---|
+| 99 999 | 999 990 000 000 000 | yes |
+| 100 000 | 1 000 000 000 000 000 | **no** |
+| 400 000 | 4 000 000 000 000 000 | **no** - WP-25a's low volume |
+| 2 400 001 | 24 000 010 000 000 000 | **no** - WP-25a's top volume |
+
+No per-account figure derived from the largest drawable transfer fits at the top volume at all: 2.4
+million accounts leave **4 166.66** each, which is a thousandth of the 5 000 000.00 a corporate
+transfer can draw. **The model's amount distribution and a 1995 record's field width are coupled, and
+nothing in this repository declared it.** `generate.py` now refuses past the ceiling naming the
+arithmetic rather than letting `encode_comp3` raise eight frames down with an integer, and
+`batch-window.sh` passes `--opening-balance` so WP-25a's three volumes stay reproducible - reported
+as a substitution on every run that makes it, the way currency substitutions already are under F-72.
 
 ## Reproducing
 
@@ -838,6 +967,9 @@ bash workload/scripts/signatures.sh --baseline with-broker
 bash workload/scripts/migration.sh --baseline with-broker --variant both
 
 bash workload/scripts/soak.sh --days 12
+
+# One day, both phases, and the reconciliation between them.
+bash workload/scripts/two-phase-day.sh
 ```
 
 All of them need Docker, a JDK 17 and Go; every one from the baselines down also needs uv,

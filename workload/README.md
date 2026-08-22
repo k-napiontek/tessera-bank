@@ -215,6 +215,33 @@ cycle's memory from the writer's - the writer needs 5.6 GiB to prepare a day the
 `workload/baselines/batch-window/` carries the capture: 2 429 346 movements against 2 400 001
 accounts in 9.251 s, nothing rejected. `estate-under-load.md` section 8 reads it.
 
+## Both phases of one day, and the reconciliation between them
+
+Everything above measures one tier at a time. This crosses the online/batch boundary:
+
+```bash
+bash workload/scripts/two-phase-day.sh
+```
+
+The online day against the live estate, stopped at the `online-cut-off` instant the day contract
+declares at minute 1 200; the same day written as stratum-0 files and applied by the real cycle in
+`overnight-batch`; then `batch/recon` in `morning-reconciliation` on the next business date,
+comparing the master that cycle produced against the ledger that fed it.
+
+**Three things have to agree before a break means anything**, and each was a defect until WP-25c:
+one opening balance, carried in the stream's header (F-98); one account set, which is what
+`--seed-population` is for; and one day, which is what `--driver-seed` is for - the emitter derives a
+per-date seed and the driver does not, so pointed at the same date they drew different days (F-102).
+A fourth, F-103, is why the driver now sends the business date as `valueDate` instead of letting the
+ledger stamp the machine's clock.
+
+**The population is capped by a 1995 record.** The treasury carries one leg of every funding and
+`ACCT-BOOKED-BAL` is `PIC S9(13)V99 COMP-3`, so at the opening figure the model implies the master
+tops out at 99 999 accounts - F-101. `generate.py` refuses past it and names the arithmetic.
+
+`workload/baselines/two-phase-day/` carries the capture: 80 001 compared, 80 001 matched, zero drift.
+`estate-under-load.md` section 11 reads it.
+
 ## Driving stratum 1
 
 The 2011 tier has no REST and no queue: it is a JAX-WS endpoint on Tomcat 8.5 in front of Oracle, and

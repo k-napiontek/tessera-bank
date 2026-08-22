@@ -223,6 +223,20 @@ rather than one over the other, each stating its own conditions, exactly as `spi
 `with-broker/` are - two captures that do not state their conditions cannot be compared, and comparing
 them anyway is how a team concludes a regression exists.
 
+## What `two-phase-day/` is
+
+The one capture in this directory that is not a measurement of a component. It is a **control
+record**: the online day, the cut-off, the overnight cycle and the reconciliation between them, run
+in sequence at 40 000 customers and 80 001 accounts.
+
+`BREAKS-20260302.json` is committed with an empty `breaks` array - 80 001 compared, 80 001 matched,
+zero absolute drift - beside `online.log`, `generate.txt` and `cycle.txt`, which are the three phases
+that produced it. A break report is evidence of what the two cores held at one audit position, and
+summarising it would leave nothing to check the claim against.
+
+**A break is not a failure.** `batch/recon` exits 0 when it finds breaks; the empty array here says
+this particular day did not disagree, not that a disagreement would have gone unreported.
+
 ## What they show
 
 The interpretation, with the numbers and what they mean, is in
