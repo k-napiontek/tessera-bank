@@ -204,13 +204,19 @@ class MovementRecordTest {
      *
      * <p>The expected record is found by its transfer reference and leg rather than by position, so
      * this fails with something legible if the generator's ordering ever changes.
+     *
+     * <p>WP-25a changed which account and currency this transfer was drawn on, when it closed F-18,
+     * and this test is what caught it - a stratum-2 test pinned byte-for-byte to what a stratum-0
+     * generator writes. The literals below are re-read from the regenerated file. The pin is now
+     * stronger than it was: the record is EUR rather than PLN, so the encoder is held to a currency
+     * that is not the base one.
      */
     @Test
     void aRecordMatchesOneTheGeneratorWroteByteForByte() throws Exception {
         byte[] fromTheGenerator = recordOf("TB202608170000000020", "02");
 
-        byte[] built = MovementRecord.of("TB202608170000000020", 2, "TB00000000000002",
-                "CREDIT", "PLN", 1_163_074L, "20260817", "20260817091500",
+        byte[] built = MovementRecord.of("TB202608170000000020", 2, "TB00000000000098",
+                "CREDIT", "EUR", 181_986L, "20260817", "20260817091500",
                 "TRANSFER 20260817 SEQ 000020");
 
         assertArrayEquals(fromTheGenerator, built,

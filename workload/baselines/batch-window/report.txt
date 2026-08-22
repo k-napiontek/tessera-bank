@@ -1,0 +1,42 @@
+== The batch window ==
+  business date 2026-03-02, model tessera-day-v1.json, seed 42
+  darwin arm64, 10 cores, commit 18291ec
+
+-- 400001 accounts, 243292 movements   (customers 200000, scale 0.02)
+   applied 243292, rejected 0, currency substituted 9294
+   STEP010    0.102s   SORT     movements into account sequence
+   STEP020    1.184s   ACCTPOST match-merge, streams
+   STEP030    0.171s   SORT     new master into report sequence
+   STEP040    0.666s   EODREPT  the printed report
+   WINDOW     2.123s   of which the sort stand-in 13%
+   peak RSS  cycle 0.19 GiB, writer 1.26 GiB
+
+-- 1200001 accounts, 729776 movements   (customers 600000, scale 0.06)
+   applied 729776, rejected 0, currency substituted 27848
+   STEP010    0.250s   SORT     movements into account sequence
+   STEP020    2.450s   ACCTPOST match-merge, streams
+   STEP030    0.442s   SORT     new master into report sequence
+   STEP040    1.308s   EODREPT  the printed report
+   WINDOW     4.450s   of which the sort stand-in 16%
+   peak RSS  cycle 0.52 GiB, writer 3.70 GiB
+
+-- 2400001 accounts, 2429346 movements   (customers 1200000, scale 0.2)
+   applied 2429346, rejected 0, currency substituted 92872
+   STEP010    0.783s   SORT     movements into account sequence
+   STEP020    5.402s   ACCTPOST match-merge, streams
+   STEP030    0.847s   SORT     new master into report sequence
+   STEP040    2.219s   EODREPT  the printed report
+   WINDOW     9.251s   of which the sort stand-in 18%
+   peak RSS  cycle 1.02 GiB, writer 5.63 GiB
+
+== What the sorts cost, which is a property of this stand-in and not of the tier ==
+  STEP010 and STEP030 are sortrec.py, which reads the whole file into a list. DFSORT
+  spills to work datasets and does not. STEP020 is ACCTPOST, which match-merges two
+  sorted files in one pass and never holds the master in memory - the property the tier
+  exists to demonstrate. Read the two apart.
+
+  The writer figure is this fixture's own ceiling and not the cycle's: generate.py
+  --from-stream holds the whole day as Python objects before it writes a byte. It is
+  reported because it is what decides how large a day can be prepared on a given
+  machine, and it is the larger of the two.
+

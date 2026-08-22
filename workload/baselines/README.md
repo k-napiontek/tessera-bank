@@ -191,6 +191,24 @@ is that every file in it is evidence of something.
 Produced by [`../scripts/migration.sh`](../scripts/migration.sh) and
 [`../scripts/soak.sh`](../scripts/soak.sh). Both are captured by WP-24b.
 
+## What `batch-window/` is, and why it has no manifest
+
+`batch-window/` is stratum 0 and shares nothing with the captures above. There is no run manifest, no
+scrape pair and no SLO report, because there is no estate: the cycle is four programs over two files,
+started and finished before anything could be scraped. What is committed is the **job log of each
+run** - `cycle-<customers>.txt`, carrying `ACCTPOST`'s own control totals and the elapsed time each
+step reported - and the **generator's own accounting**, `generate-<customers>.txt`, which says how
+many of the stream's actions became movements and why the rest did not.
+
+`report.txt` is derived from those and nothing else, which is why they are committed rather than
+summarised. The three volumes are customers:scale pairs, both dials moving together because the
+master scales with one and the movement file with the other; the top point is the model's whole
+declared population.
+
+Two numbers on that page are properties of this fixture rather than of the tier, and the report says
+so on its own last lines: the share of the window spent in `sortrec.py`, which holds files in memory
+where DFSORT spills to work datasets, and the writer's peak memory, which is larger than the cycle's.
+
 ## What they show
 
 The interpretation, with the numbers and what they mean, is in

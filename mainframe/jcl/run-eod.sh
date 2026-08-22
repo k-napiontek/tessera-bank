@@ -66,7 +66,16 @@ abend() {
     exit "$2"
 }
 
+# A real job log reports elapsed time per step; SMF records it and an operator reads it. This is
+# that. python3 rather than $EPOCHREALTIME because the shell here is bash 3.2, and the cycle already
+# depends on python3 for sortrec.py. The ~20 ms the subprocess costs falls outside the step it
+# brackets, so a step's own figure does not carry it.
+now() {
+    python3 -c 'import time; print("%.3f" % time.time())'
+}
+
 step_banner() {
+    STEP_STARTED_AT="$(now)"
     echo
     echo "-- $1 $2  $3"
 }
@@ -74,7 +83,10 @@ step_banner() {
 # JCL runs a step only when the ones before it ended clean. This is that, in shell.
 check_rc() {
     local step="$1" rc="$2"
-    echo "   $step RC=$rc"
+    local ended elapsed
+    ended="$(now)"
+    elapsed="$(awk -v a="$STEP_STARTED_AT" -v b="$ended" 'BEGIN { printf "%.3f", b - a }')"
+    echo "   $step RC=$rc  elapsed ${elapsed}s"
     [ "$rc" -eq 0 ] || abend "$step RC=$rc  the cycle stopped, no later step ran" "$rc"
 }
 

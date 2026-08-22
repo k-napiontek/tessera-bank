@@ -1,0 +1,9 @@
+2026-03-02 from TB-WORKLOAD-DAY-V1 seed 42
+  /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T/tessera-batch-window/1200000/ACCTMAST.DAT    2400001 records x 100 = 240000100 bytes
+  /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T/tessera-batch-window/1200000/MOVEMENT.DAT    2429346 records x 120 = 291521520 bytes
+  actions offered       4966982
+  transfers written     1214673  (two legs each)
+  not a movement        3752239  reads, holds and reversals
+  unknown account             0
+  would overdraw             70
+  currency substituted    92872  posted in PLN rather than the currency drawn - F-72

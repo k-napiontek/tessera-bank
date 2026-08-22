@@ -9,6 +9,76 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-25a is done and merged** ([#78](https://github.com/k-napiontek/tessera-bank/pull/78), `PENDING`),
+> and **stratum 0 has finally been given a day worth running.** Every measurement in this repository
+> until now was of the modern spine; this one is the 1995 core, driven by files and nothing else,
+> over a day the same WP-20 model drew. WP-25 was split into 25a and 25b when it was detailed and
+> into a third half, **WP-25c**, during execution - see the decision below.
+>
+> **The next actionable packages are WP-25b, WP-25c and WP-18.** 25b carries a detailed task list;
+> 25c's was written when it was split out; WP-18 alone still carries frame only.
+>
+> **F-18 is closed after nineteen packages, and it was worse than a defect - it was a measurement of
+> the wrong path.** `build_movements` hard-coded `PLN` on both legs while `build_master` drew from
+> five currencies, and movements were drawn without regard to account status, so **162 of 302
+> movements rejected and 140 posted**. Every rejection was correct; what was wrong is what the file
+> exercised. 111 `R003` currency mismatches and 48 `R002` closed accounts meant the cycle's happy
+> path was thinly covered on real data and **multi-currency posting was never exercised at all, on
+> any run, in any package**. The same file now posts **300 of 302**, and the two that remain are the
+> deliberate fixtures WP-04 proves `R001` and `R004` with.
+>
+> **The test that proves it does not need a COBOL compiler, and it earned that trust on the failing
+> case first.** `predict_rejects` reimplements `ACCTPOST`'s validation in the order the program
+> documents, and against the **old** generator it returned 162 rejects with exactly the breakdown
+> `REJECTS.DAT` contained - `R003` 111, `R002` 48, and one each of `R001`, `R004` and `R005` - before
+> anything was changed. A model that agrees with the real program on the failing case is worth
+> trusting on the passing one. The real cycle then confirmed it.
+>
+> **Closing it failed a build two strata away.** `esb-adapter`'s `MovementRecordTest` holds its Java
+> COMP-3 encoder against a record `mainframe/data/comp3.py` actually wrote, found by transfer
+> reference and leg - deliberately the strongest check available, and it did its job, failing at byte
+> 36 with a legible message because transfer 20 was drawn onto a different account. Nothing anywhere
+> declares that coupling, so the first sign is a red build in a tier the change never touched.
+> **F-96.** The pin is now stronger than it was: the record is **EUR rather than PLN**, so the
+> encoder is held to a non-base currency for the first time.
+>
+> **The overnight cycle has a number, and it is not the one an operator would fear.** At the model's
+> **whole declared population** - 1.2 million customers, 2 400 001 accounts - the cycle posts a
+> **2 429 346-movement day in 9.251 seconds and refuses nothing**. Ten times the movements costs 4.4
+> times the window rather than ten, because much of the small figure is fixed cost; between the
+> middle and top points the marginal cost converges on linear.
+>
+> **`ACCTPOST` is 57% of the window at every volume and it is the step that cannot run out of
+> memory.** It match-merges two sorted files in one pass and never holds the master - the property
+> the tier exists to demonstrate, and the one `CLAUDE.md` keeps a trap entry about. The sorts are the
+> opposite: `sortrec.py` is the local stand-in for DFSORT and reads the whole file into a list, its
+> share climbing 13% to 18% across the three volumes. Neither figure transfers to a mainframe, and
+> the report says which is which rather than leaving it to be inferred.
+>
+> **The ceiling turned out to be the fixture rather than the cycle.** The writer needs **5.63 GiB**
+> to prepare a day the cycle then runs in **1.02 GiB** - `generate.py --from-stream` holds the whole
+> day as Python objects before it writes a byte. Both figures are on the report, separated, because a
+> single number would have been read as the cycle's. **F-97**; the fix is a streaming writer, and
+> nothing needed one until this measurement existed.
+>
+> **What the file does not represent is stated on every run.** 92 872 of 2 429 346 movements were
+> posted in `PLN` rather than the currency drawn - 3.8% - because the stream carries a currency on
+> every action and none on any account. Every account opens in the base currency and each
+> substitution is counted, which is **F-72**'s convention one stratum down rather than a second
+> answer invented here. Transfers written, reads and holds that are not movements, unknown accounts
+> and debits that would have overdrawn are all counted too: a file that omits without saying so is a
+> file whose totals cannot be checked.
+>
+> **The two-phase run moved into WP-25c rather than being forced.** For `batch/recon` to compare the
+> COBOL master against the ledger both must start from the same opening balances; the driver funds
+> with `seeding.Opening` and **the dataset stream does not carry that figure** (**F-98**). Adding it
+> changes the wire format `services/ledger-loader` also reads - WP-20's and WP-22's ground. Without
+> it the reconciliation breaks on every account and measures nothing, which is this repository's
+> named failure mode wearing a batch costume.
+>
+> **`REQ-PERF-008` is `Partially met` and the matrix says which third.** The requirement is *every*
+> stratum at volume; this is stratum 0. Strata 1 and 2 are WP-25b, which is not built.
+>
 > **WP-24b is done and merged** ([#75](https://github.com/k-napiontek/tessera-bank/pull/75), `0897d63`),
 > and **the estate has been changed while money was moving through it.** WP-21 put it under load,
 > WP-22 gave it a production-shaped database, WP-23 declared what good looks like, WP-24a and WP-24c
@@ -17,8 +87,6 @@ Updated by the executing session at the start and end of every work package, per
 > out of `pg_locks` **while it is held**, and what it cost is read from the customer's side rather
 > than from the database's. `master-plan.md` names *"schema migration under load"* as a reason this
 > repository exists; this is the first change here that makes the phrase true.
->
-> **The next actionable packages are WP-25 and WP-18, and both carry frame only.**
 >
 > **The same index was built twice and the only difference is one keyword.** 338 052 accounts,
 > 6 616 226 postings, scale 0.002, 720x, seed 42, applied at the same point in the same day - once
@@ -708,7 +776,8 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `27d843d` |
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Done` | [#75](https://github.com/k-napiontek/tessera-bank/pull/75) | `0897d63` |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
-| [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the two-phase day | 0 | 21, 05 | `Not started` | | |
+| [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `PENDING` |
+| [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Not started` | | |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP and event volume against the older strata | 1/2 | 21, 10b, 11b | `Not started` | | |
 
 ## Critical path
@@ -728,7 +797,7 @@ The workload strand hangs off the contracts, not off the ledger:
 02 -> 20 -----+        +-> 23 -> 24a -----+
               +-> 22 --+                  +-> 24c
               |
-              +-> 25a  (also needs 05)
+              +-> 25a  (also needs 05) -> 25c
               |
               +-> 25b  (also needs 10b, 11b)
 ```
@@ -767,7 +836,7 @@ becomes its own change when picked up.
 | F-15 | WP-03 | The task list said to add the GnuCOBOL prerequisite to `docs/consuming-this-repo.md`. That document is still a stub owned by WP-18 (F-05) and already names GnuCOBOL under "Planned contents", so filling in part of it would have widened the branch into another package's work. The concrete prerequisites and build commands went into `mainframe/README.md` instead. `consuming-this-repo.md` still needs writing. | Open |
 | F-16 | WP-04 | `mainframe/data/check-records.py` gained a `--skip-coverage` flag. Its fixture-coverage assertions - that the data contains a positive, a negative and a zero amount - are a requirement on *generated* data, not on the output of a batch run, where the account holding zero may legitimately have been moved away. The flag names which of the two jobs the tool is doing. If more tools end up serving both purposes, the split is worth making explicit rather than adding more flags. | Open |
 | F-17 | WP-01 | **Nothing stops the foundation documents going stale again.** `README.md` claimed "no application source code has been written yet" through four merged packages, and `make test` said the same, because the Definition of Done only requires a *directory* README to be updated when that directory changes - and the root README, the Makefile and the compliance banners belong to no package. Corrected in [#13](https://github.com/k-napiontek/tessera-bank/pull/13), but the gap that allowed it is still open. WP-18 should either extend the Definition of Done to cover repository-level documents or add a check that fails when they contradict `STATUS.md`. | Open |
-| F-18 | WP-05 | **The synthetic movement file rejects 54% of its records.** `build_movements` in `mainframe/data/generate.py` hard-codes `PLN` on every leg, while `build_master` draws from `["PLN","PLN","PLN","EUR","USD"]`. Every movement landing on a EUR or USD account rejects `R003`, and movements are drawn without regard to account status, so 48 more reject `R002`. On the full run 162 of 302 movements reject and only 140 post. Nothing is broken - the rejections are correct - but the cycle's happy path is thinly exercised on real data, multi-currency posting is never exercised at all, and WP-16 will inherit a master that barely moved. Fixing it means changing the generator, which is WP-03's file and outside WP-05's scope. **WP-25's detailing on 2026-08-22 assigns it: it is WP-25a's task 2, and the first thing that half does.** No package owned the fix, which is why it has stayed open through nineteen of them, and WP-25's own Constraints say the stratum-0 measurement is a measurement of the reject path until it is closed. The two deliberate reject fixtures - the JPY unsupported-scale record and the unknown-account record - stay exactly as they are, because they are what WP-04 proves the mainframe's own validation with. | Open |
+| F-18 | WP-05 **Closed by WP-25a.** **The synthetic movement file rejected 54% of its records.** `build_movements` in `mainframe/data/generate.py` hard-codes `PLN` on every leg, while `build_master` draws from `["PLN","PLN","PLN","EUR","USD"]`. Every movement landing on a EUR or USD account rejects `R003`, and movements are drawn without regard to account status, so 48 more reject `R002`. On the full run 162 of 302 movements reject and only 140 post. Nothing is broken - the rejections are correct - but the cycle's happy path is thinly exercised on real data, multi-currency posting is never exercised at all, and WP-16 will inherit a master that barely moved. Fixing it means changing the generator, which is WP-03's file and outside WP-05's scope. **WP-25's detailing on 2026-08-22 assigns it: it is WP-25a's task 2, and the first thing that half does.** No package owned the fix, which is why it has stayed open through nineteen of them, and WP-25's own Constraints say the stratum-0 measurement is a measurement of the reject path until it is closed. The two deliberate reject fixtures - the JPY unsupported-scale record and the unknown-account record - stay exactly as they are, because they are what WP-04 proves the mainframe's own validation with. **Closed: the same file now posts 300 of 302.** Both legs of a transfer share the currency of the accounts they land on, movements land only on `OPEN` accounts, and the amount is drawn against the debited account's running balance, so the file carries no debit `ACCTPOST` was always going to refuse. The real cycle confirms it - `MOVE-APPLIED 300, MOVE-REJECTED 2` where it read 140 and 162 - and multi-currency posting is exercised for the first time on any run in this repository. || **Closed** by WP-25a |
 | F-19 | WP-05 | **`0x0A` cannot occur in a COMP-3 field, but `CLAUDE.md` and `ACCTPOST.CBL` both say it can.** Every nibble of a packed field is a digit except the last, which is the sign - `C`, `D` or `F` - so the byte `0x0A` is unreachable. `0x0D` is reachable and common: any negative amount whose final digit is zero packs to a trailing `0x0D`. The conclusion those comments draw is right and the reasoning is half wrong, which is worse than either. The stronger argument is not mentioned at all: a fixed-width record is padded with `0x20`, and line sequential strips trailing spaces, so every record would lose its length. Affects the trap in `CLAUDE.md`, the comment block in `ACCTPOST.CBL` and WP-04's task list. | Open |
 | F-20 | WP-05 | **`test-acctpost.py` hides compiler warnings.** It compiles with `capture_output=True` and never inspects the result, so a `cobc -Wall` warning in `ACCTPOST.CBL` is invisible in a suite that prints thirteen lines of `PASS`. Exactly that hid an `arithmetic-osvs` warning in `EODREPT.CBL` until a compile was run by hand. `test-eodrept.py` now fails on any compiler output; `test-acctpost.py` should do the same, but it is WP-04's file. | Open |
 | F-21 | WP-07 | **`Hold.transitionTo` requires an `Instant` it never keeps.** `capture`, `release` and `expire` all demand a non-null `at`, validate it, and then construct the new `Hold` from `placedAt` - the transition instant is discarded. So a released hold cannot say when it was released, and the persistence adapter has to pass a value it knows is ignored in order to rehydrate one. Either the field should be stored on the aggregate, which is what an audit trail would want, or the parameter should go. `Hold` is WP-06's type and WP-07 must not add a persistence-shaped back door to it, so the adapter passes `placedAt` and a round-trip equality test proves the value cannot matter. WP-09 will care about this when it builds the audit chain. | **Closed** - [#24](https://github.com/k-napiontek/tessera-bank/pull/24), 2026-08-19. `Hold` now stores `transitionedAt`, migration `V6` adds the column with a `CHECK` making "null" and "still `PLACED`" the same statement, and the round-trip test asserts the value rather than proving it cannot matter. |
@@ -845,6 +914,9 @@ becomes its own change when picked up.
 | F-93 | WP-24b | **The requirement catalogue has nothing about data growth, retention or a change procedure.** WP-24b produced two deliverables that satisfy WP-24's Definition of Done and own no `REQ-*`: the soak run, which measures growth in two tables nothing prunes, and `schema-change-under-traffic.md`, the first document here describing how to apply a schema change. The nearest ids are `REQ-PERF-004` (WP-22's, query cost at cardinality), `REQ-OPS-001` (WP-05's, *every scheduled process has a runbook* - a migration is not scheduled) and `REQ-OPS-005` (WP-18's, the incident exercise). None fits, and the matrix says so rather than stretching one. For a bank whose two busiest tables are pruned by nothing and whose change procedure is unwritten, that is a gap in the catalogue rather than in the work - but adding a requirement is a governance decision for the repository owner, not something a work package should do to itself. | Open |
 | F-94 | WP-24b | **The published Flyway 9 image is `linux/amd64` only, so the migration exercise runs it emulated on arm64.** `docker run flyway/flyway:9.22.3-alpine` warns *"the requested image's platform does not match the detected host platform"* and runs under Rosetta. It affects the client rather than the database - the index is built by PostgreSQL either way - and WP-24b separates the two figures precisely so this cannot contaminate the measurement: the blocking run's whole invocation took 7.794 s of which the lock accounted for 2.25 s. But an exercise whose wall-clock figures include an emulated JVM boot is one whose *invocation* durations should not be compared against a Linux runner's. The version is pinned to 9 deliberately, to match what the ledger runs. | Open |
 | F-95 | WP-25 | **The plan promises a JMS tier and this estate has never had one.** WP-25's In scope says *"JMS volume through `integration/esb-adapter`"*, its Definition of Done said *"SOAP and JMS volume is driven"*, `integration/README.md` describes stratum 2 as *"Spring Boot 2.7.18, Spring Integration, JMS, XSLT"* and `CLAUDE.md`'s stratum table says the same. What WP-11 built is a `@KafkaListener` against `contracts/asyncapi/esb-adapter-events.yaml`; `integration/esb-adapter/pom.xml` carries `spring-kafka` and neither `spring-integration` nor any JMS client. Four documents describe the same component the same wrong way, and the one that would have caught it - a load driver told to drive JMS - is the package that has not run yet. WP-25's detailing corrects its own Definition of Done and drives Kafka, because adding a broker to stratum 2 to satisfy a sentence would be changing the estate to make it measurable, which WP-24's Constraint refused and F-85 recorded rather than worked around. **`CLAUDE.md` and `integration/README.md` are corrected here, on the repository owner's instruction**, to name Spring Kafka and the JAX-WS SOAP client rather than Spring Integration and JMS. Both belong to no package, which is the fourth occurrence of **F-17** and the reason they were wrong for two packages after WP-11 landed - a document that no Definition of Done covers is a document nothing checks. The finding stays open for that gap rather than for the wording: what is still missing is the control F-17 proposes, not the correction. Found while detailing WP-25 rather than while executing it, which is the detailing earning its keep. | Open |
+| F-96 | WP-25a | **A stratum-2 test is pinned byte-for-byte to what a stratum-0 generator writes, and nothing declares it.** `MovementRecordTest.aRecordMatchesOneTheGeneratorWroteByteForByte` reads a record out of `mainframe/data/out/MOVEMENT.DAT` and asserts `esb-adapter`'s Java COMP-3 encoder produces the same 120 bytes. That is deliberate and it is the strongest check available - two encoders in two languages held to one another through real output rather than through a shared expectation. It also means **closing F-18 in a 1995 data generator failed a 2019 integration module's build**, at byte 36, because transfer 20 was drawn onto a different account. The test did its job and said so legibly. What is missing is any statement that the coupling exists: nothing in `mainframe/data/README.md`, `integration/esb-adapter/README.md` or either package's file mentions the other, so the first sign is a red build in a tier the change never touched. The literals were re-read and the pin is now stronger - the record is EUR rather than PLN, so the encoder is held to a non-base currency for the first time. | Open |
+| F-97 | WP-25a | **The volume writer needs 5.63 GiB to prepare a day the cycle then runs in 1.02 GiB.** `generate.py --from-stream` holds the whole day as Python objects - every account, every action and every encoded record - before it writes a byte. At the model's full declared population, 1.2 million customers and 2 429 346 movements, that peaks at 5.63 GiB against the cycle's own 1.02 GiB, so **the fixture is the ceiling and stratum 0 is not**. Both figures are on the report, separated, because a single number would have been read as the cycle's. The fix is a streaming writer: the stream arrives in order and the master could be written as the `open` records pass, with only the balances held. Nothing needed one until this measurement existed, and the three committed volumes were chosen to fit under it. | Open |
+| F-98 | WP-25a | **The dataset stream does not carry the opening balance the driver funds accounts with, so nothing built from it can be reconciled against the ledger.** `seeding.Opening` funds every account with twenty times the largest transfer the model can draw, and `dataset.Header` carries the base currency, the cohorts' median amounts and the treasury references - but not that figure. A stratum-0 master written from the stream therefore opens every account at a number of its own choosing, and `batch/recon` comparing it against the ledger would report a break on every account: a reconciliation that measures nothing, which is worse than one that was not run. This is what moved WP-25a's task 5 into **WP-25c**. The fix is one additive field on the header plus a reader on each side - `services/ledger-loader` consumes the same stream - and it is WP-20's and WP-22's shared ground rather than something a stratum-0 branch should change on its way past. | Open |
 
 ---
 
@@ -995,3 +1067,5 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-22 | **F-18 is WP-25a's first task, and the overnight window is two business dates.** Two decisions the detailing settles so that the executing session cannot improvise them. F-18 has been open since WP-05 and is owned by no package - `mainframe/data/generate.py` is WP-03's file - so driving it at volume without closing it first would measure the reject path rather than the posting path, which WP-25's own Constraints say in as many words. And F-70's two candidate answers are both decisions about what a batch driver calls "a day": the run spans two business dates explicitly and names both in its report, while `workload-plan --window` goes on refusing a window that wraps midnight, because teaching one flag to mean two days is how a tool starts answering a question nobody asked it. |
 | 2026-08-22 | **WP-25 drives the transport the estate runs rather than the one the plan describes, and the gap is logged rather than closed.** Four documents - WP-25's In scope and Definition of Done, `integration/README.md` and `CLAUDE.md`'s stratum table - describe stratum 2 as carrying Spring Integration and JMS. WP-11 built a Kafka consumer and nothing else. The package corrects its own Definition of Done, drives Kafka, and records **F-95**; it does not add a broker to stratum 2, because changing the estate to make a sentence true is what WP-24's Constraint refused and **F-85** recorded instead of working around. The other three documents belong to no package, which is **F-17** for the fourth time. |
 | 2026-08-22 | **The stratum-0 volume writer opens every account in the base currency and counts the substitutions.** WP-20's stream carries a currency on every action and none on any account, and `ACCTREC` needs one. Deriving it from the actions that touch an account puts every other movement on the wrong currency and `ACCTPOST` rejects it `R003` - **F-18's failure mode reproduced through a different door**, at volume, in the run WP-25a exists to measure. WP-21 met the same problem against the ledger and **F-72** is the standing answer: open the population in the heaviest currency the model declares and count every substitution, about 8% on the committed model. 25a reuses that rather than inventing a second convention one stratum down, and reports the count beside every figure. Multi-currency posting is exercised in the committed fixture, where the master genuinely draws five currencies, rather than pretended at volume. Found while planning 25a's execution, after the task list was written and before it was merged. |
+| 2026-08-22 | **WP-25a's two-phase run moved into a third half, WP-25c, on the repository owner's instruction.** The same shape as WP-24c being split out of 24a, and for the same kind of reason: the work was not unsafe, it was **dependent on something the detailing had not seen**. `batch/recon` can only compare the COBOL master against the ledger if both start from the same opening balances, the driver funds with `seeding.Opening`, and the dataset stream does not carry that figure - **F-98**. Adding it changes the wire format `services/ledger-loader` also reads, which is WP-20's and WP-22's ground and not something a stratum-0 branch should alter in passing. The alternative was a reconciliation that breaks on every account, which is a plausible-looking run describing nothing. 25a lands its four verified tasks; 25c takes the field and the sequence. |
+| 2026-08-22 | **The batch window is measured per step, and both memory figures are reported apart.** `STEP020` is `ACCTPOST`, which match-merges two sorted files in one pass and never holds the master - the property stratum 0 exists to demonstrate, and the one `CLAUDE.md` keeps a trap entry about. `STEP010` and `STEP030` are `sortrec.py`, the local stand-in for DFSORT, which reads the whole file into a list. A single window figure would mix the tier's real property with a stand-in's ceiling and answer neither question; the same applies to memory, where the **writer's 5.63 GiB dwarfs the cycle's 1.02 GiB** and a single number would have been read as the cycle's. The report separates all four and says which are properties of this fixture rather than of the tier. |

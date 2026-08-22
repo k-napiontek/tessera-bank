@@ -555,7 +555,128 @@ and the report says so in those words rather than reporting a healthy vacuum.
 
 ---
 
-## 8. What changed because of these numbers
+## 8. The overnight cycle, and what a movement file that mostly posts is worth
+
+Every measurement above this section is of the modern spine. This one is stratum 0: the 1995 core,
+driven by files and nothing else, over a day the same WP-20 model drew.
+
+### The generator had been measuring the reject path for nineteen packages
+
+**F-18 has been open since WP-05.** `build_movements` hard-coded `PLN` on both legs while
+`build_master` drew from five currencies, and movements were drawn without regard to account status,
+so on a full run **162 of 302 movements rejected and 140 posted**. Every reject was correct. What was
+wrong is what the file exercised: 111 `R003` currency mismatches and 48 `R002` closed accounts meant
+the cycle's happy path was thinly covered on real data and **multi-currency posting was never
+exercised at all**, on any run, in any package.
+
+The same file now posts **300 of 302**, and the two that remain are the deliberate fixtures WP-04
+proves `R001` and `R004` with - an unknown account, and a JPY amount whose ISO 4217 scale of 0
+`PIC S9(13)V99` cannot represent.
+
+| Over the committed fixture, `--seed 42` | Before | After |
+|---|---:|---:|
+| Movements read | 302 | 302 |
+| **Applied** | **140** | **300** |
+| Rejected `R003`, currency mismatch | 111 | **0** |
+| Rejected `R002`, account not open | 48 | **0** |
+| Rejected `R001`/`R004`, the deliberate fixtures | 2 | 2 |
+| Rejected `R005`, debit exceeds balance | 1 | **0** |
+| Currencies in the report | 3 | 3 |
+
+The `R005` is worth its own line. A debit that would take a `LIABILITY` account below zero is
+refused, because this core has no arranged-overdraft concept at all - the master carries no limit
+field. The generator now draws the amount against the debited account's **running** balance, so the
+file stops containing debits the cycle was always going to refuse.
+
+**The test that proves this does not need a COBOL compiler.** `predict_rejects` in
+[`test_generate.py`](../../mainframe/data/test_generate.py) reimplements ACCTPOST's validation in the
+order the program documents - `R001`, `R006`, `R004`, `R002`, `R003`, `R005` - and against the old
+generator it returned **162 rejects with exactly the breakdown REJECTS.DAT contained**, before
+anything was changed. A model that agrees with the real program on the failing case is a model worth
+trusting on the passing one; the real cycle then confirmed it.
+
+### A stratum-2 test was pinned byte-for-byte to what a stratum-0 generator writes
+
+Closing F-18 broke `esb-adapter`'s build. `MovementRecordTest.aRecordMatchesOneTheGeneratorWroteByteForByte`
+holds the Java COMP-3 encoder against a record `mainframe/data/comp3.py` actually wrote, found by
+transfer reference and leg - deliberately the strongest check available, and it did its job: the draw
+changed, transfer 20 landed on a different account, and the assertion failed at byte 36 with a
+legible message.
+
+It is a **cross-stratum coupling nothing declares**. Changing a 1995 data generator fails a 2019
+integration module's build, and no document says so. The literals were re-read from the regenerated
+file and the pin is now stronger than it was - the record is **EUR rather than PLN**, so the encoder
+is held to a currency that is not the base one. **F-96**.
+
+### The window at three volumes, per step
+
+> One business date, 2026-03-02, model `TB-WORKLOAD-DAY-V1`, seed 42. A volume is customers:scale,
+> both dials moving together because the master scales with one and the movement file with the other.
+> darwin arm64, 10 cores. Captured by WP-25a in
+> [`batch-window/`](../../workload/baselines/batch-window/); every cycle log is committed beside the
+> report it was derived from.
+
+| | 400 001 accounts | 1 200 001 accounts | 2 400 001 accounts |
+|---|---:|---:|---:|
+| Movements | 243 292 | 729 776 | **2 429 346** |
+| Applied / rejected | 243 292 / **0** | 729 776 / **0** | 2 429 346 / **0** |
+| STEP010 `SORT` | 0.102 s | 0.250 s | 0.783 s |
+| **STEP020 `ACCTPOST`** | **1.184 s** | **2.450 s** | **5.402 s** |
+| STEP030 `SORT` | 0.171 s | 0.442 s | 0.847 s |
+| STEP040 `EODREPT` | 0.666 s | 1.308 s | 2.219 s |
+| **The window** | **2.123 s** | **4.450 s** | **9.251 s** |
+| of which the sort stand-in | 13% | 16% | 18% |
+| Peak RSS, the cycle | 0.19 GiB | 0.52 GiB | **1.02 GiB** |
+| Peak RSS, the writer | 1.26 GiB | 3.70 GiB | **5.63 GiB** |
+
+The top row is the model's **whole declared population** - 1.2 million customers, two accounts each -
+and the cycle posts a 2.4-million-movement day against a 2.4-million-account master in **nine and a
+quarter seconds**, refusing nothing.
+
+**Ten times the movements costs 4.4 times the window**, not ten, because a large part of the small
+figure is fixed: compiling two COBOL programs, opening files, and the per-step timing itself. Between
+the middle and top points - 3.3x the movements - the window grows 2.1x, so the marginal cost is
+converging on linear rather than staying flat. Read the top two columns for the shape and the first
+one for the floor.
+
+### The step that scales is not the step that would worry an operator
+
+`ACCTPOST` is 57% of the window at every volume and it is the step that **cannot** run out of memory:
+it match-merges two already-sorted files in one pass and never holds the master. That is the property
+the tier exists to demonstrate, and `CLAUDE.md` keeps a trap entry about the version that loads the
+master into a table - it passes every test in this repository and destroys the point of the tier.
+
+The sorts are the opposite. `sortrec.py` is the local stand-in for DFSORT and its own docstring says
+it *"reads the whole file into a list"* and that *"nothing here should be read as evidence that the
+local cycle handles a master larger than memory"*. Its share of the window climbs from 13% to 18%
+across the three points, and the cycle's memory climbs with it to **1.02 GiB**. Neither figure
+transfers to a mainframe: DFSORT spills to work datasets and sorts files far larger than the machine.
+
+### The ceiling is the fixture, not the cycle
+
+**The writer needs 5.63 GiB to prepare a day the cycle then runs in 1.02 GiB.** `generate.py
+--from-stream` holds the whole day as Python objects - every account, every action, every encoded
+record - before it writes a byte, so preparing the day costs five and a half times what running it
+does. That is what decides how large a day can be exercised on a given machine, and it is the
+fixture's own limit rather than anything about stratum 0. **F-97**; the fix is a streaming writer,
+and nothing needed one until this measurement existed.
+
+### What the file does and does not represent
+
+**92 872 of 2 429 346 movements were posted in `PLN` rather than in the currency the model drew** -
+3.8%, reported on every run. The model draws a currency per transfer from a mix of up to five and
+gives each customer two accounts, so an account has no currency of its own; the stream carries a
+currency on every action and none on any account. Every account is therefore opened in the base
+currency and each substitution is counted, which is the convention **F-72** records WP-21
+establishing against the ledger, reused rather than a second answer being invented one stratum down.
+Multi-currency posting is exercised where the master genuinely draws five currencies - the committed
+fixture, above - rather than pretended at volume.
+
+Everything the stream offered is accounted for on the run's own output: transfers written, reads and
+holds that are not movements, unknown accounts, and debits that would have overdrawn. A file that
+omits without saying so is a file whose totals cannot be checked.
+
+## 9. What changed because of these numbers
 
 - **F-69 is closed.** `workload-plan` warned above 2 000 requests a second, a round number named in
   its own comment as standing in for a figure nobody had. It is now **800**, which is where the two
@@ -583,10 +704,21 @@ and the report says so in those words rather than reporting a healthy vacuum.
 - **Four new findings.** The catalogue digest's granularity (**F-91**), no `lock_timeout` anywhere
   (**F-92**), no requirement about data growth or a change procedure (**F-93**), and the Flyway image
   being amd64-only (**F-94**).
+- **F-18 is closed after nineteen packages.** The synthetic movement file posts 300 of 302 rather
+  than 140, and multi-currency posting is exercised for the first time on any run in this repository.
+- **The overnight cycle has a number.** 2.4 million movements against a 2.4 million account master in
+  **9.25 s**, refusing nothing, with `ACCTPOST` 57% of it at every volume - the step that streams.
+- **Three new findings.** A stratum-2 test pinned to stratum-0 bytes with nothing declaring it
+  (**F-96**), the volume writer needing 5.6 GiB to prepare a day the cycle runs in 1.0 GiB
+  (**F-97**), and the dataset stream not carrying the opening balance the driver funds with, which is
+  what a reconciliation across the two would need (**F-98**).
 
 ## Reproducing
 
 ```bash
+# The batch window. No Docker and no database - stratum 0 is driven by files and files only.
+bash workload/scripts/batch-window.sh
+
 bash workload/scripts/ceiling.sh --levels 1,2,4,8,16,32,64 --duration 10s
 
 bash workload/scripts/baseline.sh --out-name spine-only \
