@@ -1,0 +1,14 @@
+-- V1 - the same index as the blocking variant, built the way that does not block writes.
+--
+-- CREATE INDEX CONCURRENTLY takes SHARE UPDATE EXCLUSIVE instead of SHARE. It does not block
+-- writers; it pays for that with two passes over the table and a wait for every transaction that
+-- could see it, so it takes longer in wall clock while costing the bank less. The pair is the point:
+-- the same index, the same table, the same traffic, and two very different answers to "what did the
+-- customer experience while it ran".
+--
+-- **This statement needs one setting that nothing about it suggests, and getting it wrong hangs
+-- rather than fails.** See workload/internal/migration/migration.go and
+-- docs/runbooks/schema-change-under-traffic.md - Flyway holds its own schema-history lock on a
+-- second connection that sits idle in transaction, and CREATE INDEX CONCURRENTLY waits for exactly
+-- such transactions to finish. The two then wait for each other, with no error and no timeout.
+CREATE INDEX CONCURRENTLY posting_exercise_ix ON posting (currency, amount_minor);

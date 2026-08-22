@@ -9,14 +9,104 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-24b is done and merged** ([#75](https://github.com/k-napiontek/tessera-bank/pull/75), `PENDING`),
+> and **the estate has been changed while money was moving through it.** WP-21 put it under load,
+> WP-22 gave it a production-shaped database, WP-23 declared what good looks like, WP-24a and WP-24c
+> broke it on purpose - and every one of them left the schema exactly where it found it. A Flyway
+> migration is now applied to a live ledger 15 s into a compressed bank day, the lock it takes is read
+> out of `pg_locks` **while it is held**, and what it cost is read from the customer's side rather
+> than from the database's. `master-plan.md` names *"schema migration under load"* as a reason this
+> repository exists; this is the first change here that makes the phrase true.
+>
+> **The next actionable packages are WP-25 and WP-18, and both carry frame only.**
+>
+> **The same index was built twice and the only difference is one keyword.** 338 052 accounts,
+> 6 616 226 postings, scale 0.002, 720x, seed 42, applied at the same point in the same day - once
+> `CREATE INDEX` and once `CREATE INDEX CONCURRENTLY`. Both runs posted **exactly 9 132** money
+> movements and both reconciled against the ledger's own count. The blocking build held `ShareLock`
+> for **2.25 s** with `RowExclusiveLock` queued behind it; the concurrent build held
+> `ShareUpdateExclusiveLock` for **3.5 s** with **nothing queued at all**. `SLO-GATEWAY-LATENCY`
+> **missed at 0.85744** over the migration window and 0.88996 over the whole day - 11.0x its error
+> budget - against **1.00000 met** for the concurrent run. Mean latency 251 ms against 5 ms, peak
+> requests in flight 2 255 against 72. `SLO-GATEWAY-AVAILABILITY` is **1.00000 in both**: the ninth
+> and tenth independent confirmation that every condition arrives at the edge as latency and never as
+> failure, which makes *"check for errors after the migration"* a step that passes while the bank is
+> unusable.
+>
+> **The safer migration is the slower one, and a team optimising for duration picks the wrong one.**
+> `CREATE INDEX CONCURRENTLY` took 56% longer to do the same work and cost the customer nothing
+> measurable. It makes two passes over the table and waits for every transaction that could see it,
+> which is precisely what buys it a lock nothing has to queue behind. The number a migration is
+> usually judged on is the number that does not matter.
+>
+> **Sixteen backends were waiting in every one of the nine samples the `ShareLock` was held** - not
+> fifteen, not seventeen, and not a number that varied. `LEDGER_DB_POOL` defaults to 16. The lock did
+> not exhaust the pool by leaking connections; it stopped every connection that touched `posting` from
+> finishing, and the pool filled behind it in under 250 ms and stayed exactly full until the lock was
+> released. The samples are committed rather than summarised, because a mean over that window reads
+> as eight.
+>
+> **The ledger's own latency objective was met while every writer in the bank was blocked**, at
+> 0.99321 with a third of its error budget spent. That is F-83's mechanism seen a second time, two
+> packages apart and for a condition that has nothing to do with the connection pool:
+> `ledger_posting_latency_seconds` times the posting the ledger performed, not the wait to get a
+> connection to perform it in. **A ledger-side latency objective is not a detector for anything that
+> blocks the ledger from being asked** - a property of the metric rather than of one scenario, and now
+> written where an operator would read it.
+>
+> **The trap this exercise found hangs rather than fails.** `CREATE INDEX CONCURRENTLY` under Flyway
+> **never returns** unless `flyway.postgresql.transactional.lock=false` is set: Flyway holds its
+> schema-history lock in an open transaction on a second connection, and the statement waits for every
+> transaction that could see the table, including that one. Neither gives up. There is no error and no
+> timeout, and the estate goes on serving normally throughout - measured here, the statement `active`
+> on `wait_event_type = Lock` with Flyway's own session `idle in transaction` beside it, until it was
+> killed. **The setting that looks like the fix is not the fix**: Flyway 9 already runs the statement
+> non-transactionally unprompted, so `executeInTransaction=false` changes nothing and is deliberately
+> not shipped. [`schema-change-under-traffic.md`](../runbooks/schema-change-under-traffic.md) is a
+> page this repository did not have at all.
+>
+> **F-28 has its figures, open since WP-09, and the retention period is still not an engineering
+> question.** Twelve business dates driven back to back against one ledger: `outbox_record` grew from
+> 48 786 rows to 158 627 and `idempotency_record` from 49 557 to 166 143 - **+134.4 MiB and
+> +155.2 MiB** between them - and nothing prunes either. The figure that transfers is **per posting**
+> rather than per day: **0.93 and 1.01 rows at about 1.3 kB each**, because rows per day move with
+> `--scale` and `--compress` and describe this fixture's dial rather than the ledger. A bank posting a
+> million movements a day therefore writes about **2.6 GB a day into two tables nothing ever deletes
+> from**. The 250-day extrapolation on the page is labelled arithmetic rather than measurement, and
+> **the retention period is left open**: F-28 needs a regulatory answer before an engineering one, and
+> inventing one here would be inventing a compliance position.
+>
+> **Dead tuples in `balance` peaked at 16 187 and autovacuum never ran once**, so the soak says what
+> the churn produces and **nothing** about whether autovacuum would keep up with it. The report says
+> that on the page rather than leaving a reader to assume the quieter half.
+>
+> **Four findings, and one of them corrected a number in a committed document.** F-88 gains two more
+> loads: five at identical flags have now produced **four distinct digests**, with `rowsWritten`,
+> `chainLength` and `chainHead` identical in every one, and `workload/baselines/README.md` had quoted
+> a digest the manifest committed beside it contradicted. F-89 gains its seeding half, measured from
+> the other side: a day the driver reported as `funded 37359, replayed 0` wrote **417** new
+> `idempotency_record` rows. **F-91** is the catalogue-wide scenario digest that would invalidate all
+> seven WP-24c captures if an eighth scenario were added, which is why
+> [ADR 0018](../governance/adr/0018-the-migration-exercise-is-not-a-condition.md) made this an
+> exercise rather than a condition. **F-92**: nothing in this estate sets `lock_timeout` or
+> `statement_timeout`, so a migration that has to *wait* for its lock queues the bank behind it for as
+> long as it waits - and this exercise measured the good case, where the lock was granted at once.
+> **F-93**: the requirement catalogue has nothing about data growth, retention or a change procedure,
+> so two of this package's three deliverables own no `REQ-*` and the matrix says so rather than
+> stretching one. **F-94**: the pinned Flyway 9 image is `linux/amd64` only, so the client runs
+> emulated on arm64 - which is why the lock window is separated from the whole invocation.
+>
+> **WP-18 is deferred a sixth time, and one reason is left.** Its Definition of Done requires the
+> traceability matrix to resolve **every** requirement; `REQ-PERF-008` belongs to WP-25, which is not
+> built. Both WP-25 and WP-18 carry `## Tasks` as "To be detailed before execution", so the
+> `work-package` skill halts on either until the task list exists.
+>
 > **WP-24c is done and merged** ([#73](https://github.com/k-napiontek/tessera-bank/pull/73), `7716b8b`),
 > and **the estate has been degraded on purpose and judged against what was predicted.** Seven
 > conditions were injected against the recorded normal, one run each, and every capture is committed
 > under `workload/baselines/signatures/` with the scrapes it was judged from. **Not one verdict reads
 > `CONTRADICTED`**: every line is `as declared` or `inconclusive`, and the four inconclusive ones are
 > named rather than counted as successes. `REQ-PERF-007` goes from `Partially met` to met.
->
-> **The next actionable packages are WP-24b and WP-25.**
 >
 > **The result the sweep exists for is one nobody had written down: every condition arrives at the
 > edge as latency and never as failure.** `SLO-GATEWAY-AVAILABILITY` is **1.00000 in all seven runs**,
@@ -616,7 +706,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [22](wp/WP-22-ledger-data-volume.md) | Ledger data volume - a production-shaped database | 3 | 20, 09 | `Done` | [#65](https://github.com/k-napiontek/tessera-bank/pull/65) | `7042896` |
 | [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Done` | [#68](https://github.com/k-napiontek/tessera-bank/pull/68) | `eb48dc0` |
 | [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `27d843d` |
-| [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Not started` | | |
+| [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Done` | [#75](https://github.com/k-napiontek/tessera-bank/pull/75) | `PENDING` |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
 | [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11b | `Not started` | | |
 
@@ -744,9 +834,13 @@ becomes its own change when picked up.
 | F-85 | WP-24a | **`SCN-CLOCK-SKEW` cannot be produced by this fixture**, and the injector reports it as uninjected with the reason rather than pretending. PostgreSQL stamps the value date from its own `now()`, so moving the two sides of the batch boundary apart means moving a clock inside a container - which needs `SYS_TIME` on a kernel shared with the host, or a faketime shim built into the image. Both change the estate's runtime rather than the fixture, which WP-24's Constraint refuses. Skewing the driver's own date is not the same condition: the ledger stamps its value dates itself, so a driver that thinks it is Tuesday changes nothing but its own idempotency keys. A finding about the estate's testability, recorded rather than worked around. | Open |
 | F-86 | WP-24a **Closed by WP-24c, and the scorer was never the problem.** `signatures.sh` pins its seven business dates and `TB_KEEP_DATA=1` keeps `idempotency_record`, so the **second** sweep against a ledger replayed every request instead of posting it: the ledger's own counter recorded 9 080 replays and 0 postings, no journal entry was written, no outbox row followed, nothing reached the broker and `tessera_fraud_scoring_seconds_count 0.0` was a correct reading of a run in which nothing happened. The surviving evidence came from that second sweep. `workload-run --require-postings` now refuses to finish such a run; the scorer scored 8 411 events in six of the seven captures and 8 409 in the seventh. || **Closed** by WP-24c |
 | F-87 | WP-24a | **The traceability matrix's "Partially filled" banner had gone stale twice over**, listing packages up to WP-21 while sections for WP-22 and WP-23 already existed below it. Corrected here because WP-24a was adding a section to the same file, and leaving the banner wrong would have made the document contradict itself on one page. It is the third occurrence of exactly what **F-17** describes - a repository-level document belonging to no package - and it strengthens the case for the check F-17 proposes rather than for a fourth manual correction. | Open |
-| F-88 | WP-24c | **`datasetDigest` is not reproducible across two loads of the same seed**, while everything the ledger itself checks is. Two loads at the same commit with the same flags - `--customers 150000 --from 2025-09-01 --to 2026-08-21 --seed 42 --scale 0.0017` - produced an identical `chainHead` over 3 804 955 audit rows, identical `rowsWritten` at 14 491 832 and all fifteen counters identical, and two different digests: `04f66dda...` and `37ef7dc3...`. Nothing in `services/ledger-loader`, `workload/internal/population`, the day contract or `workload-dataset` changed between the capture and the re-load, and `workload-dataset` emits a byte-identical NDJSON stream across two runs (checked). `LoadedLedgerTest.theSameStreamLoadedTwiceProducesTheSameDigest` loads **one fixed stream** twice in a single process, so it cannot see a difference arising inside a full load. The field is what a run manifest carries to name the ledger a run was taken against, so a digest that changes per load cannot serve that purpose - and the audit chain head, which does not change, is the stronger statement anyway. WP-22's. | Open |
-| F-89 | WP-24c | **`edge/api-gateway` strips `Idempotency-Replayed`, so F-71's fix does not work end to end.** The ledger sets the header (`IdempotencyFilter.REPLAYED_HEADER`), `contracts/openapi/ledger-core.yaml` documents it on all five money-moving operations, the workload driver reads it (`internal/client/send.go`) and the workload's own proxy is tested to preserve it - but `internal/proxy/proxy.go`'s `responseHeaders` allowlist does not carry it, and `relay()` copies only allowlisted names. Through the gateway the driver can therefore never see a replay. Measured: a run the ledger recorded entirely as `replayed` was reported by the driver as `posted 9080`, and only the reconciliation cross-check noticed - seeding is worse, counting every replayed funding as `Funded` with nothing to cross-check it against. F-71 chose the header precisely so that neither side would guess; one hop in between guesses by omission. | Open |
+| F-88 | WP-24c | **`datasetDigest` is not reproducible across two loads of the same seed**, while everything the ledger itself checks is. Two loads at the same commit with the same flags - `--customers 150000 --from 2025-09-01 --to 2026-08-21 --seed 42 --scale 0.0017` - produced an identical `chainHead` over 3 804 955 audit rows, identical `rowsWritten` at 14 491 832 and all fifteen counters identical, and two different digests: `04f66dda...` and `37ef7dc3...`. Nothing in `services/ledger-loader`, `workload/internal/population`, the day contract or `workload-dataset` changed between the capture and the re-load, and `workload-dataset` emits a byte-identical NDJSON stream across two runs (checked). `LoadedLedgerTest.theSameStreamLoadedTwiceProducesTheSameDigest` loads **one fixed stream** twice in a single process, so it cannot see a difference arising inside a full load. The field is what a run manifest carries to name the ledger a run was taken against, so a digest that changes per load cannot serve that purpose - and the audit chain head, which does not change, is the stronger statement anyway. WP-22's. **WP-24b loaded it twice more and it has now produced a wrong number in a committed document.** The two further loads gave `cafa90ad` and `35747263`, so five loads at identical flags have produced four distinct digests, with `rowsWritten`, `chainLength` and `chainHead` identical in every one. `workload/baselines/README.md` claimed `with-broker`'s digest was `35747263` while the manifest committed beside it says `04f66dda` - the README was written from one load and the manifest from the re-load F-86 forced, and nothing noticed. The line is corrected. That a value seen in WP-24a recurred in a WP-24b load also says the digest is **one of a limited set of outcomes** rather than a per-run random number, which narrows the search to an ordering among a few writers. | Open |
+| F-89 | WP-24c | **`edge/api-gateway` strips `Idempotency-Replayed`, so F-71's fix does not work end to end.** The ledger sets the header (`IdempotencyFilter.REPLAYED_HEADER`), `contracts/openapi/ledger-core.yaml` documents it on all five money-moving operations, the workload driver reads it (`internal/client/send.go`) and the workload's own proxy is tested to preserve it - but `internal/proxy/proxy.go`'s `responseHeaders` allowlist does not carry it, and `relay()` copies only allowlisted names. Through the gateway the driver can therefore never see a replay. Measured: a run the ledger recorded entirely as `replayed` was reported by the driver as `posted 9080`, and only the reconciliation cross-check noticed - seeding is worse, counting every replayed funding as `Funded` with nothing to cross-check it against. F-71 chose the header precisely so that neither side would guess; one hop in between guesses by omission. **WP-24b measured the seeding half from the other side and it is exactly as bad as this entry says.** On the soak's second day the driver reported `opened 384, already open 36976, funded 37359, replayed 0`, and the ledger wrote **417 new `idempotency_record` rows** between that day's opening scrape and the previous day's closing one - not 37 359. The fundings were replays, correctly, because a funding key is `wl-funding-<accountRef>` and an account is funded once; the driver simply cannot see it. The table growth is the cross-check seeding was said to lack. | Open |
 | F-90 | WP-24c | **The shared schema check catches an object that omits `additionalProperties`, not one that sets it to `true`.** `check_schema_cannot_carry_personal_data` tests `"additionalProperties" not in sub`, so `"additionalProperties": true` planted on `$defs/scenario` passes while the same object with the key deleted fails. The omission is the realistic accident and the check is doing its job for it, but the claim the traceability matrix makes - *every object closed* - is asserted by one of the two forms only. Found while re-demonstrating the fifteen planted faults against the revised catalogue. WP-20's checker, shared by three contracts. | Open |
+| F-91 | WP-24b | **The scenario catalogue's digest covers the whole catalogue, so adding a scenario invalidates every capture taken before it.** `internal/scenario.Catalogue.Digest()` hashes the decoded catalogue and `workload-report` refuses a run whose manifest records a different one - correctly, because that is what makes a signature an assertion rather than a description. But the granularity is wrong: all seven WP-24c captures pin `c490785f`, and an eighth scenario would stop all seven being reportable against the catalogue in the tree, for a change that has nothing to do with any of them. It is why [ADR 0018](../governance/adr/0018-the-migration-exercise-is-not-a-condition.md) made the migration an exercise of its own rather than an eighth condition. The fix is a digest **per scenario** rather than per catalogue, which changes `internal/scenario`, `internal/manifest`, `workload-report` and seven committed manifests - its own change, and one WP-25 will want before it adds anything. | Open |
+| F-92 | WP-24b | **Nothing in this estate sets `lock_timeout`, so a migration that cannot get its lock builds an unbounded queue behind it.** WP-24b's blocking migration took its `SHARE` lock immediately and held it 2.25 s, and 16 backends - the whole Hikari pool - were waiting in every sample it was held. That was the good case: the lock was granted at once. A statement taking `ACCESS EXCLUSIVE` that has to *wait* blocks every later request for the table while it waits, because a pending exclusive request queues ahead of new shared ones, and on this estate every transfer holds `pg_advisory_xact_lock` to the end of its transaction so there is always something to wait behind. With no `lock_timeout` the migration waits forever and the queue grows for as long as it does. `statement_timeout` is unset too. Neither appears anywhere in the repository. | Open |
+| F-93 | WP-24b | **The requirement catalogue has nothing about data growth, retention or a change procedure.** WP-24b produced two deliverables that satisfy WP-24's Definition of Done and own no `REQ-*`: the soak run, which measures growth in two tables nothing prunes, and `schema-change-under-traffic.md`, the first document here describing how to apply a schema change. The nearest ids are `REQ-PERF-004` (WP-22's, query cost at cardinality), `REQ-OPS-001` (WP-05's, *every scheduled process has a runbook* - a migration is not scheduled) and `REQ-OPS-005` (WP-18's, the incident exercise). None fits, and the matrix says so rather than stretching one. For a bank whose two busiest tables are pruned by nothing and whose change procedure is unwritten, that is a gap in the catalogue rather than in the work - but adding a requirement is a governance decision for the repository owner, not something a work package should do to itself. | Open |
+| F-94 | WP-24b | **The published Flyway 9 image is `linux/amd64` only, so the migration exercise runs it emulated on arm64.** `docker run flyway/flyway:9.22.3-alpine` warns *"the requested image's platform does not match the detected host platform"* and runs under Rosetta. It affects the client rather than the database - the index is built by PostgreSQL either way - and WP-24b separates the two figures precisely so this cannot contaminate the measurement: the blocking run's whole invocation took 7.794 s of which the lock accounted for 2.25 s. But an exercise whose wall-clock figures include an emulated JVM boot is one whose *invocation* durations should not be compared against a Linux runner's. The version is pinned to 9 deliberately, to match what the ledger runs. | Open |
 
 ---
 

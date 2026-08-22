@@ -91,6 +91,23 @@ And three about the database signals:
   their conditions are in [`../architecture/estate-under-load.md`](../architecture/estate-under-load.md).
 - **`ledger_db_autovacuum_age_seconds` is `NaN`, never 0, for a table never autovacuumed.** Zero
   would read as "vacuumed a moment ago", which is the exact opposite of the truth.
+- **`ledger_db_live_tuples` is an estimate and `ledger_db_table_size_bytes` is not.** The first is
+  `n_live_tup` out of `pg_stat_user_tables`, which the statistics collector maintains and autovacuum
+  corrects; the second is `pg_table_size`, which is exact. Quoting a row count to the unit from the
+  first is quoting a estimate as a measurement. Checked by WP-24b, whose soak report labels the two
+  differently for this reason.
+- **`ledger_db_dead_tuples` means nothing without `ledger_db_autovacuums` beside it.** Dead tuples
+  rising while the vacuum count does not move is a collector that has **not been asked**; dead tuples
+  rising while it climbs is a collector that is running and losing. They are different incidents and
+  only the second is urgent.
+
+  Measured by WP-24b over twelve business days: `balance` accumulated dead tuples monotonically while
+  `ledger_db_autovacuums` never moved off 1. That is the first case, and the arithmetic says why -
+  autovacuum triggers at `autovacuum_vacuum_threshold + scale_factor x live_tuples`, which on this
+  estate's defaults is `50 + 0.2 x 336 956` = **about 67 400 dead tuples**. The soak reached under a
+  tenth of it. **A hot table with a large row count vacuums rarely**, because the threshold scales
+  with the whole table rather than with the part being written, so "dead tuples are climbing and
+  nothing is vacuuming" is the expected state for `balance` and not a fault.
 
 ## Logs
 
@@ -129,4 +146,6 @@ but nothing joins up".
 - [ADR 0004](../governance/adr/0004-transactional-outbox.md), [ADR 0005](../governance/adr/0005-hash-chained-audit-trail.md),
   [ADR 0012](../governance/adr/0012-slo-catalogue-boundary.md)
 - [`outbox-backlog.md`](outbox-backlog.md)
+- [`schema-change-under-traffic.md`](schema-change-under-traffic.md) - what a migration does to these
+  signals, and why `ledger_posting_latency_seconds` stays met through one
 - [`../ways-of-working/data-classification.md`](../ways-of-working/data-classification.md)
