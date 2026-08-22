@@ -708,7 +708,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `27d843d` |
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Done` | [#75](https://github.com/k-napiontek/tessera-bank/pull/75) | `0897d63` |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
-| [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the two-phase day | 0 | 21, 05 | `Not started` | | |
+| [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the two-phase day | 0 | 21, 05 | `In progress` | | |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP and event volume against the older strata | 1/2 | 21, 10b, 11b | `Not started` | | |
 
 ## Critical path
