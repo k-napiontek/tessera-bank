@@ -66,6 +66,12 @@ var floatIsJustified = map[string]string{
 	// int64 of minor units that nothing divides.
 	"cmd/workload-ceiling/main.go": "throughput per second, mean latency and lock wait per posting are rates and durations; the transfer amount is an int64 constant and no arithmetic touches it",
 
+	// WP-25d. The four-era hop is timed and counted, never valued. Every figure in the report is a
+	// duration in milliseconds, a rate per second, a ratio between two of those, or a count of
+	// records - and the one thing crossing the hop that *is* money never passes through this
+	// package at all: it goes ledger to XSLT to SOAP to COMP-3 as bytes the adapter encodes.
+	"internal/hop/hop.go": "the three legs are durations in milliseconds and the drift between them is a ratio of two durations; a lag, a record count and a transfers-per-second figure are counts and rates. This package reads the adapter's log and never an amount",
+
 	// WP-24b. The migration exercise measures how long a lock was held; the soak measures how a
 	// table grows. Counts, seconds and bytes throughout, and neither reads an amount - what grows
 	// here is the record of a movement rather than the movement.

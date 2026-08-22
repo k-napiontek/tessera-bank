@@ -76,6 +76,12 @@ var driver = []string{
 	// WP-24a. It reads the machine - operating system, architecture, core count - which is exactly
 	// what the engine promises not to do, and what a committed measurement has to state.
 	"internal/hardware",
+	// WP-25d. It performs no I/O - cmd/workload-hop hands it the adapter's log and the samples,
+	// exactly as cmd/workload-soak hands internal/soak its scrapes - so it would pass the engine
+	// list on its imports. Driver by **role**: what one hop cost on one estate is not part of the
+	// model either driver executes. The same classification internal/soak and internal/slo carry,
+	// and F-80 remains the open note that this list does that.
+	"internal/hop",
 	// WP-24a. It signals process groups and shells out to docker, so it is as far from the engine as
 	// anything in this module gets - and it is a fixture acting on a fixture, never on the estate's
 	// own configuration or code, which is the line WP-24's Constraint draws.
