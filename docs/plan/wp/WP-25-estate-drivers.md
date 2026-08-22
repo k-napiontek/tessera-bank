@@ -76,7 +76,7 @@ generator, a movement file, `run-eod.sh`, `batch/recon`. **25b is driven by sock
 endpoint on Tomcat 8.5 and an event consumer on Boot 2.7, both of which need containers the workload
 fixture has never booted. Splitting anywhere else puts half of one transport in each pull request.
 
-Four decisions are taken here rather than left for the executing session to improvise, and each one
+Five decisions are taken here rather than left for the executing session to improvise, and each one
 changes what gets built.
 
 - **F-18 is 25a's first task, not a precondition somebody else owns.** This package's own Constraints
@@ -106,6 +106,23 @@ changes what gets built.
   WP-24's Constraint refused and F-85 recorded rather than worked around. 25b drives the transport
   the estate actually runs and the discrepancy is logged as **F-95** - a finding about the plan's own
   description, for the repository owner to settle, not for a work package to settle about itself.
+- **The volume writer opens every account in the base currency and counts the substitutions, which
+  is F-72's answer one stratum down.** WP-20's stream carries a currency on every *action* and none
+  on any *account*, because the model draws a currency per transfer from a mix of up to five and
+  gives each customer two accounts. Stratum 0 needs `ACCT-CURRENCY` on every `ACCTREC`, so the writer
+  has to choose. Deriving an account's currency from the actions that touch it puts every other
+  movement on the wrong currency and `ACCTPOST` rejects it `R003` - **F-18's failure mode reproduced
+  through a different door**, at volume, in the run this package exists to measure. WP-21 met exactly
+  this against the ledger and the estate already has the convention: `seeding.BaseCurrency` opens the
+  population in the heaviest currency the model declares and
+  `tessera_workload_currency_substituted_total` counts every transfer that went in it rather than in
+  the one drawn - about 8% on the committed model. 25a reuses that rather than inventing a second
+  answer, and **reports the count beside every figure**, so a reader knows what fraction of the
+  drawn day the file represents. Multi-currency posting is exercised where the master genuinely
+  draws five currencies - the committed fixture, after task 2 - rather than pretended at volume.
+  Resolving it properly is still what F-72 says it is: accounts per currency in the population, which
+  is a WP-20 model change.
+
 - **WP-25 adds no scenario to `TB-SCENARIOS-V1`, so F-91 is not a precondition.** The catalogue-wide
   digest would invalidate all seven WP-24c captures if an eighth condition were added, and
   [ADR 0018](../../governance/adr/0018-the-migration-exercise-is-not-a-condition.md) already
@@ -137,7 +154,9 @@ Branch `feat/TB-1025-batch-volume`. Six tasks, stratum 0 and the batch tier only
    exists three times in this repository already (here, `esb-adapter`, `backoffice`) and a fourth in
    Go would be a fourth thing to keep in step with the copybooks, which are contracts. `ORGANIZATION
    IS SEQUENTIAL` and COMP-3 amounts, per the Constraints - a high-volume generator that writes line
-   sequential corrupts every packed field and the file still opens and reads.
+   sequential corrupts every packed field and the file still opens and reads. Accounts open in the
+   stream's base currency and every substitution is counted and reported, per the fifth decision
+   above; `--out` keeps a volume run from overwriting the committed fixture.
 
 4. **The cycle timed at three volumes, per step.** `run-eod.sh` already takes `--master`,
    `--movements`, `--work` and `--business-date`, so this task drives it and records rather than
