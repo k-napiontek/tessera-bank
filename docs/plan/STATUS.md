@@ -9,7 +9,7 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-25a is done and merged** ([#78](https://github.com/k-napiontek/tessera-bank/pull/78), `PENDING`),
+> **WP-25a is done and merged** ([#78](https://github.com/k-napiontek/tessera-bank/pull/78), `2ca45dd`),
 > and **stratum 0 has finally been given a day worth running.** Every measurement in this repository
 > until now was of the modern spine; this one is the 1995 core, driven by files and nothing else,
 > over a day the same WP-20 model drew. WP-25 was split into 25a and 25b when it was detailed and
@@ -776,7 +776,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `f131a19` |
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Done` | [#75](https://github.com/k-napiontek/tessera-bank/pull/75) | `581402e` |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `886e1ba` |
-| [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `PENDING` |
+| [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `2ca45dd` |
 | [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Not started` | | |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP and event volume against the older strata | 1/2 | 21, 10b, 11b | `Not started` | | |
 
