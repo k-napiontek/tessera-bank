@@ -94,7 +94,7 @@ It does establish three things a design conversation needs:
 
 ## 2. The recorded normal
 
-[`workload/baselines/baseline-report.txt`](../../workload/baselines/baseline-report.txt) is a
+[`workload/baselines/spine-only/report.txt`](../../workload/baselines/spine-only/report.txt) is a
 compressed bank day driven through the gateway against a ledger loaded by WP-22's loader - 40 001
 accounts and 799 565 rows over a fortnight of business dates, dataset digest `747f4177`, chain head
 `d0c59134`.

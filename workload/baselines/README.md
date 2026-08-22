@@ -2,15 +2,26 @@
 
 Committed measurements, each carrying the conditions it was taken under.
 
-### The recorded normal
+### One directory per capture
+
+A baseline is not a file, it is a set of conditions and what the estate did under them. Writing a
+second capture over the first would leave one report and two sets of conditions, so each gets its
+own directory and `baseline.sh` requires `--out-name` rather than defaulting to one.
+
+| Directory | What the estate was, when it was measured |
+|---|---|
+| [`spine-only/`](spine-only/) | PostgreSQL, the ledger and the gateway. No broker, so `fraud-scoring` never ran and the outbox relay had nowhere to publish. Captured by WP-23 at 20 000 customers over a fortnight |
+
+Every directory holds the same seven files:
 
 | File | What it is |
 |---|---|
-| [`baseline-report.txt`](baseline-report.txt) | The run against the catalogue: which objectives were met |
-| [`baseline-run-manifest.json`](baseline-run-manifest.json) | The run: model digest, seed, both dials, window, commit |
-| [`baseline-dataset-manifest.json`](baseline-dataset-manifest.json) | The ledger it ran against: dataset digest, chain head, row counts |
-| `baseline-before.prom`, `baseline-after.prom` | The ledger's scrapes, taken where the run brackets itself |
-| `baseline-before-edge.prom`, `baseline-after-edge.prom` | The gateway's, at the same two instants |
+| `report.txt` | The run against the catalogue: which objectives were met |
+| `run-manifest.json` | The run: model digest, seed, both dials, window, commit, hardware |
+| `dataset-manifest.json` | The ledger it ran against: dataset digest, chain head, row counts |
+| `before.prom`, `after.prom` | The ledger's scrapes, taken where the run brackets itself |
+| `before-edge.prom`, `after-edge.prom` | The gateway's, at the same two instants |
+| `before-fraud.prom`, `after-fraud.prom` | The scorer's, where there was one to scrape |
 
 Produced by [`../scripts/baseline.sh`](../scripts/baseline.sh). The scrapes are committed because
 without them the report cannot be regenerated, and a report nobody can regenerate is one nobody can
@@ -19,12 +30,16 @@ check:
 ```bash
 # go -C runs with workload/ as the working directory, so the paths below are relative to it.
 go -C workload run ./cmd/workload-report \
-  --manifest baselines/baseline-run-manifest.json \
-  --before baselines/baseline-before.prom --before baselines/baseline-before-edge.prom \
-  --after baselines/baseline-after.prom --after baselines/baseline-after-edge.prom \
+  --manifest baselines/spine-only/run-manifest.json \
+  --before baselines/spine-only/before.prom --before baselines/spine-only/before-edge.prom \
+  --after baselines/spine-only/after.prom --after baselines/spine-only/after-edge.prom \
   --catalogue ../contracts/slo/tessera-slo-v1.json \
-  | diff - workload/baselines/baseline-report.txt && echo "identical"
+  | diff - workload/baselines/spine-only/report.txt && echo "identical"
 ```
+
+The two `ceiling-*.json` files below sit at the top level rather than in a capture directory. They
+are not a bank day and there is no baseline to diff them against: they answer where throughput stops
+rising, which is a property of the design rather than a normal to compare a run with.
 
 ### The throughput ceiling
 
@@ -47,11 +62,12 @@ The figures below were taken on a developer machine, not on anything resembling 
 hardware. What they establish is a **shape** - where throughput stops rising, and what stops it -
 and that shape is a property of the design rather than of the laptop.
 
-## What this baseline does not cover, and says so
+## What `spine-only/` does not cover, and says so
 
-`estate-up.sh` boots the modern spine - PostgreSQL, the ledger and the gateway - and nothing else.
-So the baseline is a recorded normal for two of the five components in the catalogue, and the report
-prints `nothing happened` against the other three rather than quietly leaving them out:
+When it was captured, `estate-up.sh` booted the modern spine - PostgreSQL, the ledger and the
+gateway - and nothing else. So it is a recorded normal for two of the five components in the
+catalogue, and the report prints `nothing happened` against the other three rather than quietly
+leaving them out:
 
 - **`fraud-scoring` was not running.** It consumes from Kafka and there is no broker in this fixture.
 - **`reporting` and `recon` are batch jobs.** Neither ran during the window, and their metrics go to
@@ -61,6 +77,14 @@ prints `nothing happened` against the other three rather than quietly leaving th
   with no broker to publish to, the relay cannot drain, so the oldest unpublished event only ages.
   It is left in the report rather than suppressed, because a baseline that hides the signals it
   could not exercise is a baseline that will be quoted as though it had.
+
+**WP-24a's fixture boots a broker and the scorer**, so a capture taken after it is a capture of a
+different estate. That is why this one is kept rather than replaced: the difference between the two
+is itself a finding, and a signature diffed against a normal that records a missed outbox objective
+would credit the injection with a failure the fixture had all along.
+
+`run-manifest.json` here says `hardware: unrecorded` because it was written before the manifest had
+the field. That is the honest answer rather than a machine name reconstructed afterwards.
 
 ## What they show
 
