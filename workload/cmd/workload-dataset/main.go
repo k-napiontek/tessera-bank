@@ -36,19 +36,28 @@ func main() {
 
 func run() error {
 	var (
-		modelPath string
-		from, to  string
-		seed      uint64
-		scale     float64
-		customers int
+		modelPath  string
+		from, to   string
+		seed       uint64
+		scale      float64
+		customers  int
+		toMinute   int
+		driverSeed bool
 	)
 	flag.StringVar(&modelPath, "model", "", "path to a workload model (required)")
 	flag.StringVar(&from, "from", "", "first business date, YYYY-MM-DD (required)")
 	flag.StringVar(&to, "to", "", "last business date, inclusive, YYYY-MM-DD (required)")
 	flag.Uint64Var(&seed, "seed", 42, "seed - the same seed and range give the same stream")
 	flag.Float64Var(&scale, "scale", 1.0, "fraction of the model's real-time daily volume")
+	flag.IntVar(&toMinute, "to-minute", 0,
+		"stop the day at this business minute, exclusive; 0 keeps the whole day. Bound a stream by "+
+			"the same minute workload-run was bounded by and the two describe one day")
 	flag.IntVar(&customers, "customers", 0,
 		"draw from this many customers instead of the model's own population size")
+	flag.BoolVar(&driverSeed, "driver-seed", false,
+		"draw the date from the seed itself, the way workload-run does, instead of from a per-date "+
+			"derivation. One date only. Without it a stream and a run of the same date are different "+
+			"days (F-102), and a movement file built from one does not reconcile against the other")
 	flag.Parse()
 
 	if modelPath == "" || from == "" || to == "" {
@@ -74,12 +83,14 @@ func run() error {
 	}
 
 	stream, err := dataset.New(dataset.Spec{
-		Model:     loaded,
-		From:      first,
-		To:        last,
-		Seed:      seed,
-		Scale:     scale,
-		Customers: customers,
+		Model:      loaded,
+		From:       first,
+		To:         last,
+		Seed:       seed,
+		Scale:      scale,
+		Customers:  customers,
+		ToMinute:   bankday.Minute(toMinute),
+		DriverSeed: driverSeed,
 	})
 	if err != nil {
 		return err

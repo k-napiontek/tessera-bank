@@ -149,6 +149,30 @@ type Spec struct {
 	Seed      uint64
 	Scale     float64
 	Customers int // 0 keeps the model's own population size
+
+	// ToMinute stops the day at a business minute, exclusive, on every date in the range. 0 keeps
+	// the whole day - the same convention Customers uses.
+	//
+	// It exists so that a two-phase run can bound the stream by the instant it bounded the driver
+	// with. cmd/workload-run takes the same minute; a movement file that carried transfers the
+	// driver never sent would put them on the stratum-0 master and not in the ledger, and ADR 0015
+	// makes the movement file the reconciliation cut-off, so the reconciliation would report the
+	// difference as drift rather than as timing.
+	ToMinute bankday.Minute
+
+	// DriverSeed draws the date from the run seed itself, the way cmd/workload-run does, instead of
+	// from the per-date derivation below.
+	//
+	// **F-102.** The two halves of this strand drew *different days* from the same seed and nothing
+	// noticed, because until WP-25c nothing had ever compared a stream against a run of the same
+	// date. seedFor exists so that a year of dates does not give one small cast of accounts every
+	// day's history; the driver has no such problem, drives one date and draws it from the run seed.
+	// Point them at one date and they disagree about every event in it - so a movement file built
+	// from the stream reconciles against a ledger the driver posted only by accident.
+	//
+	// Only meaningful for a single date, and New refuses it for a range: a year drawn this way is
+	// one day repeated, which is the thing the derivation exists to prevent.
+	DriverSeed bool
 }
 
 var (
@@ -156,6 +180,10 @@ var (
 	ErrRange = errors.New("dataset: the range ends before it begins")
 	// ErrCustomers reports a negative population override.
 	ErrCustomers = errors.New("dataset: the customer count must not be negative")
+	// ErrCutOff reports a cut-off minute that falls outside the business day.
+	ErrCutOff = errors.New("dataset: the cut-off must fall inside the business day")
+	// ErrDriverSeed reports a driver-seeded range of more than one date.
+	ErrDriverSeed = errors.New("dataset: a driver-seeded stream covers exactly one business date")
 )
 
 // Stream is a validated spec. Everything that can fail has failed by the time one exists, which is
@@ -178,6 +206,14 @@ func New(spec Spec) (Stream, error) {
 	}
 	if spec.Customers < 0 {
 		return Stream{}, fmt.Errorf("%w: %d", ErrCustomers, spec.Customers)
+	}
+	if spec.ToMinute < 0 || int(spec.ToMinute) > bankday.MinutesPerDay {
+		return Stream{}, fmt.Errorf("%w: %d, and a day is %d minutes",
+			ErrCutOff, spec.ToMinute, bankday.MinutesPerDay)
+	}
+	if spec.DriverSeed && spec.From.Before(spec.To) {
+		return Stream{}, fmt.Errorf("%w: %s to %s would be one day repeated",
+			ErrDriverSeed, spec.From, spec.To)
 	}
 
 	resolved := spec.Model
@@ -278,7 +314,16 @@ func (s Stream) Actions() iter.Seq[Action] {
 				return
 			}
 			seed := seedFor(s.spec.Seed, date)
+			if s.spec.DriverSeed {
+				seed = s.spec.Seed
+			}
 			for event := range process.Events(seed) {
+				// The cut-off, applied the way cmd/workload-run applies it: on the business minute,
+				// exclusive, and by stopping rather than filtering - the schedule is in time order,
+				// so everything after the first event past the cut-off is past it too.
+				if s.spec.ToMinute > 0 && event.Minute >= s.spec.ToMinute {
+					break
+				}
 				drawn := s.people.Draw(seed, event.Seq, date)
 				if !yield(actionOf(drawn, date, event)) {
 					return
