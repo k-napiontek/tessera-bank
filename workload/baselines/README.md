@@ -237,6 +237,30 @@ summarising it would leave nothing to check the claim against.
 **A break is not a failure.** `batch/recon` exits 0 when it finds breaks; the empty array here says
 this particular day did not disagree, not that a disagreement would have gone unreported.
 
+## What `four-era/` is, and the one file it deliberately leaves out
+
+The heaviest capture here, and the only one taken with every stratum running at once: PostgreSQL,
+Kafka, the ledger and the gateway, Oracle and Tomcat 8.5, and `integration/esb-adapter` between them.
+
+`hop.json` is the capture proper - 155 samples of the broker's consumer-group listing and the
+movement file's length, plus the three legs and how the cost per transfer moved across the day.
+`hop.txt` is the same thing rendered. `constraint.txt` records WP-11b's rule checked against a whole
+day rather than one transfer. The six `.prom` scrapes and `run-manifest.json` are the day itself, so
+it can be read against the SLO catalogue the way every other capture here can.
+
+**The adapter's own log is not committed, and it is the instrument the legs were timed from.** It is
+three lines per transfer - twelve megabytes for this run, against seventy-two kilobytes for the
+largest file committed anywhere else under `baselines/`. `hop.json` carries every sample and the
+per-slice summary derived from it, which is what a reader needs to check the claims; the log stays in
+the work directory and `four-era-day.sh` prints its path. That is a deliberate exception to the rule
+above about committing what a report was derived from, and it is recorded here rather than left to be
+noticed.
+
+**There is no second run to read this one against.** `soap/` has two ladders because a control run
+was what separated the datasource pool from a saturated machine; here the control is inside the run -
+`fraud-scoring` consumes the same topic in its own group, and it peaked at 59 while the adapter
+peaked at 7 983.
+
 ## What they show
 
 The interpretation, with the numbers and what they mean, is in

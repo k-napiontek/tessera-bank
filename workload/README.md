@@ -266,6 +266,38 @@ reasoning `workload-ceiling` sets out for the ledger. It answers about **7 800 r
 **3 300 writes**, and `estate-under-load.md` section 9 has the control run that shows the datasource
 pool is not what limits it.
 
+## Driving all four eras at once
+
+Everything above drives one tier, or one boundary between two. This is the only fixture here that
+needs the whole estate up together - and it drives the path `master-plan.md` names as the reason this
+repository exists:
+
+```bash
+bash workload/scripts/four-era-day.sh --customers 8000
+```
+
+It composes `legacy-up.sh` and `estate-up.sh` and starts `integration/esb-adapter` between them on
+JDK 8, so a Kafka event the ledger's own outbox published becomes canonical XML by XSLT, a SOAP call
+to Tomcat 8.5, and a COMP-3 record in the file tonight's cycle will read. **The events are the
+ledger's own** - driving the modern spine makes the relay publish, rather than a driver injecting
+messages the estate never produced.
+
+**Nothing is instrumented to make this measurable.** `esb-adapter` has no actuator, no Micrometer and
+no web starter, which is F-100's situation one stratum up and gets F-100's answer. `cmd/workload-hop`
+watches from outside: the broker's own consumer-group listing, the movement file's length, and the
+two INFO lines per transfer the adapter already writes. It reports **three legs and says which one is
+a measurement** - only the file leg is bracketed by two logged instants; the inbound leg is a
+difference that contains the transform *and* the SOAP call, so it is not SOAP latency.
+
+**Ask the broker on its INTERNAL listener.** `estate-up.sh` advertises PLAINTEXT as the *host* port,
+so `kafka-consumer-groups` run inside the container is told to connect to a port nothing there is
+listening on. `kafka-topics` survives it and the consumer-group tools do not - which cost WP-25d a
+whole run, silently, because every sample failed and the report printed the zero value.
+
+`workload/baselines/four-era/` carries the capture: 24 023 transfers across all four eras, peak
+consumer lag 7 983, nothing dead-lettered, and the movement-file append **13.6x dearer** at the end
+of the day than at the start. `estate-under-load.md` section 12 reads it.
+
 ## Reporting a run afterwards
 
 `workload-run` prints its outcome as it finishes, and that report dies with the terminal.
@@ -345,6 +377,9 @@ prints the two points instead and says which objective needed the window.
 | `cmd/workload-ceiling` | A saturation ladder straight at the ledger, with no gateway, to find where throughput stops rising. |
 | `cmd/workload-migration` | Migrates a live ledger mid-run, and records the lock and the customer-side latency. |
 | `cmd/workload-soak` | Turns a soak's daily captures into a growth report. Reads no clock either. |
+| `internal/consumer` | How far behind a consumer group is, read out of the broker's own listing. Never writes. |
+| `internal/hop` | What the four-era hop cost, from the adapter's log. Says which leg is a measurement. |
+| `cmd/workload-hop` | Watches the whole hop while a day crosses it: lag, the movement file, and the legs. |
 
 ## What the driver does that a load tool does not
 

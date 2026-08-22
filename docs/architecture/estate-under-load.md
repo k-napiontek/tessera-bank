@@ -942,6 +942,163 @@ arithmetic rather than letting `encode_comp3` raise eight frames down with an in
 `batch-window.sh` passes `--opening-balance` so WP-25a's three volumes stay reproducible - reported
 as a substitution on every run that makes it, the way currency substitutions already are under F-72.
 
+## 12. The four-era hop, and the write to 1995 that gets dearer all day
+
+Everything before this drives one tier, or one boundary between two. This is the only exercise here
+that needs **every stratum up at once** - PostgreSQL, Kafka, the ledger and the gateway from
+`estate-up.sh`, Oracle and Tomcat 8.5 from `legacy-up.sh`, and `integration/esb-adapter` running
+between them on JDK 8 - and it drives the path the master plan names as the reason the repository
+exists: a Kafka event becomes canonical XML by XSLT, a SOAP call to a 2011 monolith, and a COMP-3
+record in a fixed-width file for 1995. `FourEraTransferIT` walks that path once, with one transfer.
+This walked it **24 023 times**.
+
+> One day driven by `workload/scripts/four-era-day.sh`. 8 000 customers, **16 001 accounts**, scale
+> 0.002, 720x, `branch-hours`, seed 42, business date 2026-03-02. One partition, listener concurrency
+> 1, outbox relay 100 rows / 500 ms. PostgreSQL 16, Kafka 7.6.1, Oracle 23ai Free, Tomcat 8.5.100,
+> JDK 8 and JDK 17, darwin arm64, 10 cores, Docker given 8 GiB - of which Oracle took 2.2 and nothing
+> was starved. Captured in [`four-era/`](../../workload/baselines/four-era/).
+
+### The arithmetic closes to the record
+
+The ledger's own counters, the topic, the movement file and Oracle all agree, and the agreement is
+what makes everything below readable:
+
+| | Count | Publishes `TransferPosted` | Reaches the movement file |
+|---|---:|---|---|
+| `transfer` - seeding's funding | 16 000 | yes | yes |
+| `transfer` - the day's own | 7 895 | yes | yes |
+| `hold.capture` | 122 | yes | yes |
+| `reversal` | 6 | yes | yes |
+| `hold.place` | 438 | no - reserves, posts nothing | no |
+| `hold.release` | 245 | no - releases, posts nothing | no |
+| **money movements** | **24 706** | | |
+| **events published, and crossed** | | **24 023** | **24 023** |
+
+24 023 transfers, 48 046 movement records at 120 bytes each, and **not one redelivery and not one
+dead letter**. The relay had drained before the driver stopped - `ledger_outbox_pending` zero, which
+`estate-up.sh` asserts rather than assumes - so every event was on the topic before the hop's own
+backlog was measured.
+
+### Three legs, and the report says which one is a measurement
+
+The adapter publishes nothing about itself: no actuator, no Micrometer, not even a web starter to put
+an endpoint on. That is **F-100's situation one stratum up**, and it gets F-100's answer - observe it
+from outside rather than modernise a Boot 2.7 component to make it measurable. What it does have is
+two INFO lines per transfer that WP-11b wrote for operators, and they bracket the one step nobody had
+timed.
+
+| Leg | Count | Mean | p95 | Max | What it is |
+|---|---:|---:|---:|---:|---|
+| **file** | 24 023 | **8.2 ms** | 15.0 ms | 38.0 ms | measured directly between two logged instants |
+| inbound | 24 022 | 2.9 ms | 5.0 ms | 199.0 ms | a **difference**, not a measurement |
+| service | 24 022 | 11.0 ms | 18.0 ms | 200.0 ms | one crossing to the next |
+
+**Only the file leg is measured.** Nothing is logged when a message is picked up, so the inbound leg
+is one transfer's `carried to the system of record` minus the previous one's `crossed to stratum 0` -
+it holds the poll, the XSLT transform, the schema validation, the JAXB unmarshal *and* the SOAP call.
+Reporting it as "SOAP latency" would be a plausible number for something nobody measured, so the
+capture carries what each leg contains in a field beside the figure.
+
+### The write to 1995 gets dearer all day, and it is the only part that does
+
+| Transfers | File leg | Service | Per second |
+|---|---:|---:|---:|
+| 1 - 2 402 | 1.1 ms | 5.9 ms | 169.5 |
+| 4 805 - 7 206 | 4.3 ms | 7.0 ms | 142.9 |
+| 9 609 - 12 010 | 7.6 ms | 10.3 ms | 97.1 |
+| 14 413 - 16 814 | 10.4 ms | 12.7 ms | 78.7 |
+| 19 217 - 21 618 | 13.5 ms | 16.0 ms | 62.5 |
+| 21 619 - 24 023 | **15.0 ms** | 17.6 ms | **56.8** |
+
+**Appending got 13.6 times dearer across one day and the throughput fell by two thirds** - 169.5
+transfers a second to 56.8 - while the inbound leg, the half that includes the SOAP call to Tomcat,
+stayed flat at about 3 ms. The rise is close to a straight line: about 1.5 ms per 2 400 transfers,
+which is roughly 0.3 microseconds for every record already in the file.
+
+That is `MovementFileWriter` doing exactly what it says it does. Before appending it looks for the
+transfer reference among the records already there, twenty bytes at a time, one positional read per
+record, under an exclusive file lock, and forces the result to disk. **The cost of writing transfer
+*n* is proportional to *n*** - and its own javadoc had already said so: *"Linear in the size of the
+file, which is correct for a bank day's worth of records and unmeasured for anything larger."* This
+is that measurement, and at a bank day's worth the linear scan is already the dominant cost of
+crossing four decades.
+
+It is not a defect, and that is the point worth keeping. The scan is what makes the file its own
+unique constraint ([ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md)),
+which is what makes at-least-once delivery safe without a second source of truth about the bank's
+money. **The estate pays for that guarantee in a cost that grows all day**, and nothing had priced it
+until every stratum was up at once.
+
+### Where the backlog formed, and the control that says the broker was not it
+
+`fraud-scoring` consumes the same topic in its own group, so it is the control: if only one consumer
+falls behind, the broker is not what is slow.
+
+| | Peak lag | At | Closing |
+|---|---:|---:|---:|
+| `esb-adapter` | **7 983** | 263 s | 0 |
+| `fraud-scoring` | 59 | - | 0 |
+
+The backlog formed at the adapter and drained there. It could not have formed anywhere else: the
+topic has **one partition**, the listener declares **no concurrency**, and the SOAP call is
+synchronous - so the whole four-era hop is a single thread, whatever the tiers on either side of it
+can do. The ledger posted its 24 706 movements in 45 seconds of wall clock; the hop took 396 seconds
+to carry 24 023 of them across.
+
+### The constraint held under load
+
+*Nothing is written to the movement file unless the SOAP call succeeded* is WP-11b's rule, enforced
+structurally by statement order in `TransferBridge` and pinned by three unit tests. This is the first
+time it has been asked of a day rather than of a transfer:
+
+```
+  movement records                    48046
+  distinct transfers in the file      24023
+  transfers the system of record has  24023
+  in the file, not in the master      0
+  in the master, not yet in the file  0
+```
+
+Zero in the file that 2011 had not accepted first, which is the direction that does not recover: a
+record with no transfer behind it is 1995 believing a payment that never happened.
+
+### Getting there cost two runs, and the estate refused the first one outright
+
+**F-105 - three components date an opening balance by three correct rules, and stratum 1's schema
+makes them jointly impossible.** `internal/client.Fund` dates the opening credit the day *before* the
+run, and `services/ledger-loader`'s `Header.openingDate()` independently returns `from.minusDays(1)`,
+both because an opening balance is the position the day starts from rather than part of it - F-103's
+rule. `workload-legacy-seed` opened stratum-1 accounts on the business date itself. `customer-master`
+then declares `CHECK (last_movement_date IS NULL OR last_movement_date >= opened_date)`, so **every
+funding posting was refused `ORA-02290` by a 2011 check constraint**. Each rule is right on its own.
+Nothing had ever run them against each other, because nothing had driven the ledger's own events into
+stratum 1.
+
+**F-106 - and the refusal never reached the dead-letter path, because both components were behaving
+as designed.** `CustomerMasterEndpoint` deliberately lets a `DataAccessException` become a generic
+SOAP server fault rather than the WSDL's declared `ServiceFault`, and says why: *"a caller that
+cannot tell 'your request was wrong' from 'we are broken' retries the first and gives up on the
+second."* `CustomerMasterClient` implements exactly that reading - declared fault permanent,
+`WebServiceException` transient. **The hole is where the database raises the data error rather than
+the application.** A check-constraint violation is technical by exception type and permanent in fact,
+so the message was never acknowledged, Spring Kafka's default `FixedBackOff(0L, 9)` retried it with
+no backoff at all, the partition blocked behind it by design because ordering is what that buys, and
+**nothing was ever dead-lettered** - the one signal an operator would look for stayed silent. The
+estate has no poison-message escape at the era boundary.
+
+### What this does and does not license
+
+It licenses saying that **the era boundary is the narrow part of this estate, and the narrow part of
+the era boundary is the write to 1995 rather than the call to 2011.** It licenses saying the cost of
+that write grows with the day, linearly, and why.
+
+It does not license a throughput figure for `esb-adapter` in general. One partition and one consumer
+thread is this fixture's shape as much as the estate's, and the shared `CustomerMasterPortType` is
+not thread-safe, so raising either is not a one-line change and was not attempted here. It does not
+license reading the inbound leg as SOAP latency. And it says nothing about what happens when the file
+is larger than a day: this measurement stops at 48 046 records because that is what a day produced,
+and the scan that costs 15 ms at that size is the same scan.
+
 ## Reproducing
 
 ```bash
@@ -970,6 +1127,9 @@ bash workload/scripts/soak.sh --days 12
 
 # One day, both phases, and the reconciliation between them.
 bash workload/scripts/two-phase-day.sh
+
+# All four eras at once: Kafka in, XSLT, SOAP to Tomcat 8.5, COMP-3 out. The heaviest thing here.
+bash workload/scripts/four-era-day.sh --customers 8000
 ```
 
 All of them need Docker, a JDK 17 and Go; every one from the baselines down also needs uv,
@@ -987,6 +1147,14 @@ with the load. **Do not edit either script while it is running**: bash reads a s
 and an edit that shifts byte offsets under a running interpreter makes it resume mid-token. That is
 how WP-24b lost the report step of an otherwise complete soak, and re-running the report over the
 twelve committed captures was the whole of the repair.
+
+`four-era-day.sh` is the only one that needs **a JDK 8 as well as a JDK 17**, and the WAR and the
+adapter jar built (`make build-legacy build-integration`). It boots four containers and four
+processes and takes about seven minutes, most of it Oracle starting and 16 001 accounts being seeded
+over sqlplus. **It refuses to start while any container it does not own is running**, naming them,
+because Oracle alone wants 2.2 GiB and it will not remove something it did not start - stop them
+first. It never writes to `mainframe/data/out/`, and the adapter's own log is left in the work
+directory rather than committed: it is three lines per transfer and twelve megabytes for this run.
 
 `signatures.sh` runs against the database `baseline.sh` leaves behind, and it is **single-use against
 it**: its seven business dates are pinned, so a second sweep over the same ledger replays instead of
