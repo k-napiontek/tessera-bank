@@ -896,3 +896,32 @@ whose two busiest tables are pruned by nothing is a gap in the catalogue rather 
 |---|---|---|---|
 | **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | A third independent confirmation that **a ledger-side latency objective is not a detector for anything that blocks the ledger from being asked**. `SLO-LEDGER-POSTING-LATENCY` was **met at 0.99321** through the blocking migration, with a third of its budget spent, while every writer in the bank was queued behind a table lock and the edge missed at 11.0x. The ledger times the posting it performed, not the wait to perform it in - F-83's mechanism, now seen for a condition that has nothing to do with the connection pool, so it is a property of the metric rather than of that scenario. The soak adds what the `ledger_db_*` signals mean over time rather than at an instant: which of them are PostgreSQL's estimates and which are exact, and why dead tuples have to be read against the autovacuum count. Both are written into `docs/runbooks/` at the point an operator would be reading them | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | Nothing in either capture is a customer's. The migrations create an index over a currency code and an integer count of minor units and read no row; the lock samples carry backend counts, lock modes and a clock; the soak captures carry table sizes and row-count estimates. No account holder, no identifier and no authentication material anywhere in the exercise or in its error paths, which are where a leak hides | Met at this tier |
+
+---
+
+## WP-25a - estate-wide drivers: the movement file at volume and the batch window
+
+Ticket TB-1025. The half that drives stratum 0, which is driven by files and nothing else. A closed
+defect in the WP-03 generator, a mode that turns a WP-20 day into stratum-0 files, elapsed time per
+step in the job log, and the overnight cycle timed at three volumes up to the model's whole declared
+population.
+
+**`REQ-PERF-008` is not met by this half and the matrix says so rather than claiming it.** The
+requirement is *every* stratum exercised at volume; this covers stratum 0. Strata 1 and 2 - SOAP
+against `customer-master` on Tomcat 8.5, and event volume through `esb-adapter` - are WP-25b, which
+is not built. A requirement resolved to one of the three tiers it names would be a control that
+looks satisfied and is not.
+
+### Owned by WP-25a
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-008** Every stratum is exercised at volume, not only the one that is easy to drive | Stratum 0 only. `workload-dataset` emits a business day as NDJSON and `mainframe/data/generate.py --from-stream` writes it as `ACCTMAST.DAT` and `MOVEMENT.DAT` - the same pipe `services/ledger-loader` consumes, so neither side draws the bank's day twice. `ORGANIZATION IS SEQUENTIAL` and COMP-3, reusing the encoder that already exists here rather than adding a fourth to this repository. `workload/scripts/batch-window.sh` drives `run-eod.sh` at three volumes and records **per step**, because STEP020 `ACCTPOST` match-merges and streams while STEP010 and STEP030 call `sortrec.py`, which holds the whole file in memory - one total would mix the tier's property with a local stand-in's ceiling. **2 429 346 movements against 2 400 001 accounts in 9.251 s, nothing rejected**, with `ACCTPOST` 57% of the window at every volume. Accounts open in the stream's base currency and every substitution is counted - 3.8% at the top volume - which is F-72's convention one stratum down rather than a second answer | The three cycle logs and the three generator reports committed under `workload/baselines/batch-window/`, each carrying the counters the report was derived from. `test_generate.py::TheVolumeWriter` pins the writer against a synthetic stream: two legs per transfer sharing one reference, the contract's record lengths, base-currency opening with substitutions counted, the treasury carrying what it funded, every non-movement action counted rather than dropped, a debit that would overdraw refused, an unknown account counted, both files sorted as the match-merge requires, and `predict_rejects` returning empty over what the writer produced | **Partially met** - stratum 0 only; strata 1 and 2 are WP-25b |
+
+### Contributed by WP-25a, verified by the owning package
+
+| Requirement | Owner | What WP-25a contributes | Status |
+|---|---|---|---|
+| **REQ-MF-004** Invalid movements are rejected with a reason, never silently dropped | WP-04 | **F-18 closed.** The synthetic movement file rejected 162 of 302 records - 111 `R003` currency mismatches and 48 `R002` closed accounts - so every run of the cycle in nineteen packages exercised rejection handling and barely touched posting, and **multi-currency posting was never exercised at all**. A movement now takes the currency of the account it lands on, both legs of a transfer share it, movements land only on `OPEN` accounts, and the amount is drawn against the debited account's running balance. **300 of 302 post**, and the two that remain are the deliberate `R001` and `R004` fixtures WP-04's own tests depend on. The requirement was always met - every one of those 162 rejections was correct and carried its reason. What was wrong is that a file of mostly-rejects meant WP-04's control was the only path the data exercised | Met at this tier |
+| **REQ-DP-001** All test data is synthetic | WP-03 | Nothing in the capture is a customer's. The generator carries account and customer *references* from the canonical patterns and no names, addresses or identifiers of any kind - unchanged by this package, which altered which account a movement is drawn against and nothing about what an account record contains. The volume mode reads a WP-20 population, which is drawn rather than collected | Met at this tier |
+| **REQ-OPS-001** Every scheduled process has a runbook | WP-05 | The cycle now reports elapsed time per step in its own job log, which is what a real job log carries and what an operator reads to know whether the window is growing. `test-eod-cycle.py::scenario_every_step_reports_its_elapsed_time` holds it | Met at this tier |
