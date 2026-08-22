@@ -53,6 +53,11 @@ var engine = []string{
 	"internal/model",
 	"internal/money",
 	"internal/population",
+	// WP-24a. A second contract decoder beside internal/model, and engine for the same reason that
+	// one is: it takes bytes, opens nothing, and both drivers consume it. The boundary is the whole
+	// reason two drivers can share one model, and a catalogue of conditions is shared exactly as the
+	// day is - WP-25 injects the same seven against the older strata.
+	"internal/scenario",
 }
 
 // driver is WP-21's half: the packages that execute a schedule against a running estate. They reach
