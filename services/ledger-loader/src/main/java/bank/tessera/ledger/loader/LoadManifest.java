@@ -18,6 +18,8 @@ import java.util.TreeMap;
  *     reason
  * @param busiestAccountRef the customer account the draw gave the most postings, named rather than
  *     chosen
+ * @param openingBalanceMinor what every account was opened with, as the stream declared it. A figure
+ *     rather than the multiple this module used to apply - see F-98 and {@link Header}.
  */
 public record LoadManifest(
         String formatId,
@@ -33,7 +35,7 @@ public record LoadManifest(
         int accountsPerCustomer,
         String baseCurrency,
         String treasuryAccountRef,
-        long openingMultiple,
+        long openingBalanceMinor,
         Map<String, Long> counters,
         long rowsWritten,
         String datasetDigest,
@@ -65,7 +67,7 @@ public record LoadManifest(
                 header.accountsPerCustomer(),
                 header.baseCurrency(),
                 header.treasuryAccountRef(),
-                DatasetLoader.OPENING_MULTIPLE,
+                header.openingBalanceMinor(),
                 counters,
                 rowsWritten,
                 datasetDigest,
