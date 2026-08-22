@@ -70,7 +70,8 @@ var floatIsJustified = map[string]string{
 	// duration in milliseconds, a rate per second, a ratio between two of those, or a count of
 	// records - and the one thing crossing the hop that *is* money never passes through this
 	// package at all: it goes ledger to XSLT to SOAP to COMP-3 as bytes the adapter encodes.
-	"internal/hop/hop.go": "the three legs are durations in milliseconds and the drift between them is a ratio of two durations; a lag, a record count and a transfers-per-second figure are counts and rates. This package reads the adapter's log and never an amount",
+	"cmd/workload-hop/main.go": "it prints elapsed seconds beside a lag and a record count, and hands both to internal/hop; a duration and a count of records are not money, and this command sends nothing",
+	"internal/hop/hop.go":      "the three legs are durations in milliseconds and the drift between them is a ratio of two durations; a lag, a record count and a transfers-per-second figure are counts and rates. This package reads the adapter's log and never an amount",
 
 	// WP-24b. The migration exercise measures how long a lock was held; the soak measures how a
 	// table grows. Counts, seconds and bytes throughout, and neither reads an amount - what grows
@@ -110,6 +111,12 @@ var driverMayCall = map[string]map[string]string{
 	"cmd/workload-soap/main.go": {
 		"time.Now":            "a ladder measures a rate against a real clock, exactly as cmd/workload-ceiling does: it measures a machine, it does not describe a bank's day",
 		"strconv.FormatFloat": "the report renders latencies in milliseconds and rates per second. The one amount this driver sends is an int64 constant and never passes through here",
+	},
+	// WP-25d's watcher. It reads the clock to say how long a backlog took to drain, and it drains
+	// in real time whatever the compression dial says - the relay ships in wall clock and so does
+	// the hop behind it. It sends nothing and posts nothing, so no amount is ever near it.
+	"cmd/workload-hop/main.go": {
+		"time.Now": "how long a backlog stood is a duration of real time, and it is the figure this command exists to produce. Nothing here sends a request or names an amount: the money crossing the hop goes ledger to XSLT to SOAP to COMP-3 without passing through this module at all",
 	},
 }
 
