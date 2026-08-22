@@ -1,6 +1,7 @@
 # The estate under load - what it actually does
 
-**Produced by [WP-23](../plan/wp/WP-23-slo-baseline.md)** | Companion to
+**Produced by [WP-23](../plan/wp/WP-23-slo-baseline.md), extended by
+[WP-24a](../plan/wp/WP-24-failure-injection.md)** | Companion to
 [`query-plans-at-volume.md`](query-plans-at-volume.md)
 
 Two measurements and what they mean. The first answers **F-27**, open since WP-09: how much money
@@ -142,7 +143,101 @@ not a gap in the catalogue.
 
 ---
 
-## 3. What changed because of these numbers
+## 3. The estate under load with a broker behind it
+
+**Produced by WP-24a.** `spine-only/` above is two of the five components in the SLO catalogue.
+This one is three, against a ledger an order of magnitude larger, and every figure comes from
+[`workload/baselines/with-broker/`](../../workload/baselines/with-broker/).
+
+> Same developer machine, same day, same dials: Friday 2026-08-21, seed 42, scale 0.002, 720x
+> compression, branch hours. What differs is the estate - Kafka, `edge/fraud-scoring` and a
+> controllable hop are in it now - and the ledger underneath: **300 001 accounts and 14 491 832
+> rows**, loaded in 454 s, against `spine-only/`'s 40 001 and 799 565. Both captures state their own
+> conditions, which is the only reason they can be set beside each other at all.
+
+| | `spine-only/` (WP-23) | `with-broker/` (WP-24a) |
+|---|---|---|
+| Requests offered | 34 323 | 34 323 |
+| Money movements | 9 132 | 9 132 |
+| `SLO-LEDGER-MOVEMENT-SUCCESS` | met, 1.00000 | met, 1.00000 |
+| `SLO-GATEWAY-AVAILABILITY` | met, 1.00000 | met, 1.00000 |
+| `fraud-scoring` | `nothing happened` | **met over 23 588 events** |
+| `ledger_outbox_lag_seconds` | 140 s then 185 s, **missed** | 54 s then **0** |
+
+### The outbox objective was the fixture, and now it is not
+
+`SLO-LEDGER-OUTBOX-FRESHNESS` had been outside its 60-second target in every capture this repository
+holds, and **F-77** guessed correctly that the reason was a fixture with no broker to publish to.
+With one, the relay clears. That is the broker half of F-77 closed, and `fraud-scoring`'s two
+objectives have figures for the first time.
+
+What replaced the missing signal is a measured number rather than an absence. After a 45-second day
+the relay **published the run's last 12 888 events in 1 minute 14 seconds** - it was still working
+when the day had been over for a minute.
+
+**That is the compression dial, and it is worth understanding before quoting any of these figures.**
+The relay ships at most `LEDGER_OUTBOX_BATCH` rows every `LEDGER_OUTBOX_INTERVAL_MS` - 100 every
+500 ms by default - and **both are fixed in wall clock**. `--scale` and `--compress` move the demand
+and neither moves the relay, so a day replayed at 720x hands it money movements roughly seven hundred
+times faster than the bank ever would. The 54-second lag in the opening scrape is the same effect
+from seeding. In real time the bank offers the relay about 0.28 postings a second against a ceiling
+of 200, and never approaches it. **F-84.**
+
+### What this does and does not license
+
+It licenses one sentence: *with a broker in the fixture, the modern spine meets every objective it
+can be judged on at 34 323 requests over a compressed nine-hour day, against a production-shaped
+ledger.* It licenses nothing about the two batch components, which still print `nothing happened` -
+`reporting` and `recon` do not run inside a compressed window, and that is the half of F-77 this
+package does not close.
+
+It also licenses nothing about the estate under stress, because nothing here was stressed. That is
+WP-24c.
+
+---
+
+## 4. Four defects, found by running the fixture rather than by reading it
+
+WP-24a's fixture is new code, and its first real runs found four defects in it. Every one of them
+would have produced **a plausible measurement of something other than the estate**, which is the
+failure mode this repository keeps a trap list about, and each cost a full re-capture cycle. They are
+recorded here because the next person to extend a fixture will meet the same shapes.
+
+**A working relay reported as broken.** The drain check read `ledger_outbox_pending` and compared it
+against the string `"0"`. A Prometheus gauge is a float by specification, so the scrape says `0.0`
+and the check failed on an estate that had drained perfectly. A control that fires on a healthy
+system is worse than no control, because the next person turns it off.
+
+**A metric name that matched nothing.** The same check parsed the exposition with `$1 == name`, and a
+Micrometer series carries its labels in the first field - `ledger_outbox_pending{application=
+"ledger-api",} 0.0`. It reported `?` for every reading. Worth noticing that the two defects above
+were in the *check*, not in the thing checked: the first run failed the estate, the second reported
+nothing at all, and neither said anything true.
+
+**A consumer that subscribed before its topic existed.** `edge/fraud-scoring` subscribes as it
+starts, and auto-creation makes a topic when a *producer* first sends. On a run whose accounts are
+already open - so nothing is relayed during seeding - the scorer subscribed to a topic that did not
+exist, cached `UNKNOWN_TOPIC_OR_PART`, and did not look again until librdkafka's metadata refresh
+five minutes later. The run is forty-five seconds long. Because a `prometheus_client` counter has no
+series until its first increment, its metrics were **absent rather than zero**, and the report said
+`nothing happened` about a component that was running the whole time. The first capture worked only
+because seeding there did relay events in the first seconds of the scorer's life - a race, and a
+fixture whose measurement depends on one gives a different answer on a faster machine. `estate-up.sh`
+now creates both topics before anything subscribes.
+
+**A signal that reached a wrapper.** The injector suspended the ledger by sending `SIGSTOP` to the
+process group of the pid `estate-up.sh` backgrounded. `gradlew bootRun` forks the application into a
+JVM owned by the **Gradle daemon**, which is in a process group of its own: measured directly,
+launcher pgid **23780** against ledger JVM pgid **9371**. The signal suspended a shell wrapper, the
+ledger carried on answering every request, and the injector - whose `kill` had succeeded - reported
+the condition as applied. A signature captured then would have been a healthy estate filed under the
+name of a degraded one. **F-73 is the same trap one level shallower**, where it cost a teardown
+rather than a measurement. Components are now addressed by the pid holding the port they serve, which
+is what defines the component here.
+
+---
+
+## 5. What changed because of these numbers
 
 - **F-69 is closed.** `workload-plan` warned above 2 000 requests a second, a round number named in
   its own comment as standing in for a figure nobody had. It is now **800**, which is where the two
@@ -159,7 +254,16 @@ not a gap in the catalogue.
 
 ```bash
 bash workload/scripts/ceiling.sh --levels 1,2,4,8,16,32,64 --duration 10s
-bash workload/scripts/baseline.sh --customers 20000 --from 2026-06-01 --to 2026-06-15
+
+bash workload/scripts/baseline.sh --out-name spine-only \
+  --customers 20000 --from 2026-06-01 --to 2026-06-15 --date 2026-08-21
+
+bash workload/scripts/baseline.sh --out-name with-broker \
+  --customers 150000 --from 2025-09-01 --to 2026-08-21 --date 2026-08-21
 ```
 
-Both need Docker, a JDK 17 and Go. The second takes several minutes, most of it the load.
+All three need Docker, a JDK 17 and Go; the last also needs uv, for the scorer. `--date` is pinned
+because it has to be: left to the fixture it is today, and today has a weekday multiplier - a Friday
+is 1.2 and a Saturday 0.45, so the same command run at the weekend produces a third of the demand and
+a diff nobody should read as a regression. The `with-broker` capture takes about twelve minutes, most
+of it the load.

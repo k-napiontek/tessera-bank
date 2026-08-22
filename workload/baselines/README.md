@@ -12,7 +12,6 @@ own directory and `baseline.sh` requires `--out-name` rather than defaulting to 
 |---|---|
 | [`spine-only/`](spine-only/) | PostgreSQL, the ledger and the gateway. No broker, so `fraud-scoring` never ran and the outbox relay had nowhere to publish. Captured by WP-23 at 20 000 customers over a fortnight |
 | [`with-broker/`](with-broker/) | The same, plus Kafka, `edge/fraud-scoring` and the controllable hop. Captured by WP-24a at 150 000 customers over 355 dates - 300 001 accounts, 14 491 832 rows |
-| [`signatures/`](signatures/) | One directory per injected condition, each diffed against `with-broker/` |
 
 Every directory holds the same seven files:
 
@@ -119,6 +118,14 @@ ever would. The lag of 53 s in the opening scrape is the same effect from seedin
 
 **`reporting` and `recon` still print `nothing happened`.** They are batch jobs and do not run inside
 a compressed nine-hour window. That is the half of F-77 WP-24a does not close, and it stays open.
+
+## There is no `signatures/` here yet
+
+`../scripts/signatures.sh` runs all seven conditions and writes one directory per condition, and
+**WP-24a deliberately committed none of them.** Every run so far has had `fraud-scoring` score
+nothing at all while the same fixture driven on its own consumes correctly, so two of the eleven
+objectives are unmeasured in each - and a capture nobody should quote is worse than none. WP-24c
+diagnoses that first. **F-86.**
 
 ## What they show
 

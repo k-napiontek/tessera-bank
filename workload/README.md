@@ -137,11 +137,17 @@ reverted - because a condition applied between two runs measures a maintenance w
 thing the exercise exists not to be. The revert runs on a context of its own, so a run stopped with
 Ctrl-C does not leave a paused broker behind for tomorrow to boot against.
 
-`internal/injector` acts only on containers this fixture booted and process groups this fixture
-started, never on the estate's own configuration or code. Where a condition cannot be produced
+`internal/injector` acts only on containers this fixture booted and processes this fixture started -
+addressed by the pid holding the port each component serves, never by the pid the script
+backgrounded, because `gradlew bootRun` forks the application into a JVM owned by the Gradle daemon
+and a signal to the launcher's group suspends a wrapper while the ledger carries on answering. It
+never touches the estate's own configuration or code. Where a condition cannot be produced
 inside that line it is reported as **NOT INJECTED** with the reason and the run carries on, because
 that is a finding about the component's testability rather than a failure of the fixture -
 `SCN-CLOCK-SKEW` is the one that comes out that way, and its entry in the catalogue says so.
+
+`workload/scripts/signatures.sh` runs all seven against a committed baseline. **Its output is not
+committed yet** - see [`baselines/README.md`](baselines/README.md) and **F-86**.
 
 ## Reporting a run afterwards
 

@@ -9,37 +9,66 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-24a is next, and WP-24 was detailed on 2026-08-21 rather than executed.** Every package that
-> remained in the plan carried **frame only** - `WP-18`, `WP-24` and `WP-25` all read "To be detailed
-> before execution" under `## Tasks`, which is exactly the condition the `work-package` skill halts
-> on, because the task list is where the repository owner's intent lives and a session that invents
-> one has planned its own work. So this change details WP-24 and stops: no contract, no injector, no
-> run.
+> **WP-24a is done and merged** ([#71](https://github.com/k-napiontek/tessera-bank/pull/71), `PENDING`),
+> and **the estate can now be degraded on purpose.** Every measurement before this one was taken on a
+> healthy estate: WP-21 put it under load, WP-22 gave it a production-shaped database, WP-23 declared
+> what good looks like - and none of them broke anything. `contracts/workload/` now declares seven
+> conditions as a **contract**, `workload/internal/injector` applies one to a running estate at the
+> minute the scenario names, and `workload-report --scenario` judges what happened against what the
+> scenario said would happen.
 >
-> **It lands as two halves on one ticket**, 24a and 24b, for the reason `STATUS.md` already records
-> after WP-09 - *at this size, split the package in the plan rather than the pull request*. **24a**
-> declares what a condition is, makes the estate capable of showing one, and records the seven
-> signatures. **24b** spends what 24a built on the two exercises that take hours rather than minutes:
-> a schema migration applied while money is moving, and a soak long enough to put figures on F-28.
+> **The next actionable packages are WP-24b and WP-24c**, in either order, and **WP-25** is also
+> unblocked.
 >
-> **Five decisions are settled in the detailing rather than left for the executing session.** A
-> scenario is **its own contract pair** at `contracts/workload/`, not a field on the day model, because
-> every manifest since WP-21 records the model digest so that two runs can be compared - a model that
-> changed because somebody added a fault is one nothing can be diffed against. A scenario names the
-> objectives it must move **and the ones it must not**, so a signature is asserted rather than
-> described; the flat list is the load-bearing half and the one a write-up always omits. **F-77's
-> broker half closes here**, in the fixture rather than in the estate, because three of the seven
-> conditions have no observable without one - consumer lag has no consumer, and a stuck outbox row is
-> the fixture's permanent state rather than an injected condition. The **baseline is re-taken at full
-> WP-22 volume**, closing F-79, and committed beside the WP-23 one rather than over it. And the
-> migration exercised under traffic is **the scenario's own**, applied with its own Flyway history
-> table, so a package that measures leaves no permanent row in the schema history of the thing it
-> measured.
+> **The seven recorded signatures are WP-24c rather than part of WP-24a**, and the reason is the
+> honest one. WP-24a's first real runs found **four defects in its own new fixture**, each of which
+> would have produced a plausible measurement of something other than the estate: a working relay
+> reported as broken because the check compared a Prometheus float against the string `"0"`; a metric
+> matcher that ignored Micrometer's labels and reported `?` for everything; a consumer that subscribed
+> before its topic existed, cached `UNKNOWN_TOPIC_OR_PART`, and whose *absent* counters read as
+> `nothing happened` for a component that ran the whole time; and an injector that sent `SIGSTOP` to
+> the Gradle **launcher's** process group - measured at pgid 23780 against the ledger JVM's 9371 - so
+> the ledger carried on answering while the injector reported the condition as applied. All four are
+> fixed. A fifth is open and undiagnosed (**F-86**), and until it is, two of the eleven objectives are
+> unmeasured in every signature. Committing them would have been committing a measurement of the
+> fixture, which is exactly what this strand exists not to do.
 >
-> **WP-18 is deferred a fourth time, and one of its two reasons is now spent.** F-57's governance
-> stubs can be written truthfully now that WP-23 exists. What has not moved is that WP-18's Definition
-> of Done requires the traceability matrix to resolve **every** requirement, and `REQ-PERF-007` and
-> `REQ-PERF-008` belong to WP-24 and WP-25, neither of which is built.
+> **F-79 is closed and F-77's broker half with it.** `workload/baselines/with-broker/` is a Friday
+> driven against **300 001 accounts and 14 491 832 rows** - the full WP-22 volume, 3 804 955 audit
+> rows, loaded in 454 s - with Kafka and `edge/fraud-scoring` in the fixture for the first time. The
+> scorer has figures at all: **23 588 events, both objectives met**, where every previous capture
+> printed `nothing happened`. And `SLO-LEDGER-OUTBOX-FRESHNESS` goes from **missed at 140 s to met at
+> 0**, which settles the question F-77 raised - the missed objective was the fixture, not the ledger.
+> It is committed **beside** the WP-23 capture rather than over it, each stating its own conditions,
+> and `baseline.sh` now requires `--out-name` so that a third cannot silently overwrite either.
+>
+> **The most useful number this package produced is one nobody was looking for.** The outbox relay
+> ships at most 100 rows every 500 ms, both fixed in wall clock, while `--scale` and `--compress` move
+> the demand - so a day replayed at 720x hands it money movements roughly seven hundred times faster
+> than the bank ever would. After a 45-second day the relay **published the run's last 12 888 events in
+> 1 minute 14 seconds**. In real time the bank offers about 0.28 postings a second against a ceiling of
+> 200 and never comes near it, so this is the compression dial rather than a defect in the ledger -
+> but any report quoting outbox lag has to say which of the two it is describing. **F-84**, and
+> `workload-run --drain` now waits for the relay rather than guessing at a settle.
+>
+> **Three of the seven conditions move nothing this estate has an objective for, and each says so in
+> the contract.** A rate-limit storm turns customers away at full availability, because a 429 is
+> deliberately on the good side of `SLO-GATEWAY-AVAILABILITY`; a stopped consumer leaves
+> `SLO-FRAUD-DECISION-COMPLETENESS` untouched, because it is a ratio of what was consumed rather than
+> of what was offered; and a clock skew across the batch boundary is invisible because the two
+> components that would notice do not run inside a compressed window. `movesNothingBecause` is
+> required when the move list is empty, so an estate that cannot see a condition is a **declaration**
+> rather than an omission.
+>
+> **`SCN-CLOCK-SKEW` cannot be injected by this fixture at all, and the injector says so** rather than
+> pretending. PostgreSQL stamps the value date from its own `now()`, and moving a container's clock
+> needs `SYS_TIME` on a shared kernel or a faketime shim in the image - both changes to the estate
+> rather than to the fixture, which WP-24's Constraint refuses. **F-85** records it as a finding about
+> testability, which is what the Constraint asks for.
+>
+> **WP-18 is deferred a fifth time.** Its Definition of Done requires the traceability matrix to
+> resolve **every** requirement, and `REQ-PERF-007` is only partially met until WP-24c lands, while
+> `REQ-PERF-008` belongs to WP-25, which is not built.
 >
 > **WP-23 is done and merged** ([#68](https://github.com/k-napiontek/tessera-bank/pull/68), `eb48dc0`), and
 > **the estate is no longer unjudged.** Twenty-five metrics across five components had said nothing
@@ -544,8 +573,9 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | `29a75c1` |
 | [22](wp/WP-22-ledger-data-volume.md) | Ledger data volume - a production-shaped database | 3 | 20, 09 | `Done` | [#65](https://github.com/k-napiontek/tessera-bank/pull/65) | `7042896` |
 | [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Done` | [#68](https://github.com/k-napiontek/tessera-bank/pull/68) | `eb48dc0` |
-| [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture and the seven signatures | - | 23 | `In progress` | | |
+| [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `PENDING` |
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Not started` | | |
+| [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Not started` | | |
 | [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11b | `Not started` | | |
 
 ## Critical path
@@ -561,9 +591,9 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 The workload strand hangs off the contracts, not off the ledger:
 
 ```
-              +-> 21 --+
-02 -> 20 -----+        +-> 23 -> 24a -> 24b
-              +-> 22 --+
+              +-> 21 --+                  +-> 24b
+02 -> 20 -----+        +-> 23 -> 24a -----+
+              +-> 22 --+                  +-> 24c
               |
               +-> 25   (also needs 05, 10b, 11b)
 ```
@@ -571,9 +601,10 @@ The workload strand hangs off the contracts, not off the ledger:
 `12`, `13`, `14`, `15`, `17`, `19` and `20` to `25` sit off the critical path and can be taken
 whenever their dependencies are `Done`. `21` and `22` are independent of each other and may be taken
 in either order, but both must land before `23`: a baseline captured against three accounts is a
-baseline of a fixture. `24b` follows `24a` rather than sitting beside it, because the migration and
-the soak are both read against the baseline `24a` re-takes - run against the older one they would be
-diffed against a normal captured on a fixture that no longer exists.
+baseline of a fixture. `24b` and `24c` both follow `24a` rather than sitting beside it, because the
+migration, the soak and every signature are read against the baseline `24a` re-took - run against
+the older one they would be diffed against a normal captured on a fixture that no longer exists.
+`24b` and `24c` are independent of each other and may be taken in either order.
 
 ---
 
@@ -660,10 +691,17 @@ becomes its own change when picked up.
 | F-74 | WP-22 | **`population.Draw` takes a business date and ignores it in the random stream.** The seed it mixes is `seed ^ drawStream` against the event's sequence number, so two dates drawn with the same run seed produce the *same* customers doing the *same* operations, and the date changes only how the transfer and hold references are formatted. WP-21 never saw it because a run is one day. A year built that way would give one small cast of accounts every posting in the dataset and leave the rest of the population untouched, which is not a bank. `internal/dataset` derives a per-date seed from the run's and says so, so the emitter is correct; the surprising signature is untouched, because `population.go` is WP-20's file and a change there moves every byte WP-21's reproducibility tests compare. The fix is to mix the date inside `Draw` and re-record whatever golden bytes depend on it. | Open |
 | F-75 | WP-22 | **The model's operation mix has no conditional structure, so operations that need prior state land on accounts that have none.** `captureHold` and `releaseHold` are drawn from the same marginal distribution as everything else, with no regard to whether the account has an open hold - and with a few hundred thousand accounts and a couple of hold operations each, most of them do not. Four in five capture and release actions in a 250-day load therefore found nothing to act on - 79 775 of 99 095, against 114 661 holds placed - and were counted under `HOLD_NOT_FOUND`; a driver would have collected a 404 for each. The same shape as **F-72**, where the currency mix cannot be realised against single-currency accounts, and as WP-21's `no-reference-yet`: the model describes what a bank does in aggregate and not what any one account's story is. Resolving it means a model that can express "and then" rather than only "how often", which is a WP-20 change and a substantial one. | Open |
 | F-76 | WP-22 | **The loaded dataset is deep in its tables and shallow in every customer account, and a plan at real depth needs a profile that says so.** 2.1 million transfers over 300 001 accounts give each about seven sent and seven received, so the busiest customer account in a 250-day load holds 59 postings. That is enough to make the *tables* production-shaped - which is what changes the planner's choices, and what answered F-24 - and it is not a year of a real corporate account. The plan at depth was therefore captured against the treasury, at 300 000 postings, and labelled as what it is. A profile that concentrated the same volume on a few thousand customers would give a customer account a real history without planting one, and is the honest way to measure a statement page at page fifty. It is a dial on the loader (`--customers` against `--scale`) rather than new code, but choosing the shape is a decision rather than a default. | Open |
-| F-77 | WP-23 | **The committed baseline exercises two of the five components in the catalogue.** `estate-up.sh` boots PostgreSQL, the ledger and the gateway, so `fraud-scoring` never ran - it consumes from Kafka and there is no broker - and `reporting` and `recon` are batch jobs that do not execute during a compressed nine-hour window, their metrics going to a node_exporter textfile rather than to anything scraped. The report prints `nothing happened` against all three rather than omitting them, which is the honest failure mode, but the recorded normal is a recorded normal for **half the estate**. Closing it means a fixture that also boots Kafka and the scorer, and runs the two batch jobs inside the window. **WP-24a closes the broker half**: three of its seven injected conditions have no observable without one - consumer lag has no consumer, and a stuck outbox row is the fixture's permanent state rather than an injected condition. The two batch jobs stay outside a compressed window and stay open here. | Open - the broker half is owned by WP-24a |
+| F-77 | WP-23 | **The committed baseline exercises two of the five components in the catalogue.** `estate-up.sh` boots PostgreSQL, the ledger and the gateway, so `fraud-scoring` never ran - it consumes from Kafka and there is no broker - and `reporting` and `recon` are batch jobs that do not execute during a compressed nine-hour window, their metrics going to a node_exporter textfile rather than to anything scraped. The report prints `nothing happened` against all three rather than omitting them, which is the honest failure mode, but the recorded normal is a recorded normal for **half the estate**. Closing it means a fixture that also boots Kafka and the scorer, and runs the two batch jobs inside the window. **WP-24a closes the broker half**: three of its seven injected conditions have no observable without one - consumer lag has no consumer, and a stuck outbox row is the fixture's permanent state rather than an injected condition. The two batch jobs stay outside a compressed window and stay open here. **The broker half is closed by WP-24a**: `estate-up.sh` boots Kafka and the scorer, and `workload/baselines/with-broker/` records `fraud-scoring` meeting both its objectives over 23 588 events where the previous baseline printed `nothing happened`. `SLO-LEDGER-OUTBOX-FRESHNESS` goes from missed at 140 s to met at 0, which confirms the missed objective was the fixture rather than the ledger. Three of five components now, not two. | Open - the two batch jobs only |
 | F-78 | WP-23 | **Four objectives cannot be answered by any run report, by construction.** `SLO-LEDGER-OUTBOX-FRESHNESS`, `SLO-LEDGER-POOL-HEADROOM`, `SLO-REPORTING-RUN-DURATION` and `SLO-RECON-CONTROL-RUNS` are stated over a proportion of a measurement window, and `workload-report` works from two scrapes. It refuses to produce a figure and prints the two points it has, which is right - a number from two samples would be invented - but it leaves those four objectives with **no recorded normal at all**. Answering them needs something scraping over time, which ADR 0012 puts in the platform repositories; what this repository could do instead is record a series rather than two snapshots during a run. | Open |
-| F-79 | WP-23 | **The baseline's ledger is an order of magnitude smaller than the one WP-22 built.** It was captured at 20 000 customers over a fortnight - 40 001 accounts, 799 565 rows - rather than WP-22's 150 000 customers over 250 business dates, 300 001 accounts and 4.84 million postings. A deliberate trade for a capture that finishes in minutes, and it matters because **F-24** records the planner abandoning `posting_account_ix` only at the larger cardinality: the objectives met here were met against a database where the statement page is still cheap. The capture is one flag away (`--customers 150000 --from 2025-09-01 --to 2026-08-21`) and should be re-taken at full volume before this baseline is quoted as the estate's normal. **WP-24a takes it**, at exactly that volume and for exactly this reason: it has to re-capture the baseline anyway once the fixture gains a broker, and a pool-exhaustion or latency signature diffed against a database where the statement page is still cheap is a signature of the fixture. | Open - owned by WP-24a |
+| F-79 | WP-23 | **The baseline's ledger is an order of magnitude smaller than the one WP-22 built.** It was captured at 20 000 customers over a fortnight - 40 001 accounts, 799 565 rows - rather than WP-22's 150 000 customers over 250 business dates, 300 001 accounts and 4.84 million postings. A deliberate trade for a capture that finishes in minutes, and it matters because **F-24** records the planner abandoning `posting_account_ix` only at the larger cardinality: the objectives met here were met against a database where the statement page is still cheap. The capture is one flag away (`--customers 150000 --from 2025-09-01 --to 2026-08-21`) and should be re-taken at full volume before this baseline is quoted as the estate's normal. **WP-24a takes it**, at exactly that volume and for exactly this reason: it has to re-capture the baseline anyway once the fixture gains a broker, and a pool-exhaustion or latency signature diffed against a database where the statement page is still cheap is a signature of the fixture. **Closed by WP-24a**: `workload/baselines/with-broker/` is 150 000 customers over 355 dates - 300 001 accounts, 14 491 832 rows, 3 804 955 audit rows, loaded in 454 s - committed beside the old capture rather than over it, each stating its own conditions. | **Closed** by WP-24a |
 | F-80 | WP-23 | **`internal/purity` classifies by role, and two packages would pass the stricter test.** `internal/reconcile` and `internal/slo` perform no I/O - both take bytes and return values - but they sit under `driver`, where the forbidden-import list does not apply, because they belong to the run-reporting half rather than to the demand model. The classification is coherent and it is deliberately not purity, so the guarantee the engine list carries does not extend to two packages that would satisfy it. Either the lists gain a third category, or the comment should stop describing the engine list as "the packages which perform no I/O of any kind". | Open |
+| F-81 | WP-24a | **A condition's window is compressed by the same dial as the schedule.** A scenario states `holdsForMinutes` in business minutes so that it reads the same at any dial setting, and `injector.Schedule` divides it by the compression - so `SCN-LEDGER-OUTAGE`'s declared thirty minutes is **2.5 seconds** of wall clock and `SCN-OUTBOX-STUCK`'s ninety is 7.5. That is coherent, and it means several conditions are too brief for an estate to notice: a thirty-minute ledger outage is catastrophic in real time and a 2.5-second one is absorbed. The delay a slow-dependency condition adds is deliberately *not* compressed, for the opposite reason - a customer's second and a half is a second and a half at any dial - so the two halves of a scenario are already treated differently and the asymmetry is undocumented. WP-24c decides whether a hold is wall clock, business time, or a choice the scenario states. | Open |
+| F-82 | WP-24a | **A two-point scrape bracket cannot see a condition that was reverted**, which is **F-78** with evidence rather than reasoning. `SCN-OUTBOX-STUCK` paused the broker for 7.5 s and `ledger_outbox_lag_seconds` read 0 before and 0 after, because the relay had drained by the time the closing scrape was taken. `SCN-POOL-EXHAUSTION` held a table lock and `hikaricp_connections_pending` read 0 at both ends while 1 951 customer requests took over a second - the spike happened between the two samples. Every gauge objective in the catalogue has this property, so a signature over one needs a series rather than a bracket. What this repository could do without leaving ADR 0012's boundary is have `workload-run` sample those gauges **during** the run and publish the extremes. | Open |
+| F-83 | WP-24a | **`SCN-POOL-EXHAUSTION` moved an objective its scenario names in neither list.** The lock took `SLO-GATEWAY-LATENCY` to 32 371 of 34 322 requests within a second - 0.943 against a 0.99 target - while the two objectives the scenario *did* declare were not crossed: pool headroom for F-82's reason, and posting latency because 53 slow postings in 9 132 is inside a 1% budget. The declaration was written before the run and WP-24a deliberately left it alone, because a prediction rewritten after seeing the answer is not a prediction. Revising it belongs in **WP-24c**, in a change that carries the measurement. | Open - owned by WP-24c |
+| F-84 | WP-24a | **The outbox relay's throughput does not scale with the compression dial.** It ships at most `LEDGER_OUTBOX_BATCH` rows every `LEDGER_OUTBOX_INTERVAL_MS` - 100 every 500 ms by default - and both are fixed in wall clock while `--scale` and `--compress` move the demand. A day at 720x hands the relay money movements roughly seven hundred times faster than the bank ever would: after a 45-second day it **published the run's last 12 888 events in 1 minute 14 seconds**. In real time the bank offers about 0.28 postings a second against a ceiling of 200 and never approaches it, so this is a property of the fixture's dial rather than a defect in the ledger - but any report quoting outbox lag has to say which of the two it is describing. `workload-run --drain` now waits for the relay rather than guessing at a settle. | Open |
+| F-85 | WP-24a | **`SCN-CLOCK-SKEW` cannot be produced by this fixture**, and the injector reports it as uninjected with the reason rather than pretending. PostgreSQL stamps the value date from its own `now()`, so moving the two sides of the batch boundary apart means moving a clock inside a container - which needs `SYS_TIME` on a kernel shared with the host, or a faketime shim built into the image. Both change the estate's runtime rather than the fixture, which WP-24's Constraint refuses. Skewing the driver's own date is not the same condition: the ledger stamps its value dates itself, so a driver that thinks it is Tuesday changes nothing but its own idempotency keys. A finding about the estate's testability, recorded rather than worked around. | Open |
+| F-86 | WP-24a | **`edge/fraud-scoring` scores nothing during an injected run, and nobody knows why yet.** All seven runs under `signatures.sh` produced `tessera_fraud_scoring_seconds_count 0.0` with the relay reporting nothing pending, while the same `estate-up.sh` driven on its own consumes correctly - a consumer group at offset 3 315 with zero lag - and the `with-broker` baseline scored 23 588 events. The difference between the two paths is the scale, the scrape directory and the scenario environment, none of which should touch a consumer. Until it is understood, two of the eleven objectives are unmeasured in every signature, so **WP-24a committed no signature captures at all**: a capture nobody should quote is worse than none. This is the first task of **WP-24c**. | Open - owned by WP-24c |
+| F-87 | WP-24a | **The traceability matrix's "Partially filled" banner had gone stale twice over**, listing packages up to WP-21 while sections for WP-22 and WP-23 already existed below it. Corrected here because WP-24a was adding a section to the same file, and leaving the banner wrong would have made the document contradict itself on one page. It is the third occurrence of exactly what **F-17** describes - a repository-level document belonging to no package - and it strengthens the case for the check F-17 proposes rather than for a fourth manual correction. | Open |
 
 ---
 
@@ -805,3 +843,8 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-21 | **F-77's broker half is closed inside WP-24a, in the fixture rather than in the estate.** Three of the seven conditions have no observable against a fixture that boots no broker: consumer lag has no consumer, and a stuck outbox row is the fixture's **permanent state** rather than an injected condition - the committed baseline records `SLO-LEDGER-OUTBOX-FRESHNESS` as missed, at 140 s against a 60 s target, for exactly that reason, and that was the fixture rather than the ledger. Booting Kafka and `fraud-scoring` in `estate-up.sh` does not touch the Constraint that the estate is not modified to make a fault injectable: `workload/` is a test fixture and its own README says so in the first paragraph. Both components already read their configuration from the environment and neither changes. |
 | 2026-08-21 | **The baseline is re-taken at full WP-22 volume, and committed beside the WP-23 one rather than over it.** The moment the fixture gains a broker the committed baseline is no longer the same manifest, and WP-24's Constraint is that every run is compared against a baseline captured under one - diffing an injected run against a normal that already records a missed outbox objective would credit the injection with a failure the fixture had all along. The re-take goes to 150 000 customers over 250 business dates, which closes **F-79**, because **F-24** records the planner abandoning `posting_account_ix` only at the larger cardinality: a pool-exhaustion or latency signature taken against a database where the statement page is still cheap is a signature of the fixture. The old baseline stays, because the difference between the two is itself a finding. |
 | 2026-08-21 | **The migration exercised under traffic is the scenario's own, not the ledger's.** It is applied against the running ledger with its own Flyway history table, so `services/ledger-api`'s migration set is untouched - a package that measures should not leave a permanent row in the schema history of the thing it measured. Both alternatives cost something real and were refused: taking the index **F-24** asks for would partially answer F-24, which is WP-07's migration set and which WP-22's Out of scope explicitly forbade; and an add-then-drop pair would leave two permanent migrations in the ledger's history that exist only to demonstrate an exercise. What the exercise measures is unchanged either way - the lock the migration takes, and what the customer-facing latency did while it held it. Written into WP-24's **Out of scope**, not only into its task list, so the easier version is refused halfway through rather than reached for. |
+| 2026-08-22 | **A scenario is its own contract, not a field on the day model.** [ADR 0017](../governance/adr/0017-a-scenario-is-its-own-contract.md). Every run manifest records the day model's digest so that two runs can be compared, so a model that changed because somebody added a fault would be a baseline nothing could be diffed against - and the damage would be silent, because the digest would simply differ and a team comparing a WP-24 run with the WP-23 baseline would be comparing two models and calling it a regression. |
+| 2026-08-22 | **The seven recorded signatures moved out of WP-24a into a third half, WP-24c**, on the repository owner's instruction. WP-24a's first real runs found four defects in its own new fixture - a working relay reported as broken by a string comparison against a float, a metric matcher that ignored Micrometer's labels, a consumer that subscribed before its topic existed, and an injector that signalled the Gradle launcher's process group rather than the ledger JVM. Each invalidated the captures taken before it and cost a full re-capture cycle of about thirty-five minutes; all four are fixed and written up in [`estate-under-load.md`](../architecture/estate-under-load.md). A fifth (**F-86**) is open: `fraud-scoring` scores nothing during an injected run while the same fixture drives it correctly on its own. Committing signatures with two of eleven objectives unmeasured would have been committing a measurement of the fixture, so WP-24a lands what is verified and names what is not. |
+| 2026-08-22 | **The contradicted scenario declarations are left as written.** Three of the seven predictions were contradicted by the first runs, and WP-24's Out of scope says findings are logged rather than fixed. Rewriting a prediction after seeing the answer would make every future signature "as declared" by construction, which is the unfalsifiable claim the two-list design exists to refuse. **F-83** records what is already known; WP-24c revises the catalogue in a change that carries the measurement. |
+| 2026-08-22 | **The controllable hop is in path for every run, including the baseline.** A signature taken through one forwarding hop and diffed against a normal taken through none differs by more than the condition. It costs tens of microseconds on localhost against objectives stated at 500 ms and 1 s, and it is where a slow-dependency delay has to land - the interesting half of that signature is that the ledger's own latency histogram stays flat, and a delay added inside the ledger would move it. |
+| 2026-08-22 | **A baseline capture gets a directory, and `baseline.sh --out-name` is required.** A second capture written over the first leaves one report and two sets of conditions. `--date` is required for the same reason: left to the fixture it is today, and a Friday is a 1.2 multiplier against a Saturday's 0.45, so the same command run at the weekend produces a third of the demand and a diff nobody should read as a regression. |
