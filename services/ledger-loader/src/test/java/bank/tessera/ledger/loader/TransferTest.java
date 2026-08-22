@@ -55,8 +55,10 @@ class TransferTest {
                 "PLN",
                 "LIABILITY",
                 "ASSET",
-                // 200 x 100 = an opening balance of 20 000 minor units on each customer account.
                 Map.of("retail", 100L),
+                // An opening balance of 20 000 minor units on each customer account. It comes off the
+                // wire now rather than being scaled from the median beside it - F-98.
+                20_000L,
                 "CU0000000099",
                 TREASURY);
     }

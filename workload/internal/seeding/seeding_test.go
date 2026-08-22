@@ -176,6 +176,70 @@ func TestThePlanIsEveryAccountTheScheduleTouchesAndNothingElse(t *testing.T) {
 	}
 }
 
+// The plan a two-phase day needs, and the reason it is a second function rather than a wider Plan.
+//
+// A run that is going to be reconciled against a stratum-0 master cannot seed only what its schedule
+// touches: mainframe/data/generate.py writes an ACCTREC for every account the stream opens, so every
+// account the day happened not to touch would be a MISSING_IN_LEDGER break - tens of thousands of
+// them, burying whatever the reconciliation was meant to find. The two sides have to hold the same
+// estate, and this is the half that makes them.
+//
+// Plan stays exactly as it is, because for a run that is *not* reconciled it is the right answer:
+// opening 2.4 million accounts to drive nine thousand of them is a study of the seeding phase.
+func TestThePlanForAWholePopulationHoldsEveryAccountItDeclares(t *testing.T) {
+	built := people(t)
+	plan := seeding.PlanAll(built)
+
+	counted := 0
+	for range built.Accounts() {
+		counted++
+	}
+	if len(plan) != counted {
+		t.Fatalf("the population declares %d accounts and the plan holds %d", counted, len(plan))
+	}
+
+	planned := map[string]bool{}
+	for _, account := range plan {
+		if planned[account.AccountRef] {
+			t.Errorf("%s is opened twice", account.AccountRef)
+		}
+		planned[account.AccountRef] = true
+	}
+	for holding := range built.Accounts() {
+		if !planned[holding.AccountRef] {
+			t.Errorf("the population declares %s and the plan does not open it", holding.AccountRef)
+		}
+	}
+
+	_, treasury := built.Treasury()
+	if plan[0].AccountRef != treasury || plan[0].Type != seeding.Asset {
+		t.Errorf("the plan starts with %s as %s, the treasury is %s and must be an %s",
+			plan[0].AccountRef, plan[0].Type, treasury, seeding.Asset)
+	}
+	for _, account := range plan[1:] {
+		if account.Type != seeding.Liability {
+			t.Errorf("%s is opened as %s, and a customer account is a liability of the bank",
+				account.AccountRef, account.Type)
+		}
+	}
+}
+
+// Whatever the schedule touches, the whole-population plan holds too. The two-phase run relies on
+// this: the movement file is drawn from the same stream, so an account the day pays that the wider
+// plan had missed would be an unknown account at stratum 0 and a 404 at the edge.
+func TestTheWholePopulationPlanIsASupersetOfTheSchedulePlan(t *testing.T) {
+	built := people(t)
+	whole := map[string]bool{}
+	for _, account := range seeding.PlanAll(built) {
+		whole[account.AccountRef] = true
+	}
+	for _, account := range seeding.Plan(built, schedule(400), 7, date(t)) {
+		if !whole[account.AccountRef] {
+			t.Errorf("the schedule touches %s and the whole-population plan omits it", account.AccountRef)
+		}
+	}
+}
+
 func TestThePlanOpensTheTreasuryFirstAndAsAnAsset(t *testing.T) {
 	// Funding debits it. An ASSET account grows when it is debited, so the bank's own account never
 	// needs an overdraft - and a LIABILITY treasury would be refused the moment it funded anything.
@@ -202,7 +266,7 @@ func TestSeedingOpensEveryAccountAndFundsItFromTheTreasury(t *testing.T) {
 	plan := seeding.Plan(built, schedule(60), 5, date(t))
 	fake := accepting()
 
-	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 1_000_000), 4)
+	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 1_000_000), 4, date(t))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -240,7 +304,7 @@ func TestTheTreasuryIsOpenedBeforeAnythingIsFundedFromIt(t *testing.T) {
 	plan := seeding.Plan(built, schedule(40), 9, date(t))
 	fake := accepting()
 
-	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 8); err != nil {
+	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 8, date(t)); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -267,7 +331,7 @@ func TestAnAccountThatAlreadyExistsIsNotAFailure(t *testing.T) {
 		return client.Result{Outcome: client.Replayed, Status: 200}
 	}}
 
-	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 2)
+	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 2, date(t))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -294,7 +358,7 @@ func TestARunAgainstAnEstateThatCannotBeSeededStopsRatherThanStarting(t *testing
 		return client.Result{Outcome: client.Posted, Status: 201}
 	}}
 
-	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 1)
+	report, err := seeding.Run(context.Background(), fake, plan, amount(t, 500_000), 1, date(t))
 	if err == nil {
 		t.Fatal("seeding reported success against an estate that refused to open accounts")
 	}
@@ -310,7 +374,7 @@ func TestATreasuryThatCannotBeOpenedStopsImmediately(t *testing.T) {
 		return client.Result{Outcome: client.Unknown, Status: 500}
 	}}
 
-	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 100), 4); err == nil {
+	if _, err := seeding.Run(context.Background(), fake, plan, amount(t, 100), 4, date(t)); err == nil {
 		t.Fatal("carried on funding from a treasury that does not exist")
 	}
 	if count := len(fake.requests()); count != 1 {

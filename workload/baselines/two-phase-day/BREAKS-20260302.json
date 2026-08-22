@@ -1,0 +1,21 @@
+{
+  "formatId": "TB-RECON-BREAKS-V1",
+  "businessDate": "20260302",
+  "ledgerPosition": 172169,
+  "ledgerChainHash": "19e1503a767cfde37b9e3655817b8d7988692866763c70cc85acd541e1b2f9ba",
+  "cutOff": {
+    "movementFile": "MOVEMENT.IN",
+    "transferRefCount": 10877
+  },
+  "masterFile": {
+    "name": "ACCTNEW.DAT",
+    "recordCount": 80001
+  },
+  "breaks": [],
+  "totals": {
+    "accountsCompared": 80001,
+    "accountsMatched": 80001,
+    "accountsBroken": 0,
+    "totalAbsoluteDriftMinor": 0
+  }
+}

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sort"
 	"testing"
 
+	"github.com/k-napiontek/tessera-bank/workload/internal/arrivals"
 	"github.com/k-napiontek/tessera-bank/workload/internal/bankday"
 	"github.com/k-napiontek/tessera-bank/workload/internal/dataset"
 	"github.com/k-napiontek/tessera-bank/workload/internal/model"
@@ -17,7 +19,17 @@ const committed = "../../../contracts/workload/tessera-day-v1.json"
 // What the driver half decides. Spelled out here rather than imported, because internal/seeding is
 // on the other side of the purity boundary and this package must not reach across it - the command
 // is where the two meet.
-var testBank = dataset.Bank{BaseCurrency: "PLN", CustomerAccountType: "LIABILITY", TreasuryAccountType: "ASSET"}
+//
+// OpeningBalanceMinor is seeding.Opening's answer for the committed model - twenty times the largest
+// transfer any cohort can draw, which is 5 000 000.00 in the corporate cohort. Written out rather
+// than computed for the same reason: this side must not hold a second copy of the arithmetic. The
+// fixture test at the bottom of this file is what holds the command to the same figure.
+var testBank = dataset.Bank{
+	BaseCurrency:        "PLN",
+	CustomerAccountType: "LIABILITY",
+	TreasuryAccountType: "ASSET",
+	OpeningBalanceMinor: 10_000_000_000,
+}
 
 // A small population and a small scale, so a test emits thousands of lines rather than millions.
 // The cohort shares divide 2 000 customers into whole people, which is the condition population.New
@@ -220,6 +232,189 @@ func TestTheHeaderIsTheFirstLineAndNamesTheTreasury(t *testing.T) {
 	if header.ModelDigest == "" {
 		t.Fatal("the header carries no model digest, so a load could not say which model it came from")
 	}
+}
+
+// **F-98.** The stream used to carry no opening balance, so every consumer invented one: the driver
+// funded twenty times the largest drawable transfer, the loader two hundred times a cohort median,
+// and the stratum-0 writer a constant. Three answers, and a reconciliation between any two of them
+// breaks on every account. The figure now travels with the day.
+//
+// Supplied by the command out of internal/seeding, never computed here - the same rule BaseCurrency
+// follows, and for the same reason: a second copy of a WP-21 decision is a second bank.
+func TestTheHeaderCarriesTheOpeningBalanceEveryConsumerFunds(t *testing.T) {
+	built := stream(t, spec(t, 42, "2026-03-02", "2026-03-02"))
+	rendered := render(t, built)
+
+	firstLine := rendered[:bytes.IndexByte(rendered, '\n')+1]
+	var header dataset.Header
+	if err := json.Unmarshal(firstLine, &header); err != nil {
+		t.Fatalf("the first line is not a header: %v", err)
+	}
+	if header.OpeningBalanceMinor != testBank.OpeningBalanceMinor {
+		t.Fatalf("the header carries an opening balance of %d, the bank was built with %d",
+			header.OpeningBalanceMinor, testBank.OpeningBalanceMinor)
+	}
+
+	// The wire name, not just the Go field. The loader parses this stream by property name and
+	// refuses one it does not know, so a rename here is a load that fails on the first line.
+	var wire map[string]any
+	if err := json.Unmarshal(firstLine, &wire); err != nil {
+		t.Fatalf("the header is not an object: %v", err)
+	}
+	if _, found := wire["openingBalanceMinor"]; !found {
+		t.Fatalf("the header has no openingBalanceMinor property; it carries %v", keysOf(wire))
+	}
+}
+
+// The cut-off, on the emitter's side of the strand.
+//
+// A two-phase day drives the online window and then writes the movement file from the same stream.
+// Those two have to end at the same instant: a file carrying transfers the driver never sent puts
+// them on the master and not in the ledger, and ADR 0015 makes the file the reconciliation cut-off,
+// so the difference is reported as drift rather than as timing. cmd/workload-run bounds its schedule
+// by business minute; this is the same bound, on the same events, from the same seed.
+func TestActionsCanBeBoundedByTheSameMinutesTheDriverRuns(t *testing.T) {
+	const cutOff = 1200 // the online-cut-off instant the day contract declares
+
+	whole := spec(t, 42, "2026-03-02", "2026-03-02")
+	bounded := whole
+	bounded.ToMinute = cutOff
+
+	before := 0
+	for action := range stream(t, whole).Actions() {
+		if action.AtMillis < int64(cutOff)*60_000 {
+			before++
+		}
+	}
+	if before == 0 {
+		t.Fatal("no action falls before the cut-off, so this proves nothing")
+	}
+
+	got := 0
+	for action := range stream(t, bounded).Actions() {
+		if action.AtMillis >= int64(cutOff)*60_000 {
+			t.Fatalf("action %d is at minute %d, past the cut-off at %d",
+				action.Seq, action.AtMillis/60_000, cutOff)
+		}
+		got++
+	}
+	if got != before {
+		t.Fatalf("the bounded stream yields %d actions and the whole day has %d before the cut-off",
+			got, before)
+	}
+}
+
+// Zero keeps the whole day, the same convention Customers already uses. Every caller that predates
+// the bound therefore keeps emitting exactly what it emitted.
+func TestAZeroCutOffKeepsTheWholeDay(t *testing.T) {
+	whole := 0
+	for range stream(t, spec(t, 42, "2026-03-02", "2026-03-02")).Actions() {
+		whole++
+	}
+	bounded := spec(t, 42, "2026-03-02", "2026-03-02")
+	bounded.ToMinute = 0
+	got := 0
+	for range stream(t, bounded).Actions() {
+		got++
+	}
+	if got != whole {
+		t.Fatalf("a zero cut-off yielded %d actions and the whole day is %d", got, whole)
+	}
+}
+
+func TestACutOffOutsideTheDayIsRefused(t *testing.T) {
+	bad := spec(t, 42, "2026-03-02", "2026-03-02")
+	bad.ToMinute = 1441
+	if _, err := dataset.New(bad); !errors.Is(err, dataset.ErrCutOff) {
+		t.Fatalf("a cut-off past the end of the day gave %v, want ErrCutOff", err)
+	}
+}
+
+// **F-102.** The emitter and the driver drew different days from the same seed, and nothing noticed
+// because nothing had ever compared them.
+//
+// seedFor derives a per-date seed so that a year of dates does not give one small cast of accounts
+// every day's history - see the dateStream comment. cmd/workload-run has no such problem: it drives
+// one date and draws it from the run seed itself. The two are therefore different days whenever they
+// are pointed at the same one, and a two-phase run reconciles a master built from one against a
+// ledger driven by the other - drift on every account, and a control measuring nothing.
+//
+// DriverSeed is the emitter drawing the date the way the driver draws it. Off by default, so every
+// stream that predates it is byte-identical.
+func TestADriverSeededStreamDrawsWhatTheDriverWouldDraw(t *testing.T) {
+	const seed = 42
+	day, err := bankday.ParseDate("2026-03-02")
+	if err != nil {
+		t.Fatalf("parsing the date: %v", err)
+	}
+
+	matched := spec(t, seed, "2026-03-02", "2026-03-02")
+	matched.DriverSeed = true
+	built := stream(t, matched)
+
+	// What cmd/workload-run walks: the process at the run seed, drawn at the run seed.
+	curve, err := committedModel(t).Curve()
+	if err != nil {
+		t.Fatalf("resolving the curve: %v", err)
+	}
+	process, err := arrivals.New(curve, day, testScale)
+	if err != nil {
+		t.Fatalf("arrivals.New: %v", err)
+	}
+
+	expected := []string{}
+	for event := range process.Events(seed) {
+		drawn := built.People().Draw(seed, event.Seq, day)
+		expected = append(expected, drawn.AccountRef)
+	}
+	if len(expected) == 0 {
+		t.Fatal("the driver would send nothing, so this proves nothing")
+	}
+
+	got := []string{}
+	for action := range built.Actions() {
+		got = append(got, action.AccountRef)
+	}
+	if len(got) != len(expected) {
+		t.Fatalf("the stream draws %d actions and the driver would send %d", len(got), len(expected))
+	}
+	for index := range expected {
+		if got[index] != expected[index] {
+			t.Fatalf("action %d lands on %s and the driver would send it to %s",
+				index, got[index], expected[index])
+		}
+	}
+}
+
+// The default is unchanged, which is what keeps every committed load and baseline valid.
+func TestWithoutDriverSeedTheStreamKeepsItsPerDateDerivation(t *testing.T) {
+	plain := render(t, stream(t, spec(t, 42, "2026-03-02", "2026-03-02")))
+
+	matched := spec(t, 42, "2026-03-02", "2026-03-02")
+	matched.DriverSeed = true
+	if bytes.Equal(plain, render(t, stream(t, matched))) {
+		t.Fatal("the two draws are identical, so the flag does nothing and F-102 was misdiagnosed")
+	}
+}
+
+// A range drawn from one seed gives every date the same customers doing the same things, which is
+// exactly what seedFor exists to prevent. Refused rather than allowed to produce a year with one
+// day in it repeated.
+func TestDriverSeedIsRefusedForARangeOfMoreThanOneDate(t *testing.T) {
+	bad := spec(t, 42, "2026-03-02", "2026-03-03")
+	bad.DriverSeed = true
+	if _, err := dataset.New(bad); !errors.Is(err, dataset.ErrDriverSeed) {
+		t.Fatalf("a multi-date driver-seeded range gave %v, want ErrDriverSeed", err)
+	}
+}
+
+func keysOf(object map[string]any) []string {
+	names := make([]string, 0, len(object))
+	for name := range object {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Money leaves the engine as int64 minor units and arrives as int64 minor units. A float on this

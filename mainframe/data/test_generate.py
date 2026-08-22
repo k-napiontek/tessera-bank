@@ -239,6 +239,7 @@ def a_stream(actions, opens=None, base="PLN"):
         "from": "2026-03-02",
         "to": "2026-03-02",
         "baseCurrency": base,
+        "openingBalanceMinor": 1_000_000_00,
         "treasuryAccountRef": "TB000000000001JK",
         "treasuryCustomerRef": "CU0000001000",
     }
@@ -322,7 +323,7 @@ class TheVolumeWriter(unittest.TestCase):
 
     def test_a_debit_that_would_overdraw_is_refused_rather_than_written(self):
         """ACCTPOST would reject it R005. A file of those measures the overdraft path."""
-        actions = [transfer("TB00000000000001", "TB00000000000002", generate.OPENING_BALANCE + 1)]
+        actions = [transfer("TB00000000000001", "TB00000000000002", 1_000_000_00 + 1)]
         _, movements, counts, _ = self.write(*a_stream(actions))
         self.assertEqual(movements, [])
         self.assertEqual(counts["wouldOverdraw"], 1)
@@ -347,6 +348,58 @@ class TheVolumeWriter(unittest.TestCase):
         )
         refs = [record[MOV_ACCOUNT] for record in movements]
         self.assertEqual(refs, sorted(refs))
+
+    def test_accounts_open_at_the_figure_the_header_carries(self):
+        """F-98. Three components held three opening balances; the stream carries one now."""
+        header, opens, actions = a_stream([])
+        header["openingBalanceMinor"] = 1_234_500
+        accounts = generate.accounts_from_stream(header, opens)
+
+        customers = [one for one in accounts if one["ref"] != "TB000000000001JK"]
+        self.assertEqual({one["booked"] for one in customers}, {1_234_500})
+        self.assertEqual({one["available"] for one in customers}, {1_234_500})
+
+    def test_a_header_without_an_opening_balance_is_refused(self):
+        """A stream from before F-98 carries no figure, and guessing one is how F-98 happened."""
+        header, opens, _ = a_stream([])
+        del header["openingBalanceMinor"]
+        with self.assertRaises(ValueError) as raised:
+            generate.accounts_from_stream(header, opens)
+        self.assertIn("openingBalanceMinor", str(raised.exception))
+
+    def test_a_treasury_contra_too_wide_for_the_master_is_refused(self):
+        """F-101. ACCT-BOOKED-BAL is PIC S9(13)V99 COMP-3, and the treasury carries every funding."""
+        header, opens, _ = a_stream([])
+        # At 20x the largest transfer the model draws the ceiling is 99 999 accounts. A hundred
+        # thousand fixtures would prove the same arithmetic, so the figure is widened instead: at
+        # 100 000 000 000.00 the ceiling is 99 accounts and a hundred of them overflow.
+        header["openingBalanceMinor"] = 10_000_000_000_000
+
+        many = [opens[0]] + [
+            {"kind": "open", "customerRef": f"CU{ordinal:010d}", "accountRef": f"TB{ordinal:014d}",
+             "accountType": "LIABILITY", "cohort": "retail"}
+            for ordinal in range(1, 101)
+        ]
+        with self.assertRaises(ValueError) as raised:
+            generate.accounts_from_stream(header, many)
+
+        message = str(raised.exception)
+        self.assertIn("treasury", message.lower())
+        self.assertIn("99", message)  # the account ceiling at this figure
+        self.assertIn("S9(13)V99", message)
+
+    def test_the_opening_balance_can_be_overridden_and_the_substitution_is_reported(self):
+        """F-101's escape hatch: what keeps WP-25a's volumes reproducible, and it says so on the run."""
+        header, opens, _ = a_stream([])
+        header["openingBalanceMinor"] = 10_000_000_000
+
+        accounts = generate.accounts_from_stream(header, opens, opening=1_000_000_00)
+        customers = [one for one in accounts if one["ref"] != "TB000000000001JK"]
+        self.assertEqual({one["booked"] for one in customers}, {1_000_000_00})
+
+        substitution = generate.opening_substitution(header, 1_000_000_00)
+        self.assertEqual(substitution, (10_000_000_000, 1_000_000_00))
+        self.assertIsNone(generate.opening_substitution(header, None))
 
     def test_a_stream_with_no_header_is_refused(self):
         import io as _io

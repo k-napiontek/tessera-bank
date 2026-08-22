@@ -105,6 +105,7 @@ public final class DatasetReader {
         public String customerAccountType;
         public String treasuryAccountType;
         public List<Cohort> cohorts;
+        public long openingBalanceMinor;
         public String treasuryCustomerRef;
         public String treasuryAccountRef;
 
@@ -149,6 +150,7 @@ public final class DatasetReader {
                     customerAccountType,
                     treasuryAccountType,
                     medians,
+                    openingBalanceMinor,
                     treasuryCustomerRef,
                     treasuryAccountRef);
         }

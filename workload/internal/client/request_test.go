@@ -266,6 +266,44 @@ func TestATransferGoesInTheCurrencyTheAccountsHold(t *testing.T) {
 	}
 }
 
+// **F-103.** A driven day was dated by the machine's clock rather than by the day it was driving.
+//
+// The ledger defaults valueDate to LocalDate.now when the request omits one - Transfer.java:97 - and
+// this driver omitted it, while already holding the business date it mints references and
+// idempotency keys from. So a run of 2026-03-02 wrote journal entries dated today, and a
+// reconciliation that asks the ledger for the business date's postings got none of them. It was
+// invisible until WP-25c compared the ledger against a stratum-0 master for the first time.
+//
+// The field is in contracts/openapi/ledger-core.yaml already, optional, described as "defaults to
+// the current business date when omitted". Nothing had to change but the sending of it.
+func TestATransferIsDatedByTheBusinessDayItBelongsTo(t *testing.T) {
+	built, err := client.Build(action("createTransfer"), date(t), 7, "PLN", populated())
+	if err != nil {
+		t.Fatalf("createTransfer: %v", err)
+	}
+	if !strings.Contains(string(built.Body), `"valueDate":"`+date(t).String()+`"`) {
+		t.Errorf("the transfer carries no value date for %s: %s", date(t), built.Body)
+	}
+}
+
+// Seeding is dated the day *before* the run, which is the rule services/ledger-loader already
+// follows in Header.openingDate: an opening balance is the position the day starts from, not part of
+// it. batch/recon depends on exactly that - a posting counts towards what the master ought to hold
+// when its reference is in the movement file, or its value date is earlier than the business date.
+// Funding is in neither the movement file nor the day, so dated on the day it would be excluded from
+// the expected balance and every account would drift by its opening balance.
+func TestFundingIsDatedTheDayBeforeTheRun(t *testing.T) {
+	funded, err := client.Fund("TB0000000000000T", "TB0000000000000A", "CU0000000001",
+		money.Amount{Minor: 1_000_000, Currency: "PLN"}, date(t))
+	if err != nil {
+		t.Fatalf("Fund: %v", err)
+	}
+	before := date(t).AddDays(-1).String()
+	if !strings.Contains(string(funded.Body), `"valueDate":"`+before+`"`) {
+		t.Errorf("funding for %s is not dated %s: %s", date(t), before, funded.Body)
+	}
+}
+
 func TestNoRequestCarriesAnythingResemblingPersonalData(t *testing.T) {
 	// data-classification.md asks that this be checked against the bytes rather than asserted about
 	// intent. The reference field is 35 characters of free text and is exactly where a real system
@@ -343,7 +381,7 @@ func TestSeedingSendsTheContractsOpenAccountAndFundsFromTheTreasury(t *testing.T
 	}
 
 	funded, err := client.Fund("TB0000000000000T", "TB0000000000000A", "CU0000000001",
-		money.Amount{Minor: 1_000_000, Currency: "PLN"})
+		money.Amount{Minor: 1_000_000, Currency: "PLN"}, date(t))
 	if err != nil {
 		t.Fatalf("Fund: %v", err)
 	}

@@ -67,6 +67,7 @@ type options struct {
 	compress  int
 	window    string
 	from, to  int
+	customers int
 
 	gateway       string
 	ledgerMetrics string
@@ -93,6 +94,7 @@ type options struct {
 	seedWorkers  int
 	waitFor      time.Duration
 	skipSeeding  bool
+	seedAll      bool
 	skipRun      bool
 	tokenMinutes int
 	settle       time.Duration
@@ -150,6 +152,11 @@ func run() error {
 	curve, err := loaded.Curve()
 	if err != nil {
 		return err
+	}
+	// The population override is applied to the model before it is resolved, exactly as
+	// cmd/workload-dataset applies it, so the same --customers gives both halves the same estate.
+	if opts.customers > 0 {
+		loaded.Population.Size = opts.customers
 	}
 	people, err := loaded.People()
 	if err != nil {
@@ -225,10 +232,17 @@ func run() error {
 
 	if !opts.skipSeeding {
 		plan := seeding.Plan(people, inWindow(process, opts.seed, from, to), opts.seed, date)
-		fmt.Printf("== Seeding ==\n  %d accounts, opening balance %s each, %d at a time\n",
-			len(plan), opening, opts.seedWorkers)
+		scope := "the schedule touches"
+		if opts.seedAll {
+			// Every account, because this run is going to be reconciled against a master that holds
+			// every account. See seeding.PlanAll.
+			plan = seeding.PlanAll(people)
+			scope = "the population declares"
+		}
+		fmt.Printf("== Seeding ==\n  %d accounts %s, opening balance %s each, %d at a time\n",
+			len(plan), scope, opening, opts.seedWorkers)
 		started := time.Now()
-		report, err := seeding.Run(ctx, sender, plan, opening, opts.seedWorkers)
+		report, err := seeding.Run(ctx, sender, plan, opening, opts.seedWorkers, date)
 		if err != nil {
 			return err
 		}
@@ -351,6 +365,12 @@ func parse() options {
 	flag.IntVar(&opts.attempts, "attempts", 2, "attempts per logical request; only an unknown outcome is retried")
 	flag.IntVar(&opts.expected, "expected", 64, "requests this run expects in flight at once - reported, never enforced")
 	flag.IntVar(&opts.seedWorkers, "seed-workers", 8, "how many accounts to open at once before the run")
+	flag.IntVar(&opts.customers, "customers", 0,
+		"override the model's population size; 0 keeps it. The same dial workload-dataset takes, so a "+
+			"run and a stream can describe one bank")
+	flag.BoolVar(&opts.seedAll, "seed-population", false,
+		"open every account the population declares, not only those the schedule touches. Needed when "+
+			"the run will be reconciled against a stratum-0 master, which holds every account")
 	flag.DurationVar(&opts.waitFor, "wait", 90*time.Second, "how long to wait for the gateway to answer")
 	flag.StringVar(&opts.edgeMetrics, "edge-metrics", "",
 		"the gateway's metrics endpoint, scraped at the same two instants as the ledger's")

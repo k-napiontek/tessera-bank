@@ -284,30 +284,69 @@ def effect_of(acct_type: str, direction: str, amount: int) -> int:
 #     therefore opened in the stream's base currency and every movement drawn in another currency is
 #     posted in it and COUNTED - the convention WP-21 established against the ledger and F-72
 #     records, reused here rather than a second answer being invented one stratum down.
-#   * **No opening balance.** Customer accounts open funded and the treasury is debited for the
-#     total, which is how WP-22's loader states the same thing: every opening balance came from
-#     somewhere.
+#   * **The opening balance now travels with the day, and it used not to.** Customer accounts open
+#     funded and the treasury is debited for the total, which is how WP-22's loader states the same
+#     thing: every opening balance came from somewhere. The figure is the stream's
+#     `openingBalanceMinor` - `seeding.Opening`'s answer, the one the driver funds with - rather than
+#     a constant invented here. Until F-98 was closed this file held a third opinion, and a
+#     reconciliation against either of the other two would have broken on every account.
 #   * **No legs.** A createTransfer is one action; stratum 0 carries two records, leg 01 the debit
 #     and leg 02 the credit, sharing one transfer reference.
 # ---------------------------------------------------------------------------------------------
 
-# Enough that a day's debits post without the file becoming a study of the overdraft path, and far
-# inside PIC S9(13)V99. Stated as a constant because it is an assumption, not a measurement.
-OPENING_BALANCE = 1_000_000_00
+# The widest amount ACCT-BOOKED-BAL can hold. PIC S9(13)V99 COMP-3 is fifteen digits, and the
+# implied decimal occupies nothing, so the stored digits are the amount in minor units.
+MASTER_BALANCE_LIMIT = 10**15 - 1
 
 
-def accounts_from_stream(header: dict, opens: list) -> list:
+def opening_balance(header: dict, override: int | None = None) -> int:
+    """What every customer account opens with, in minor units of the base currency.
+
+    The stream's figure unless one is forced. **F-98**: a header from before the figure travelled
+    carries nothing, and it is refused rather than defaulted - inventing one here is exactly how
+    three components came to hold three different answers.
+    """
+    if override is not None:
+        return override
+    figure = header.get("openingBalanceMinor")
+    if not figure:
+        raise ValueError(
+            "the stream carries no openingBalanceMinor, so there is no figure to open accounts "
+            "with. It is emitted by workload-dataset out of seeding.Opening; regenerate the stream, "
+            "or force one with --opening-balance and accept that it will not reconcile against a "
+            "ledger the driver funded"
+        )
+    return figure
+
+
+def opening_substitution(header: dict, override: int | None) -> tuple[int, int] | None:
+    """What the stream asked for and what was written, when the two differ. None when they agree.
+
+    **F-101.** The override exists because stratum 0's own field width caps the estate this writer
+    can describe, and a run that quietly wrote a different figure from the one on the wire would be
+    F-98 again wearing a flag.
+    """
+    if override is None:
+        return None
+    asked = header.get("openingBalanceMinor")
+    if asked is None or asked == override:
+        return None
+    return (asked, override)
+
+
+def accounts_from_stream(header: dict, opens: list, opening: int | None = None) -> list:
     """The account master, from the stream's open records. Sorted as the match-merge requires."""
     currency = header["baseCurrency"]
     business_date = int(header["from"].replace("-", ""))
+    figure = opening_balance(header, opening)
 
     accounts = []
     treasury_total = 0
     for record in opens:
         treasury = record.get("treasury", False)
-        booked = 0 if treasury else OPENING_BALANCE
+        booked = 0 if treasury else figure
         if not treasury:
-            treasury_total += OPENING_BALANCE
+            treasury_total += figure
         accounts.append({
             "ref": record["accountRef"],
             "customer": record["customerRef"],
@@ -319,6 +358,23 @@ def accounts_from_stream(header: dict, opens: list) -> list:
             "opened": business_date,
             "last_move": business_date,
         })
+
+    # **F-101 - the opening figure and the master's field width are coupled, and nothing else says
+    # so.** The treasury carries one leg of every funding, so its balance is the account count times
+    # the opening figure, and ACCT-BOOKED-BAL holds fifteen digits. At seeding.Opening's twenty times
+    # the largest drawable transfer that caps the estate at 99 999 accounts - below every volume
+    # WP-25a recorded. encode_comp3 would refuse it eight frames down with the integer and nothing
+    # else; refused here, with the ceiling and the arithmetic that produced it.
+    if treasury_total > MASTER_BALANCE_LIMIT:
+        ceiling = MASTER_BALANCE_LIMIT // figure
+        raise ValueError(
+            f"the treasury would carry {treasury_total} minor units, funding "
+            f"{len(accounts) - 1} accounts at {figure} each, and ACCT-BOOKED-BAL is "
+            f"PIC S9(13)V99 COMP-3 - it holds {MASTER_BALANCE_LIMIT}. At this opening balance the "
+            f"master tops out at {ceiling} customer accounts (F-101). Draw a smaller population, or "
+            f"pass --opening-balance to write a figure the field can carry and accept that it will "
+            f"not reconcile against a ledger the driver funded"
+        )
 
     # The treasury funded every one of them, so it carries the contra balance rather than zero.
     for account in accounts:
@@ -419,22 +475,28 @@ def main() -> int:
                         help="read a workload-dataset NDJSON day on stdin instead of drawing one")
     parser.add_argument("--out", type=pathlib.Path, default=OUT,
                         help="where to write, so a volume run never overwrites the fixture")
+    parser.add_argument("--opening-balance", type=int, default=None, metavar="MINOR",
+                        help="force the opening balance instead of taking the stream's. The master's "
+                             "treasury balance is the account count times this figure and "
+                             "ACCT-BOOKED-BAL holds fifteen digits, so a volume run needs one "
+                             "(F-101). The substitution is reported on every run that makes it")
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
 
     if args.from_stream:
         header, opens, actions = read_stream(sys.stdin)
-        accounts = accounts_from_stream(header, opens)
+        accounts = accounts_from_stream(header, opens, opening=args.opening_balance)
         master = [acctrec(**account) for account in accounts]
         movements, counts = movements_from_stream(header, actions, accounts)
+        substituted = opening_substitution(header, args.opening_balance)
         label = f"{header['from']} from {header['modelId']} seed {header['seed']}"
     else:
         rng = random.Random(args.seed)
         accounts = draw_accounts(rng, args.accounts)
         master = [acctrec(**account) for account in accounts]
         movements = build_movements(rng, args.transfers, accounts)
-        counts, label = None, f"seed {args.seed}"
+        counts, label, substituted = None, f"seed {args.seed}", None
 
     master_path = args.out / "ACCTMAST.DAT"
     movement_path = args.out / "MOVEMENT.DAT"
@@ -455,8 +517,23 @@ def main() -> int:
         print(f"  would overdraw       {counts['wouldOverdraw']:>8}")
         print(f"  currency substituted {counts['currencySubstituted']:>8}  posted in "
               f"{header['baseCurrency']} rather than the currency drawn - F-72")
+    if substituted is not None:
+        # Said on the run rather than left in a flag, for the same reason the currency substitutions
+        # are counted: a file that differs from the day it claims to represent has to say so, or the
+        # next reconciliation reports the difference as drift.
+        asked, written = substituted
+        print(f"  opening balance substituted   the stream carries {asked}, this master was "
+              f"written at {written} - F-101. It will NOT reconcile against a ledger the driver "
+              f"funded from the same stream")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except ValueError as refused:
+        # A refusal is a result here, not a crash. The stack tells a reader which frame raised and
+        # nothing about what to do next, and every ValueError this module raises carries the whole
+        # explanation in its message.
+        print(f"generate.py: {refused}", file=sys.stderr)
+        sys.exit(2)

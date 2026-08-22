@@ -109,6 +109,35 @@ func Plan(people population.Population, events iter.Seq[arrivals.Event], seed ui
 	return plan
 }
 
+// PlanAll is every account the population declares, treasury first.
+//
+// Plan is the right answer for a run measured on its own: it opens what the schedule touches and no
+// more, so a compressed day does not spend its time standing up two million accounts to use nine
+// thousand. This is the right answer for a run that is going to be **reconciled**.
+// mainframe/data/generate.py writes an ACCTREC for every account the stream opens, so an account the
+// day happened not to touch is present on the master and absent from the ledger - a
+// MISSING_IN_LEDGER break per account, and a reconciliation whose real findings are buried under
+// tens of thousands of them. The two sides have to describe the same bank before a break means
+// anything.
+//
+// Ordering and membership come from population.Accounts, which already yields the treasury first,
+// so nothing here decides either.
+func PlanAll(people population.Population) []Account {
+	plan := []Account{}
+	for holding := range people.Accounts() {
+		accountType := Liability
+		if holding.Treasury {
+			accountType = Asset
+		}
+		plan = append(plan, Account{
+			CustomerRef: holding.CustomerRef,
+			AccountRef:  holding.AccountRef,
+			Type:        accountType,
+		})
+	}
+	return plan
+}
+
 // Opening is what every account is funded with.
 //
 // A multiple of the largest transfer the model can draw, so that a short run is a study of the
@@ -153,7 +182,17 @@ func (r Report) Total() int { return r.Opened + r.AlreadyOpen + r.Failed }
 //
 // The plan's first entry is the treasury and it is opened alone, before anything else: funding
 // debits it, and a worker that raced ahead would be funding from an account that did not exist yet.
-func Run(ctx context.Context, sender Sender, plan []Account, opening money.Amount, workers int) (Report, error) {
+//
+// date is the business date the run is about to execute. Funding is dated the day before it - see
+// client.Fund and F-103.
+func Run(
+	ctx context.Context,
+	sender Sender,
+	plan []Account,
+	opening money.Amount,
+	workers int,
+	date bankday.Date,
+) (Report, error) {
 	if len(plan) == 0 {
 		return Report{}, fmt.Errorf("seeding: nothing to seed")
 	}
@@ -193,7 +232,8 @@ func Run(ctx context.Context, sender Sender, plan []Account, opening money.Amoun
 
 				// Funded even when the account was already open: a re-run against a seeded estate
 				// replays the funding under the same key rather than crediting it twice.
-				funded, err := client.Fund(treasury.AccountRef, account.AccountRef, account.CustomerRef, opening)
+				funded, err := client.Fund(
+					treasury.AccountRef, account.AccountRef, account.CustomerRef, opening, date)
 				if err != nil {
 					mu.Lock()
 					report.Failed++
