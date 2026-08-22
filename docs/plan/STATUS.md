@@ -978,7 +978,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `Done` | [#57](https://github.com/k-napiontek/tessera-bank/pull/57) | `e99f06e` |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `747803d` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
-| [18a](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, worked as documented, and the RCA | - | 16, 25d | `Not started` | | |
+| [18a](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, worked as documented, and the RCA | - | 16, 25d | `In progress` | | |
 | [18b](wp/WP-18-incident-exercise.md) | Final documentation pass, the DORA map, and the checker that keeps it true | - | 18a | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `a9012ce` |
 | [20](wp/WP-20-workload-model.md) | Workload model - the bank day as a contract | 4 | 02 | `Done` | [#59](https://github.com/k-napiontek/tessera-bank/pull/59) | `b0f4c80` |
