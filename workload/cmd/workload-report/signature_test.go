@@ -150,17 +150,28 @@ func TestAFlatObjectiveThatMovedIsContradicted(t *testing.T) {
 	}
 }
 
-func TestADeclaredMoveThatDidNotHappenIsContradicted(t *testing.T) {
-	// The other direction, and the one that keeps the catalogue honest: a condition that was
-	// supposed to show up and did not is a claim about the estate that turned out to be wrong.
+// A declared move that did not happen is CONTRADICTED - asserted over `judge` in
+// TestAnObjectiveNoSnapshotPairCanAnswerIsInconclusiveRatherThanContradicted rather than over a
+// rendered page, because every computable objective in testdata/ is already missed in the baseline
+// and a declared move over one of those is inconclusive by the older rule. The end-to-end rendering
+// of CONTRADICTED is covered by TestAFlatObjectiveThatMovedIsContradicted.
+//
+// This replaces a test that stated the same claim over SLO-LEDGER-OUTBOX-FRESHNESS - an objective
+// two scrapes cannot answer at all - and so asserted that a run which could not tell would report
+// the prediction as wrong. That is the defect F-82 describes, and WP-24c's sweep measured it.
+
+func TestAnUnanswerableDeclaredMoveReadsInconclusiveOnThePage(t *testing.T) {
+	// The same end to end, for the objective that produced the finding. SCN-OUTBOX-STUCK declares
+	// SLO-LEDGER-OUTBOX-FRESHNESS, which is stated over a window; a run supplies two points, and two
+	// points that agree cannot show a condition that was applied and reverted between them.
 	page := report(t, degradedArgs(
 		degradedManifest(t, "SCN-OUTBOX-STUCK"),
 		filepath.Join("testdata", "after.prom"),
 	)...)
 
 	line := lineFor(t, page, "SLO-LEDGER-OUTBOX-FRESHNESS")
-	if !strings.Contains(line, contradicted) {
-		t.Errorf("a declared move that did not happen reads %q", line)
+	if !strings.Contains(line, inconclusive) {
+		t.Errorf("an objective no snapshot pair can answer reads %q", line)
 	}
 }
 
@@ -270,4 +281,54 @@ func lineFor(t *testing.T, page, objectiveID string) string {
 	}
 	t.Fatalf("no signature line for %s in:\n%s", objectiveID, section)
 	return ""
+}
+
+// An objective this report has already said it cannot answer cannot then be used to contradict a
+// prediction. `standing` falls back to the closing point against the objective's own threshold, and
+// its comment claimed that point was "enough to tell moved from flat". WP-24c's sweep falsified it:
+// SCN-OUTBOX-STUCK paused the broker for the window its scenario names and ledger_outbox_lag_seconds
+// read 0 before and 0 after, because the relay had drained by the time the closing scrape was taken.
+// Two closing points that agree say nothing about what happened between them, so the honest verdict
+// is that this run could not tell - not that the prediction was wrong. F-82.
+func TestAnObjectiveNoSnapshotPairCanAnswerIsInconclusiveRatherThanContradicted(t *testing.T) {
+	cases := []struct {
+		name                    string
+		declared, before, after string
+		want                    string
+	}{
+		{
+			name:     "a declared move whose gauge read the same at both ends",
+			declared: "move", before: "within threshold", after: "within threshold",
+			want: inconclusive,
+		},
+		{
+			name:     "a flat objective whose gauge read the same at both ends",
+			declared: "flat", before: "within threshold", after: "within threshold",
+			want: inconclusive,
+		},
+		{
+			name:     "a gauge that really is over its line at the close is evidence, not a shrug",
+			declared: "move", before: "within threshold", after: "outside threshold",
+			want: asDeclared,
+		},
+		{
+			name:     "a flat objective whose gauge ended over its line is contradicted",
+			declared: "flat", before: "within threshold", after: "outside threshold",
+			want: contradicted,
+		},
+		{
+			name:     "a computable objective is judged on its ratio exactly as before",
+			declared: "move", before: "met", after: "met",
+			want: contradicted,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := judge(testCase.declared, testCase.before, testCase.after)
+			if got != testCase.want {
+				t.Errorf("judge(%q, %q, %q) = %q, want %q",
+					testCase.declared, testCase.before, testCase.after, got, testCase.want)
+			}
+		})
+	}
 }
