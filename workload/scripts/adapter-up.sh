@@ -59,9 +59,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-for required in ENDPOINT MOVEMENT_FILE LOG PID_FILE; do
-    [ -n "${!required}" ] || { echo "adapter-up: --${required,,} is required" >&2; exit 2; }
-done
+# Spelled out rather than looped over indirectly: macOS ships bash 3.2, where ${!name} and ${name,,}
+# are both syntax errors, and every other script in this fixture is written to run on it.
+[ -n "$ENDPOINT" ]      || { echo "adapter-up: --endpoint is required" >&2; exit 2; }
+[ -n "$MOVEMENT_FILE" ] || { echo "adapter-up: --movement-file is required" >&2; exit 2; }
+[ -n "$LOG" ]           || { echo "adapter-up: --log is required" >&2; exit 2; }
+[ -n "$PID_FILE" ]      || { echo "adapter-up: --pid-file is required" >&2; exit 2; }
 
 ADAPTER_JAR="$(find "$ROOT/integration/esb-adapter/target" -maxdepth 1 -name 'esb-adapter-*.jar' 2>/dev/null | sort | tail -1)"
 [ -n "$ADAPTER_JAR" ] || { echo "adapter-up: the adapter jar is not built - run make build-integration" >&2; exit 1; }
