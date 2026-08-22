@@ -113,13 +113,28 @@ Branch `feat/TB-1018-incident-exercise`. Six tasks.
    incident rather than the other way round. Its own commit, so the diff shows what was written
    before the exercise and what the exercise changed.
 
-3. **The fault, injected by a script that seals what it planted.**
+3. **The fault, injected by a script that seals what it planted, over two business dates.**
    `workload/scripts/incident-exercise.sh`, composing `four-era-day.sh` the way `migration.sh`
    composes `estate-up.sh`. It moves **one** account's `opened_date` forward by a day in stratum 1
    after seeding, drives the day, runs the overnight cycle and then `batch/recon`. What it planted -
    the account reference, the transfer reference and the instant - is written to a **sealed envelope**
    under the capture directory, separately from everything the responder is allowed to look at. The
    point of the Verification below is that the break is found without opening it.
+
+   > **Two business dates, and the reason is the finding this task produced before a line of it was
+   > written.** `batch/recon` counts a posting towards what the master ought to hold when its
+   > reference is in the movement file **or** its value date is earlier than the business date -
+   > `ledger.py:146`, which is [ADR 0015](../../governance/adr/0015-the-cut-off-is-the-movement-file.md)
+   > in SQL. A transfer this fault blocks reaches neither: it is not in the file, because the fault is
+   > what stopped it getting there, and its value date is the day being reconciled rather than an
+   > earlier one. **So on the day it happens the reconciliation passes.** The bank is short and the
+   > control that exists to say so is, correctly by its own rules, silent. On D+1 those same postings
+   > are dated earlier than the business date, enter the expected set, and the master still does not
+   > hold them - so the break surfaces a full cycle late, as `VALUE_DRIFT`. The exercise therefore
+   > drives **D and D+1** and the first reconciliation passing is evidence rather than a failed
+   > attempt. It is also a finding in its own right, and independent of this exercise: **the
+   > reconciliation is blind for one cycle to anything that stops a posting reaching the movement
+   > file**, which is the class of fault the ESB hop can produce at any time.
 
 4. **Work the incident as documented.** Detection from the reconciliation report and
    `legacy/backoffice`, which is where an operator reads it - not from the adapter's log, and not
