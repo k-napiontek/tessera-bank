@@ -67,6 +67,9 @@ record python3 contracts/check-workload-model.py
 step "SLO catalogue against its schema, and against what the estate emits"
 record python3 contracts/check-slo-catalogue.py
 
+step "Failure scenarios against their schema, and against the objectives they name"
+record python3 contracts/check-workload-scenarios.py
+
 printf '\n'
 if [ "$failed" -ne 0 ]; then
   printf '\033[1mFAILED\033[0m - %d check(s) did not pass\n' "$failed"
