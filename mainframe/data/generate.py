@@ -175,28 +175,73 @@ def draw_accounts(rng: random.Random, count: int) -> list:
     return accounts
 
 
-def build_movements(rng: random.Random, transfers: int, accounts: int) -> list:
+# A debit that would take a LIABILITY account below zero is rejected R005 - this core has no arranged
+# overdraft. The generator respects that rather than producing rejects it did not mean to.
+MIN_AMOUNT = 1_00
+MAX_AMOUNT = 25_000_00
+
+
+def build_movements(rng: random.Random, transfers: int, accounts: list) -> list:
     """A day of movements, sorted by account reference for the sequential match-merge.
 
     Each transfer produces exactly two legs - leg 01 the debit, leg 02 the credit - sharing one
     transfer reference. Stratum 0 has no Transfer record at all; the batch reconstructs one from the
     pair, which is why the pairing has to be right in the data.
+
+    Both legs land on accounts that share one currency, and that currency is the movement's. Stratum
+    0 has no cross-currency record: a movement carries one amount in one currency and lands on one
+    account, so a transfer whose legs disagree is not a product this core has. Both accounts are
+    OPEN, and a debit never exceeds what the debited account holds. Every one of those was drawn at
+    random before WP-25a and 162 of 302 movements rejected - F-18 - so the file exercised rejection
+    handling and barely touched posting.
+
+    The two reject fixtures at the bottom are deliberate and stay: WP-04 proves R004 and R001 with
+    them, and a generator with no rejects at all would exercise the reject path less than one whose
+    rejects are accidental.
     """
     rows = []
 
-    for n in range(1, transfers + 1):
-        debit = account_ref(rng.randrange(2, accounts + 1))
-        credit = account_ref(rng.randrange(2, accounts + 1))
-        while credit == debit:
-            credit = account_ref(rng.randrange(2, accounts + 1))
+    postable = [one for one in accounts if one["status"] == "OPEN"]
+    by_currency = {}
+    for one in postable:
+        by_currency.setdefault(one["currency"], []).append(one)
+    # Only currencies with two accounts can carry a transfer at all.
+    currencies = sorted(code for code, pool in by_currency.items() if len(pool) >= 2)
+    if not currencies:
+        raise ValueError("no currency has two open accounts to move between")
 
-        amount = rng.randrange(1_00, 25_000_00)
+    # Weighted by how many accounts hold each currency, so the mix of movements follows the mix of
+    # accounts rather than being flat across currencies the master barely uses.
+    weights = [len(by_currency[code]) for code in currencies]
+
+    balances = {one["ref"]: one["booked"] for one in postable}
+
+    def headroom(account):
+        """What may be debited from this account before ACCTPOST would reject R005."""
+        if account["acct_type"] != "LIABILITY":
+            return MAX_AMOUNT
+        return balances[account["ref"]]
+
+    for n in range(1, transfers + 1):
+        currency = rng.choices(currencies, weights=weights, k=1)[0]
+        pool = by_currency[currency]
+
+        fundable = [one for one in pool if headroom(one) >= MIN_AMOUNT]
+        if len(fundable) < 1 or len(pool) < 2:
+            continue
+        debit = rng.choice(fundable)
+        credit = rng.choice(pool)
+        while credit["ref"] == debit["ref"]:
+            credit = rng.choice(pool)
+
+        amount = rng.randrange(MIN_AMOUNT, min(MAX_AMOUNT, headroom(debit)) + 1)
         reference = f"TRANSFER {BUSINESS_DATE} SEQ {n:06d}"
 
-        rows.append((debit, moverec(transfer_ref(n), 1, debit, "D", "PLN", amount,
-                                    int(BUSINESS_DATE), int(POSTED_TS), reference)))
-        rows.append((credit, moverec(transfer_ref(n), 2, credit, "C", "PLN", amount,
-                                     int(BUSINESS_DATE), int(POSTED_TS), reference)))
+        for account, leg, direction in ((debit, 1, "D"), (credit, 2, "C")):
+            rows.append((account["ref"], moverec(
+                transfer_ref(n), leg, account["ref"], direction, currency, amount,
+                int(BUSINESS_DATE), int(POSTED_TS), reference)))
+            balances[account["ref"]] += effect_of(account["acct_type"], direction, amount)
 
     # The reject fixture. JPY has an ISO 4217 scale of 0, which PIC S9(13)V99 cannot represent - the
     # implied decimal would misstate it a hundredfold. The integration tier rejects such a movement
@@ -217,6 +262,13 @@ def build_movements(rng: random.Random, transfers: int, accounts: int) -> list:
     return [record for _, record in rows]
 
 
+def effect_of(acct_type: str, direction: str, amount: int) -> int:
+    """ACCTPOST's COMPUTE-EFFECT, so the generator can see the balance the cycle will see."""
+    if acct_type in ("ASSET", "EXPENSE"):
+        return amount if direction == "D" else -amount
+    return amount if direction == "C" else -amount
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=42, help="same seed, same bytes")
@@ -227,8 +279,9 @@ def main() -> int:
     rng = random.Random(args.seed)
     OUT.mkdir(parents=True, exist_ok=True)
 
-    master = build_master(rng, args.accounts)
-    movements = build_movements(rng, args.transfers, args.accounts)
+    accounts = draw_accounts(rng, args.accounts)
+    master = [acctrec(**account) for account in accounts]
+    movements = build_movements(rng, args.transfers, accounts)
 
     master_path = OUT / "ACCTMAST.DAT"
     movement_path = OUT / "MOVEMENT.DAT"

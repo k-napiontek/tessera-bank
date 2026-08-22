@@ -10,9 +10,9 @@ the same seed produces them twice.
 
 **What the cycle would reject, predicted from the data alone.** `predict_rejects` reimplements
 ACCTPOST's validation so that a property of the *data* can be asserted in milliseconds without a
-COBOL compiler. Against the generator as it stands it returns 162 rejects out of 302 movements -
-111 `R003`, 48 `R002`, and one each of `R001`, `R004` and `R005` - which is exactly what the real
-cycle writes to REJECTS.DAT. F-18 is the 111 and the 48.
+COBOL compiler. Before WP-25a it returned 162 rejects out of 302 movements - 111 `R003`, 48 `R002`,
+and one each of `R001`, `R004` and `R005` - which was exactly what the real cycle wrote to
+REJECTS.DAT. F-18 was the 111 and the 48, and those two classes are asserted to zero below.
 
 The prediction is held honest by test-eod-cycle.py, which runs the real program over the real files:
 if this model and that cycle ever disagree, the prediction is what is wrong.
@@ -56,8 +56,9 @@ SCALE_2 = {"PLN", "EUR", "USD", "GBP", "CHF"}
 
 def build(seed=42, accounts=200, transfers=150):
     rng = random.Random(seed)
-    master = generate.build_master(rng, accounts)
-    movements = generate.build_movements(rng, transfers, accounts)
+    drawn = generate.draw_accounts(rng, accounts)
+    master = [generate.acctrec(**account) for account in drawn]
+    movements = generate.build_movements(rng, transfers, drawn)
     return master, movements
 
 
@@ -144,8 +145,79 @@ class TheBytesOnDisk(unittest.TestCase):
         _, movements = build()
         self.assertEqual(
             hashlib.sha256(b"".join(movements)).hexdigest(),
-            "4860ecc6b4936cf5432af4d8a4f17d231ac9c4fad956f0917640aa679bb55d8a",
+            "8d52759a14e7de091bc53922d7f7082e496e157ec0e6b86eb753fe00e0fab2c7",
         )
+
+
+class MovementsLandWhereTheyCanPost(unittest.TestCase):
+    """F-18. Every test in this class fails against the generator as it stood before WP-25a."""
+
+    def setUp(self):
+        self.master, self.movements = build()
+        self.rejects = predict_rejects(self.master, self.movements)
+        self.fixtures = [
+            index
+            for index, record in enumerate(self.movements)
+            if record[MOV_REFERENCE].decode().startswith("REJECT FIXTURE")
+        ]
+
+    def test_the_status_defect_is_gone(self):
+        """R002: movements were drawn without regard to whether the account was open."""
+        self.assertEqual([i for i, r in self.rejects.items() if r == "R002"], [])
+
+    def test_the_currency_defect_is_gone(self):
+        """R003: every movement was PLN while the master drew five currencies. 111 of them."""
+        self.assertEqual([i for i, r in self.rejects.items() if r == "R003"], [])
+
+    def test_both_reject_fixtures_survive(self):
+        """WP-04 proves R001 and R004 with these two. A generator without them tests less."""
+        self.assertEqual(
+            {self.rejects.get(index) for index in self.fixtures}, {"R001", "R004"}
+        )
+
+    def test_the_majority_of_movements_post(self):
+        """WP-25's Definition of Done, as a number. It was 140 of 302 - 46% - before this."""
+        posted = len(self.movements) - len(self.rejects)
+        self.assertGreater(
+            posted / len(self.movements),
+            0.95,
+            f"{posted} of {len(self.movements)} posted",
+        )
+
+    def test_every_master_currency_is_actually_posted(self):
+        """Multi-currency posting was never exercised at all while every movement was PLN."""
+        posted = {
+            record[MOV_CURRENCY].decode()
+            for index, record in enumerate(self.movements)
+            if index not in self.rejects
+        }
+        self.assertEqual(posted, set(generate.MASTER_CURRENCIES))
+
+    def test_both_legs_of_a_transfer_share_one_currency(self):
+        """Stratum 0 has no cross-currency record: the batch reconstructs a transfer from the pair."""
+        by_transfer = {}
+        for index, record in enumerate(self.movements):
+            if index in self.fixtures:
+                continue
+            by_transfer.setdefault(record[MOV_TRANSFER].decode(), set()).add(
+                record[MOV_CURRENCY].decode()
+            )
+        for transfer, currencies in by_transfer.items():
+            self.assertEqual(len(currencies), 1, f"{transfer} has legs in {currencies}")
+
+    def test_no_movement_lands_on_a_blocked_account(self):
+        blocked = {
+            record[ACCT_REF].decode()
+            for record in self.master
+            if record[ACCT_STATUS].decode().strip() != "OPEN"
+        }
+        self.assertTrue(blocked, "the master must still contain blocked accounts")
+        landed = {
+            record[MOV_ACCOUNT].decode()
+            for index, record in enumerate(self.movements)
+            if index not in self.fixtures
+        }
+        self.assertEqual(landed & blocked, set())
 
 
 class TheAwkwardBalancesStay(unittest.TestCase):
