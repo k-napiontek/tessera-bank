@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -96,6 +97,7 @@ type options struct {
 	tokenMinutes int
 	settle       time.Duration
 	drain        time.Duration
+	requirePosts bool
 }
 
 func run() error {
@@ -306,13 +308,20 @@ func run() error {
 	saveScrape(opts.scrapeDir, "after-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
 	saveScrape(opts.scrapeDir, "after-fraud.prom", scrapeLedger(opts.fraudMetrics).Body)
 	printReport(summary, registry)
-	printReconciliation(summary, before.Transfers, after.Transfers, opts.ledgerMetrics)
+	moved := printReconciliation(summary, before.Transfers, after.Transfers, opts.ledgerMetrics)
 
 	if err := writeManifest(record, opts.manifestPath); err != nil {
 		return err
 	}
 	if runErr != nil {
 		return fmt.Errorf("the run was interrupted: %w", runErr)
+	}
+	if opts.requirePosts && reconcile.ReplayedEverything(moved) {
+		return errors.New("the ledger posted none of this run and replayed all of it, so nothing\n" +
+			"  was written to the outbox, nothing reached the broker and nothing was scored. The\n" +
+			"  figures above describe the replay path rather than the estate. A run's idempotency\n" +
+			"  keys come from its business date and seed, so this ledger has already been offered\n" +
+			"  this day: load it again before capturing, or capture a date it has not seen")
 	}
 	return nil
 }
@@ -369,6 +378,8 @@ func parse() options {
 			"estate that has caught up rather than one still working through the day")
 	flag.StringVar(&opts.scrapeDir, "scrapes", "",
 		"write the ledger scrapes that bracket the measured run into this directory")
+	flag.BoolVar(&opts.requirePosts, "require-postings", false,
+		"fail the run if the ledger posted none of it - a capture of a replay measures nothing")
 	flag.BoolVar(&opts.skipSeeding, "skip-seeding", false, "assume the accounts are already open and funded")
 	flag.BoolVar(&opts.skipRun, "seed-only", false, "seed the estate and stop")
 	flag.IntVar(&opts.tokenMinutes, "token-ttl", 60, "minutes a minted token stays valid")
@@ -616,17 +627,17 @@ func overExpected(summary runner.Summary) string {
 	return fmt.Sprintf("exceeded %d times", summary.OverExpected)
 }
 
-func printReconciliation(summary runner.Summary, before, after reconcile.ByOutcome, url string) {
+func printReconciliation(summary runner.Summary, before, after reconcile.ByOutcome, url string) reconcile.ByOutcome {
 	fmt.Printf("\n== Reconciliation against the ledger's own count ==\n")
 	if url == "" || before == nil || after == nil {
 		fmt.Printf("  not attempted: %s was not readable, so this run is the only account of itself\n",
 			describeURL(url))
-		return
+		return nil
 	}
 	moved, usable := reconcile.Delta(before, after)
 	if !usable {
 		fmt.Printf("  not possible: the ledger's counters went backwards, so it restarted mid-run\n")
-		return
+		return nil
 	}
 
 	rows := reconcile.Compare(moneyMoving(summary), moved)
@@ -646,6 +657,13 @@ func printReconciliation(summary runner.Summary, before, after reconcile.ByOutco
 		fmt.Printf("  The two accounts of this run do not agree. That is a finding about the estate\n" +
 			"  or about this driver, and it is worth more than the latency figures above.\n")
 	}
+	if reconcile.ReplayedEverything(moved) {
+		fmt.Printf("  The ledger posted none of this run and replayed all of it. Nothing was written\n" +
+			"  to the outbox, so nothing reached the broker and nothing was scored: every figure\n" +
+			"  downstream of a journal entry describes an estate that was never asked to do any\n" +
+			"  work. Run --require-postings to make that refuse rather than report.\n")
+	}
+	return moved
 }
 
 func describeURL(url string) string {

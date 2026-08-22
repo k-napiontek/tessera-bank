@@ -21,12 +21,14 @@
 # multiplier as the baseline, none of them a payday and none in a month's last two days, so every
 # run offers the same day and only the condition differs.
 #
-# **The captures this produces are not committed yet, and WP-24c is why.** Every one of the seven
-# runs so far has had `edge/fraud-scoring` score nothing at all - tessera_fraud_scoring_seconds_count
-# 0.0 - while the same estate-up.sh driven on its own consumes correctly, at a consumer group offset
-# of 3 315 with zero lag. Until that is understood, two of the eleven objectives are unmeasured in
-# every signature and a committed capture would be a measurement of the fixture. The script is
-# committed because it works and because WP-24c needs it; its output is not.
+# **This sweep is single-use against a given ledger, and --require-postings is what enforces it.**
+# The dates are pinned and TB_KEEP_DATA=1 keeps idempotency_record, so a second sweep against the
+# same ledger replays every request instead of posting it. Such a run writes no journal entry, so no
+# outbox row, so nothing reaches the broker and the scorer scores nothing - and the report reads as
+# though fraud-scoring were dead rather than as though nothing had been asked of it. That is F-86:
+# seven captures whose `tessera_fraud_scoring_seconds_count 0.0` was a correct reading of a run in
+# which nothing happened. The driver now refuses to finish such a run rather than reporting it, so
+# the remedy is to load the ledger again - baseline.sh does it - before capturing a second time.
 #
 # Needs: Docker, a JDK 17, Go and uv. Each run takes a couple of minutes.
 
@@ -54,7 +56,7 @@ while [ $# -gt 0 ]; do
     --scale) RUN_SCALE="$2"; shift 2 ;;
     --compress) COMPRESS="$2"; shift 2 ;;
     --window) WINDOW="$2"; shift 2 ;;
-    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,33p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -126,6 +128,7 @@ for index in "${!SCENARIOS[@]}"; do
   TB_EXPECT_OUTBOX_BACKLOG="$expect_backlog" \
     bash "$ROOT/workload/scripts/estate-up.sh" \
       --scale "$RUN_SCALE" --compress "$COMPRESS" --window "$WINDOW" --date "$date" \
+      --require-postings \
     | tee "$work/run.log"
   status=${PIPESTATUS[0]}
   set -e
