@@ -215,6 +215,30 @@ cycle's memory from the writer's - the writer needs 5.6 GiB to prepare a day the
 `workload/baselines/batch-window/` carries the capture: 2 429 346 movements against 2 400 001
 accounts in 9.251 s, nothing rejected. `estate-under-load.md` section 8 reads it.
 
+## Driving stratum 1
+
+The 2011 tier has no REST and no queue: it is a JAX-WS endpoint on Tomcat 8.5 in front of Oracle, and
+the only way in is SOAP.
+
+```bash
+bash workload/scripts/legacy-up.sh --keep --customers 2000 --accounts 4000
+go -C workload run ./cmd/workload-soap \
+  --accounts "${TMPDIR:-/tmp}/tessera-legacy/accounts.txt" \
+  --levels 1,2,4,8,16,32,64 --duration 8s --writes
+```
+
+`legacy-up.sh` boots real Oracle and installs a real Tomcat 8.5.100 from the Apache archive - an
+end-of-life version is not on a mirror - drops `ojdbc8` into `lib/`, binds `jdbc/customerMaster` in
+`context.xml` and deploys the WAR. Nothing in `legacy/` changes and no pinned version moves. The
+references the driver uses are read back **out of the database** rather than re-derived, because a
+driver given references the master does not hold measures the fault path.
+
+**A ladder rather than the day**, because the question is where this tier stops going faster, and the
+instrument for a saturation question is a fixed worker count each waiting for its answer - the same
+reasoning `workload-ceiling` sets out for the ledger. It answers about **7 800 reads a second** and
+**3 300 writes**, and `estate-under-load.md` section 9 has the control run that shows the datasource
+pool is not what limits it.
+
 ## Reporting a run afterwards
 
 `workload-run` prints its outcome as it finishes, and that report dies with the terminal.
