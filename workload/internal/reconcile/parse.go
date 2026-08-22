@@ -184,3 +184,20 @@ func Reconciled(rows []Row) bool {
 	}
 	return true
 }
+
+// ReplayedEverything reports whether the ledger answered every money movement of this run out of
+// its idempotency store rather than posting any of it.
+//
+// It is not a defect and it is not an error - it is the correct behaviour of a run offered the same
+// business date, seed and model twice against the same ledger, and WP-21 demonstrates it on purpose.
+// It matters because such a run **is not a measurement of the estate**: no entry is written, so no
+// outbox row is written, so nothing reaches the broker, so the scorer scores nothing and every
+// downstream objective reads as though the component were dead. That is F-86: seven signature
+// captures whose `tessera_fraud_scoring_seconds_count 0.0` was a correct reading of a run in which
+// nothing happened, taken because the sweep pins its business dates and was run a second time.
+//
+// Rejections are deliberately not postings. A rejected movement is answered by the ledger and
+// writes no journal entry, so a run of nothing but rejections publishes nothing either.
+func ReplayedEverything(moved ByOutcome) bool {
+	return moved["posted"] == 0 && moved["replayed"] > 0
+}

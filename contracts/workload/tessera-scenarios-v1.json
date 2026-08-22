@@ -1,8 +1,7 @@
 {
   "catalogueId": "TB-SCENARIOS-V1",
-  "catalogueVersion": "1.0.0",
+  "catalogueVersion": "1.1.0",
   "summary": "Seven conditions an operator would recognise, each declared with the objectives it is expected to move and the objectives expected to stay flat. The flat list is the half that makes a signature falsifiable: three of these conditions move nothing this estate has an objective for, and each of those says why rather than being left out. Injecting one is the fixture's job and changing the estate to make one injectable is refused - where that refusal costs a condition, the mechanism records it.",
-
   "scenarios": [
     {
       "scenarioId": "SCN-SLOW-DEPENDENCY",
@@ -36,14 +35,15 @@
       "holdsForMinutes": 30,
       "parameters": {},
       "movesObjectives": [
-        "SLO-GATEWAY-AVAILABILITY"
+        "SLO-GATEWAY-LATENCY"
       ],
       "flatObjectives": [
+        "SLO-GATEWAY-AVAILABILITY",
         "SLO-LEDGER-MOVEMENT-SUCCESS",
         "SLO-LEDGER-POSTING-LATENCY"
       ],
       "introducedBy": "WP-24a",
-      "rationale": "A ratio computed from a component's own counters cannot fall while the component is not counting. `ledger_transfers_total` stops advancing entirely, so the ledger's success rate over the window is whatever it was before the outage started - which reads as a healthy ledger rather than an absent one. This is the single most important thing to have seen before reading a dashboard under pressure, and the reason a component's availability has to be judged from outside it."
+      "rationale": "A ratio computed from a component's own counters cannot fall while the component is not counting. `ledger_transfers_total` stops advancing entirely, so the ledger's success rate over the window is whatever it was before the outage started - which reads as a healthy ledger rather than an absent one. This is the single most important thing to have seen before reading a dashboard under pressure, and the reason a component's availability has to be judged from outside it. **Revised by WP-24c with the measurement in hand.** The first sweep declared that judging from outside would move `SLO-GATEWAY-AVAILABILITY`, and it did not: availability stayed at 1.00000 over 34 322 requests while `SLO-GATEWAY-LATENCY` went from met to missed at 0.95283, 4.72x its budget. A suspended process is not a refused connection. It holds its listening socket, the kernel keeps accepting, and every request that arrives during the window is answered late rather than not at all - so the outage arrives at the edge as latency and never as failure. Judging from outside is still the right instruction; the graph it moves is the other one."
     },
     {
       "scenarioId": "SCN-OUTBOX-STUCK",
@@ -119,14 +119,15 @@
         "lockTable": "balance"
       },
       "movesObjectives": [
-        "SLO-LEDGER-POOL-HEADROOM",
-        "SLO-LEDGER-POSTING-LATENCY"
+        "SLO-GATEWAY-LATENCY",
+        "SLO-LEDGER-POOL-HEADROOM"
       ],
       "flatObjectives": [
-        "SLO-LEDGER-MOVEMENT-SUCCESS"
+        "SLO-LEDGER-MOVEMENT-SUCCESS",
+        "SLO-LEDGER-POSTING-LATENCY"
       ],
       "introducedBy": "WP-24a",
-      "rationale": "`SLO-LEDGER-POOL-HEADROOM` is stated as the earliest of the ledger's four objectives to break, before latency moves and long before anything fails. This condition is the test of that ordering, and the order the two move in is the finding rather than the fact that they moved. SHARE rather than ACCESS EXCLUSIVE is deliberate: readers keep passing, so the ledger stays visibly alive and the signature is a queue rather than an outage, which is the harder one to recognise."
+      "rationale": "`SLO-LEDGER-POOL-HEADROOM` is stated as the earliest of the ledger's four objectives to break, and this condition is the test of that ordering. SHARE rather than ACCESS EXCLUSIVE is deliberate: readers keep passing, so the signature is a queue rather than an outage. **Revised by WP-24c with the measurement in hand**, and it is what F-83 saw in one run and a second sweep confirmed: the condition is invisible in both of the ledger's own signals and plain at the edge. `SLO-LEDGER-POSTING-LATENCY` degraded to 0.99398 against 0.99 - real, 0.60x of its budget, inside the line - so it is declared flat. `SLO-GATEWAY-LATENCY` missed at 0.94141, 5.86x its budget, because a blocked writer holds its pooled connection and everything behind it queues for one, reads included, and reads are three quarters of the day. `SLO-LEDGER-POOL-HEADROOM` stays declared: it is what the condition is named for, and a gauge bracketed by two scrapes reads 0 at both ends whatever happened between them. That is `inconclusive` rather than contradicted, and closing it is F-82."
     },
     {
       "scenarioId": "SCN-CLOCK-SKEW",

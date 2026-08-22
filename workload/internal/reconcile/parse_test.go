@@ -124,3 +124,48 @@ func TestAnEmptyExpositionReadsAsNothingRatherThanFailing(t *testing.T) {
 		t.Errorf("read %d samples out of garbage", len(samples))
 	}
 }
+
+// A run the ledger answered entirely out of its idempotency store is not a measurement of the
+// estate: nothing moved, so no outbox row was written, so nothing reached the broker and the
+// scorer had nothing to consume. F-86 was three weeks of exactly that being read as a broken
+// consumer, so the condition has a name and a test rather than a note in a log.
+func TestReplayedEverythingSeparatesAReplayedRunFromAQuietOne(t *testing.T) {
+	cases := []struct {
+		name  string
+		moved reconcile.ByOutcome
+		want  bool
+	}{
+		{
+			name:  "the ledger posted nothing and replayed everything",
+			moved: reconcile.ByOutcome{"posted": 0, "replayed": 9080, "rejected": 43},
+			want:  true,
+		},
+		{
+			name:  "a run that posted is a run worth reading, replays and all",
+			moved: reconcile.ByOutcome{"posted": 9080, "replayed": 12},
+			want:  false,
+		},
+		{
+			name:  "a run that moved no money at all is quiet, not replayed",
+			moved: reconcile.ByOutcome{"posted": 0, "replayed": 0, "rejected": 0},
+			want:  false,
+		},
+		{
+			name:  "a window with no money-moving traffic in it says nothing either way",
+			moved: reconcile.ByOutcome{},
+			want:  false,
+		},
+		{
+			name:  "rejections are not postings: they wrote no outbox row",
+			moved: reconcile.ByOutcome{"posted": 0, "replayed": 1, "rejected": 500},
+			want:  true,
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := reconcile.ReplayedEverything(testCase.moved); got != testCase.want {
+				t.Errorf("ReplayedEverything(%v) = %v, want %v", testCase.moved, got, testCase.want)
+			}
+		})
+	}
+}

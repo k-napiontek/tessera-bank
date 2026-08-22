@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1024-failure-injection` (24a), `feat/TB-1024-migration-and-soak` (24b), `feat/TB-1024-signatures` (24c) |
 | **Stratum** | - |
 | **Depends on** | WP-23 |
-| **Status** | `Done` - 24a. `Not started` - 24b and 24c |
+| **Status** | `Done` - 24a and 24c. `Not started` - 24b |
 
 ## Objective
 
@@ -266,14 +266,14 @@ baseline to mean anything, which is why they are the second half rather than the
 
 The half that satisfies each box is named, because two pull requests cannot both tick all six.
 
-- [ ] Every condition in the catalogue can be injected, and each produces a recorded signature. *(24c)*
-- [ ] Each signature is compared against a baseline captured under the same manifest. *(24c)*
+- [x] Every condition in the catalogue can be injected, and each produces a recorded signature. *(24c)*
+- [x] Each signature is compared against a baseline captured under the same manifest. *(24c)*
 - [x] A scenario is declarable, checkable and injectable, and the estate can show one. *(24a)*
 - [x] A recorded normal exists for the extended fixture, at full WP-22 volume. *(24a)*
 - [ ] A migration is applied under traffic, and the lock it takes and the latency it caused are
       recorded. *(24b)*
 - [ ] A soak run demonstrates unbounded growth in the two tables F-28 names, with figures. *(24b)*
-- [ ] Every runbook claim that observation contradicted is corrected. *(24b and 24c, each in its own change)*
+- [x] Every runbook claim that observation contradicted is corrected. *(24c done; 24b re-checks it)*
 - [x] No component was changed to make a fault injectable, or the change is recorded as a finding.
       *(24a; 24b and 24c re-check it)*
 - [ ] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).

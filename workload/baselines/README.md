@@ -12,6 +12,7 @@ own directory and `baseline.sh` requires `--out-name` rather than defaulting to 
 |---|---|
 | [`spine-only/`](spine-only/) | PostgreSQL, the ledger and the gateway. No broker, so `fraud-scoring` never ran and the outbox relay had nowhere to publish. Captured by WP-23 at 20 000 customers over a fortnight |
 | [`with-broker/`](with-broker/) | The same, plus Kafka, `edge/fraud-scoring` and the controllable hop. Captured by WP-24a at 150 000 customers over 355 dates - 300 001 accounts, 14 491 832 rows |
+| [`signatures/`](signatures/) | The same estate, degraded on purpose. One directory per condition in `TB-SCENARIOS-V1`, each diffed against `with-broker/`. Captured by WP-24c |
 
 Every directory holds the same seven files:
 
@@ -41,6 +42,22 @@ go -C workload run ./cmd/workload-report \
 The two `ceiling-*.json` files below sit at the top level rather than in a capture directory. They
 are not a bank day and there is no baseline to diff them against: they answer where throughput stops
 rising, which is a property of the design rather than a normal to compare a run with.
+
+### The seven signatures
+
+`signatures/<SCN-ID>/` holds the same seven files as a capture directory above, and its `report.txt`
+carries one extra section: the **Signature**, which judges the run against what the scenario declared
+*before* it - the objectives it said would move, the objectives it said would stay flat, and where
+each one actually ended. A verdict reads `as declared`, `CONTRADICTED`, or `inconclusive` when this
+run could not answer the question at all.
+
+Produced by [`../scripts/signatures.sh`](../scripts/signatures.sh), which runs against the database
+[`../scripts/baseline.sh`](../scripts/baseline.sh) leaves behind. **It is single-use against that
+database.** Its seven business dates are pinned, so a second sweep over the same ledger replays every
+request instead of posting it - and a run in which nothing was posted writes no journal entry, no
+outbox row, publishes nothing and scores nothing, which reads as an estate full of dead components.
+Load the ledger again between sweeps. `workload-run --require-postings` refuses such a run rather
+than reporting it; F-86 is what happens without that control.
 
 ### The throughput ceiling
 
