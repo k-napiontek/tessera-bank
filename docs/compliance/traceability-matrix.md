@@ -2,7 +2,8 @@
 
 > **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-11b, WP-12, WP-13, WP-14, WP-15, WP-16, WP-17, WP-19, WP-20 and WP-21. Every work package adds its own as
+> WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-11b, WP-12, WP-13, WP-14, WP-15, WP-16, WP-17, WP-19,
+> WP-20, WP-21, WP-22, WP-23 and WP-24a. Every work package adds its own as
 > part of the Definition of Done, and WP-18 verifies that none is missing.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
@@ -796,3 +797,34 @@ a pipe, so neither side draws the day twice.
 | **REQ-LED-002** An account may not go below its overdraft limit | WP-06 | Enforced on the bulk path, where nothing in the schema enforces it. The loader carries a running balance and asks `OverdraftPolicy.forbidden()` itself, so a drawn transfer that would take an account below zero is **counted and not written** - a loader that posted it anyway would leave a ledger full of rows `Transfer` would have rejected while every constraint remained enabled | **Met** |
 | **REQ-DP-001** All test data is synthetic | WP-03 | The loader invents no reference. Accounts, customers, transfers, holds and the treasury all come from the WP-20 population, and the two references the loader does mint - the opening entries - are `TB` plus the day before the range, which is what keeps them from colliding with a drawn one | **Met** |
 | **REQ-LED-003** Money is exact and currency-aware | WP-06 | `long` minor units from the stream to the `COPY` buffer. No `double` and no `BigDecimal` on the amount path, and the one place a balance moves consults `AccountType.signedEffect` rather than reproducing it | **Met** |
+
+---
+
+## WP-24a - failure injection: the scenario contract, the fixture and the recorded normal
+
+Ticket TB-1024. A new contract pair under `contracts/workload/`, a sixth checker in
+`contracts/validate.sh`, and four new packages in `workload/`. **None of it is a component of the
+bank**: it extends the fixture WP-20 and WP-21 built, and nothing in the estate depends on it.
+
+**Every measurement in this repository had been taken on a healthy estate.** WP-21 put it under load,
+WP-22 gave it a production-shaped database and WP-23 declared what good looks like - and none of them
+degraded it on purpose. This package declares what a condition is, makes the fixture capable of
+showing one, and re-takes the recorded normal against an estate that finally has a broker in it.
+
+The seven recorded signatures themselves are **WP-24c**, moved out on 2026-08-22 after four defects
+in the new fixture invalidated three capture cycles and a fifth was left undiagnosed. What is
+verified here is verified; what is not is named rather than implied.
+
+### Owned by WP-24a
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-007** Degradation is exercised, not assumed | `contracts/workload/scenario.schema.json` and `tessera-scenarios-v1.json` declare `TB-SCENARIOS-V1`: seven conditions, each naming what it degrades, how the **fixture** produces it, when in the business day, the objectives it is expected to **move** and the objectives expected to stay **flat**. The two lists are what turn a signature from prose into an assertion, and the flat list is the load-bearing half - the interesting claim about a rate-limit storm is not that refusals rose but that `SLO-GATEWAY-AVAILABILITY` did not. [ADR 0017](../governance/adr/0017-a-scenario-is-its-own-contract.md) decides that a scenario is its own contract rather than a field on the day model, because every run manifest records the day model's digest and a model that changed because somebody added a fault is a baseline nothing can be diffed against. **Three of the seven move nothing this estate has an objective for**, and each carries a written reason rather than an empty list - an estate that cannot see a condition is a finding. `internal/injector` applies a condition to containers the fixture booted and processes it started, never to the estate's own code or configuration, and reports a condition it cannot produce as **uninjected with the reason** rather than failing - `SCN-CLOCK-SKEW` is one. `workload-report --scenario` judges a run against what its scenario declared, and "moved" is the catalogue's own threshold rather than a tolerance invented in the report | `contracts/check-workload-scenarios.py`, wired into `contracts/validate.sh`; **demonstrated both ways against fifteen planted faults** - an SLO id renamed in the catalogue and left stale in a scenario, the same objective in both lists, two scenarios sharing an id, an objective named twice in one list, a scenario that moves nothing and does not say why, `movesNothingBecause` on a scenario that expects movement, a parameter belonging to another condition, a required parameter unset, a condition dropped from the catalogue, a hold window running past the end of the day, an object left open, an unbounded string, a planted `holderName`, a planted `severity`, and a `oneOf` the shared validator does not assert. The Go half refuses independently: `scenario_test.go::TestDecodeRefusesADocumentItDoesNotFullyUnderstand` over nine mutations of the committed catalogue. `injector_test.go` runs the whole injector against a recorder, so `make test-workload` still needs no Docker; `signature_test.go` pins the verdict both ways, including a declared move that did not happen and a flat objective that moved, and refuses a catalogue digest the run was not executed under | **Partially met** - the catalogue, the checker, the injector and the report land here; the seven recorded signatures are WP-24c |
+
+### Contributed by WP-24a, verified by the owning package
+
+| Requirement | Owner | What WP-24a contributes | Status |
+|---|---|---|---|
+| **REQ-PERF-006** Normal is recorded before it is needed | WP-23 | A second capture, `workload/baselines/with-broker/`, beside the first rather than over it - `baseline.sh` now requires `--out-name`, because a baseline written over another leaves one report and two sets of conditions. It closes **F-79**: 150 000 customers over 355 dates, **300 001 accounts and 14 491 832 rows**, against WP-23's 40 001 and 799 565. It closes the broker half of **F-77**: `fraud-scoring` has figures for the first time, 23 588 events with both objectives met, and `SLO-LEDGER-OUTBOX-FRESHNESS` goes from *missed* at 140 s to met at **0** - which confirms that the missed objective was the fixture rather than the ledger. The manifest now records the **hardware** and, for a degraded run, the scenario and its catalogue digest; `New` refuses a blank hardware the way it already refused a blank commit | **Met** |
+| **REQ-DP-001** All test data is synthetic | WP-03 | The scenario schema is *incapable* of carrying personal data, checked the same way WP-20's is: every object closed, every string bounded, and `check-workload-model.py`'s denylist of property names run against it - demonstrated against a planted `holderName`. Nothing the injector captures is a customer's | **Met** |
+| **REQ-OPS-002** Every component exposes a metric surface | WP-09 | The fixture now scrapes three of them rather than two. `workload-run` writes a third `before`/`after` pair for the scorer, and `estate-up.sh` **asserts the outbox drained** rather than assuming it - the control that was missing when WP-23's baseline recorded a missed objective for two months without anybody noticing it was the fixture | **Met** |

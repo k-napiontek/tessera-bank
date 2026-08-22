@@ -79,7 +79,6 @@ boot_ledger() {
   wait_for "the ledger on $port" "http://localhost:$port/actuator/health/readiness"
 }
 
-HARDWARE="$(uname -s) $(uname -m), $(sysctl -n hw.ncpu 2>/dev/null || nproc) cores, $(go version | awk '{print $3}')"
 GIT_SHA="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 step "PostgreSQL"
@@ -99,7 +98,7 @@ boot_ledger "$LEDGER_ONE" "${TMPDIR:-/tmp}/tessera-ceiling-one.log"
 go -C "$ROOT/workload" run ./cmd/workload-ceiling \
   --ledger "http://localhost:$LEDGER_ONE" \
   --prefix TB91 \
-  --hardware "$HARDWARE" --git-sha "$GIT_SHA" \
+  --git-sha "$GIT_SHA" \
   --out "$OUT_DIR/ceiling-one-instance.json" \
   "$@"
 
@@ -113,7 +112,7 @@ go -C "$ROOT/workload" run ./cmd/workload-ceiling \
   --ledger "http://localhost:$LEDGER_ONE" \
   --ledger "http://localhost:$LEDGER_TWO" \
   --prefix TB92 \
-  --hardware "$HARDWARE" --git-sha "$GIT_SHA" \
+  --git-sha "$GIT_SHA" \
   --out "$OUT_DIR/ceiling-two-instances.json" \
   "$@"
 

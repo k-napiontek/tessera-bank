@@ -51,9 +51,12 @@ still sits where the canonical model says it does,
 [`check-extract-layout.py`](check-extract-layout.py), which asserts the same of the outbound
 regulatory extract, [`check-workload-model.py`](check-workload-model.py), which validates the
 committed workload model against its schema and then checks the arithmetic a schema cannot express,
-and [`check-slo-catalogue.py`](check-slo-catalogue.py), which validates the SLO catalogue and then
+[`check-slo-catalogue.py`](check-slo-catalogue.py), which validates the SLO catalogue and then
 asserts in **both directions** that every metric this estate emits owes an entry and every entry
-names a metric it emits.
+names a metric it emits, and
+[`check-workload-scenarios.py`](check-workload-scenarios.py), which validates the failure-scenario
+catalogue and resolves every objective a scenario expects to move, or expects to stay flat, against
+the SLO catalogue.
 
 A green run proves each contract is well-formed. It does **not** prove the four agree with each
 other - only reading them beside the canonical model proves that.

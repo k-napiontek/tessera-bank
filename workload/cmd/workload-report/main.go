@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/k-napiontek/tessera-bank/workload/internal/manifest"
+	"github.com/k-napiontek/tessera-bank/workload/internal/scenario"
 	"github.com/k-napiontek/tessera-bank/workload/internal/slo"
 )
 
@@ -55,6 +56,9 @@ type options struct {
 	cataloguePath string
 	before, after scrapes
 	out           string
+
+	scenarioPath                  string
+	baselineBefore, baselineAfter scrapes
 }
 
 func run(args []string, stdout io.Writer) error {
@@ -67,6 +71,11 @@ func run(args []string, stdout io.Writer) error {
 	flags.Var(&opts.before, "before", "a scrape taken before the run; give it once per component")
 	flags.Var(&opts.after, "after", "the matching scrape taken after it")
 	flags.StringVar(&opts.out, "out", "-", "where to write the report, or - for stdout")
+	flags.StringVar(&opts.scenarioPath, "scenario", "",
+		"the failure-scenario catalogue, to judge this run against what its condition declared")
+	flags.Var(&opts.baselineBefore, "baseline-before",
+		"a scrape from the run this one is diffed against; give it once per component")
+	flags.Var(&opts.baselineAfter, "baseline-after", "the matching closing scrape")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -98,8 +107,16 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("reading the closing scrapes: %w", err)
 	}
 
+	condition, baseline, err := readCondition(opts, record)
+	if err != nil {
+		return err
+	}
+
 	var page strings.Builder
 	render(&page, record, catalogue, before, after)
+	if condition != nil {
+		renderSignature(&page, record, *condition, catalogue, capture{before, after}, baseline)
+	}
 
 	if opts.out == "-" {
 		_, err := io.WriteString(stdout, page.String())
@@ -121,6 +138,63 @@ func readAll(paths []string) (string, error) {
 		joined.WriteString("\n")
 	}
 	return joined.String(), nil
+}
+
+// readCondition resolves the scenario this run's manifest says it was executed under, and the
+// baseline capture its signature is judged against.
+//
+// The identifier comes from the **manifest** rather than from a flag. A flag would let a capture be
+// labelled with a condition it was not run under, and a mislabelled measurement is worse than a
+// missing one - it is the only kind that gets quoted.
+func readCondition(opts options, record manifest.Manifest) (*scenario.Scenario, capture, error) {
+	if opts.scenarioPath == "" {
+		if record.ScenarioID != "" {
+			return nil, capture{}, fmt.Errorf(
+				"this run was executed under %s and no --scenario was given, so its signature "+
+					"cannot be judged; pass the catalogue or report a run that was not degraded",
+				record.ScenarioID)
+		}
+		return nil, capture{}, nil
+	}
+	if record.ScenarioID == "" {
+		return nil, capture{}, fmt.Errorf(
+			"--scenario was given and this run was not executed under one")
+	}
+	if len(opts.baselineBefore) == 0 || len(opts.baselineAfter) == 0 {
+		return nil, capture{}, fmt.Errorf(
+			"--baseline-before and --baseline-after are required with --scenario: a degradation " +
+				"described without the normal it degraded from is an anecdote")
+	}
+
+	document, err := os.ReadFile(opts.scenarioPath)
+	if err != nil {
+		return nil, capture{}, fmt.Errorf("reading the scenario catalogue: %w", err)
+	}
+	catalogue, err := scenario.Decode(document)
+	if err != nil {
+		return nil, capture{}, err
+	}
+	if catalogue.Digest() != record.ScenarioDigest {
+		return nil, capture{}, fmt.Errorf(
+			"the catalogue digest is %s and the run was executed under %s - this is a different "+
+				"catalogue from the one that produced the run, so the signature it declares is not "+
+				"the one that was asserted",
+			short(catalogue.Digest()), short(record.ScenarioDigest))
+	}
+	chosen, err := catalogue.Find(record.ScenarioID)
+	if err != nil {
+		return nil, capture{}, err
+	}
+
+	before, err := readAll(opts.baselineBefore)
+	if err != nil {
+		return nil, capture{}, fmt.Errorf("reading the baseline's opening scrapes: %w", err)
+	}
+	after, err := readAll(opts.baselineAfter)
+	if err != nil {
+		return nil, capture{}, fmt.Errorf("reading the baseline's closing scrapes: %w", err)
+	}
+	return &chosen, capture{before, after}, nil
 }
 
 func readManifest(path string) (manifest.Manifest, error) {
@@ -146,6 +220,7 @@ func render(out *strings.Builder, record manifest.Manifest, catalogue slo.Catalo
 	fmt.Fprintf(out, "  Offered rate    %.1f/s mean, %.1f/s peak\n",
 		record.Offered.MeanPerSecond, record.Offered.PeakPerSecond)
 	fmt.Fprintf(out, "  Commit          %s\n", record.GitSHA)
+	fmt.Fprintf(out, "  Hardware        %s\n", record.Hardware)
 	fmt.Fprintf(out, "\n  Catalogue       %s %s\n", catalogue.CatalogueID, catalogue.CatalogueVersion)
 
 	var deferred []deferredReading

@@ -27,17 +27,21 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/k-napiontek/tessera-bank/workload/internal/arrivals"
 	"github.com/k-napiontek/tessera-bank/workload/internal/bankday"
 	"github.com/k-napiontek/tessera-bank/workload/internal/client"
+	"github.com/k-napiontek/tessera-bank/workload/internal/hardware"
 	"github.com/k-napiontek/tessera-bank/workload/internal/identity"
+	"github.com/k-napiontek/tessera-bank/workload/internal/injector"
 	"github.com/k-napiontek/tessera-bank/workload/internal/manifest"
 	"github.com/k-napiontek/tessera-bank/workload/internal/metrics"
 	"github.com/k-napiontek/tessera-bank/workload/internal/model"
 	"github.com/k-napiontek/tessera-bank/workload/internal/money"
+	"github.com/k-napiontek/tessera-bank/workload/internal/proxy"
 	"github.com/k-napiontek/tessera-bank/workload/internal/reconcile"
 	"github.com/k-napiontek/tessera-bank/workload/internal/runner"
 	"github.com/k-napiontek/tessera-bank/workload/internal/seeding"
@@ -66,12 +70,21 @@ type options struct {
 	gateway       string
 	ledgerMetrics string
 	edgeMetrics   string
-	issuer        string
-	audience      string
-	keysPath      string
-	metricsListen string
-	manifestPath  string
-	scrapeDir     string
+	fraudMetrics  string
+	proxyListen   string
+	proxyUpstream string
+
+	scenarioPath    string
+	scenarioID      string
+	runDir          string
+	brokerContainer string
+	dbContainer     string
+	issuer          string
+	audience        string
+	keysPath        string
+	metricsListen   string
+	manifestPath    string
+	scrapeDir       string
 
 	timeout      time.Duration
 	attempts     int
@@ -81,6 +94,8 @@ type options struct {
 	skipSeeding  bool
 	skipRun      bool
 	tokenMinutes int
+	settle       time.Duration
+	drain        time.Duration
 }
 
 func run() error {
@@ -107,6 +122,29 @@ func run() error {
 		return err
 	}
 
+	// Started before anything is sent, because the gateway is pointed at it and will start looking
+	// for it as soon as this process writes its public key. In path for every run including the
+	// baseline: a signature taken through one hop and diffed against a normal taken through none
+	// differs by more than the condition.
+	condition, scenarioDigest, injecting, err := loadScenario(opts)
+	if err != nil {
+		return err
+	}
+	if injecting {
+		fmt.Printf("== Scenario ==\n  %s - %s\n  %s\n\n",
+			condition.ScenarioID, condition.Title, condition.Mechanism)
+	}
+
+	hop, err := startProxy(opts)
+	if err != nil {
+		return err
+	}
+	if hop != nil {
+		defer func() { _ = hop.Close() }()
+		fmt.Printf("== Proxy ==\n  %s in front of %s, adding nothing until a condition says so\n\n",
+			hop.Addr(), hop.Upstream())
+	}
+
 	curve, err := loaded.Curve()
 	if err != nil {
 		return err
@@ -122,6 +160,11 @@ func run() error {
 	record, err := manifest.New(manifest.Run{
 		Model: loaded, BusinessDate: date, Seed: opts.seed, Scale: opts.scale,
 		Compression: opts.compress, From: from, To: to, GitSHA: gitSHA(opts.modelPath),
+		Hardware: hardware.Describe(),
+		// Both or neither: manifest.New refuses one without the other, because a run that recorded a
+		// condition without saying which catalogue it came from could be diffed against a run of a
+		// scenario somebody had since edited.
+		ScenarioID: condition.ScenarioID, ScenarioDigest: scenarioDigest,
 	})
 	if err != nil {
 		return err
@@ -204,18 +247,64 @@ func run() error {
 	// about every objective the gateway carries, which reads as an estate that did nothing rather
 	// than as a report that looked in one place.
 	saveScrape(opts.scrapeDir, "before-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
+	// And the scorer, which is only running when the fixture booted a broker for it. Left empty the
+	// scrape is empty, and the report says "nothing happened" about fraud-scoring exactly as it did
+	// before there was one to look at.
+	saveScrape(opts.scrapeDir, "before-fraud.prom", scrapeLedger(opts.fraudMetrics).Body)
 
 	fmt.Printf("== Run ==\n  %s of business time at %dx, so about %s of wall clock\n",
 		businessSpan(from, to), opts.compress, record.RealDuration.Round(time.Second))
+
+	// The condition runs beside the day rather than instead of it. A condition applied between two
+	// runs measures a maintenance window, which is the thing this exercise exists not to be.
+	var injection injector.Record
+	var applying sync.WaitGroup
+	var injectErr error
+	if injecting {
+		engine, err := newInjector(opts, hop, newStorm(sender, people, date, held))
+		if err != nil {
+			return err
+		}
+		applying.Add(1)
+		go func() {
+			defer applying.Done()
+			injection, injectErr = engine.Run(ctx, condition, from)
+		}()
+	}
+
 	summary, runErr := runner.Execute(ctx, runner.Settings{
 		People: people, Process: process, Date: date, Seed: opts.seed,
 		Compression: opts.compress, From: from, To: to, Held: held,
 		Sender: sender, Observer: registry, Expected: opts.expected,
 	})
+	applying.Wait()
+	if injectErr != nil && runErr == nil {
+		runErr = injectErr
+	}
+	if injecting {
+		printInjection(injection, condition)
+	}
+
+	// The scorer sits behind the outbox relay and the broker, so at the instant the last request is
+	// answered it has consumed less than the run produced. Closing the bracket immediately would
+	// report a scorer that fell behind when what happened is that nobody waited - a measurement of
+	// the fixture rather than of the estate. The wait is stated rather than guessed, and the ledger
+	// is scraped after it too, because the outbox lag at that moment is the one worth recording.
+	if opts.settle > 0 {
+		fmt.Printf("\n  settling for %s so the relay and the scorer can catch up\n", opts.settle)
+		select {
+		case <-time.After(opts.settle):
+		case <-ctx.Done():
+		}
+	}
+	if opts.drain > 0 {
+		waitForOutbox(ctx, opts.ledgerMetrics, opts.drain)
+	}
 
 	after := scrapeLedger(opts.ledgerMetrics)
 	saveScrape(opts.scrapeDir, "after.prom", after.Body)
 	saveScrape(opts.scrapeDir, "after-edge.prom", scrapeLedger(opts.edgeMetrics).Body)
+	saveScrape(opts.scrapeDir, "after-fraud.prom", scrapeLedger(opts.fraudMetrics).Body)
 	printReport(summary, registry)
 	printReconciliation(summary, before.Transfers, after.Transfers, opts.ledgerMetrics)
 
@@ -256,6 +345,28 @@ func parse() options {
 	flag.DurationVar(&opts.waitFor, "wait", 90*time.Second, "how long to wait for the gateway to answer")
 	flag.StringVar(&opts.edgeMetrics, "edge-metrics", "",
 		"the gateway's metrics endpoint, scraped at the same two instants as the ledger's")
+	flag.StringVar(&opts.fraudMetrics, "fraud-metrics", "",
+		"the scorer's metrics endpoint, scraped at the same two instants as the ledger's")
+	flag.StringVar(&opts.proxyListen, "proxy-listen", "",
+		"host a controllable hop on this address; the gateway is pointed at it instead of the ledger")
+	flag.StringVar(&opts.proxyUpstream, "proxy-upstream", "",
+		"what that hop forwards to - the ledger's own base address")
+	flag.StringVar(&opts.scenarioPath, "scenario", "",
+		"the failure-scenario catalogue to inject a condition from")
+	flag.StringVar(&opts.scenarioID, "scenario-id", "",
+		"which condition in that catalogue to inject during this run")
+	flag.StringVar(&opts.runDir, "run-dir", "",
+		"where the fixture wrote one <role>.pid per component, so a condition can signal one")
+	flag.StringVar(&opts.brokerContainer, "broker-container", "tessera-workload-kafka",
+		"the broker container a condition may pause")
+	flag.StringVar(&opts.dbContainer, "db-container", "tessera-workload-db",
+		"the database container a condition may take a lock in")
+	flag.DurationVar(&opts.settle, "settle", 0,
+		"wait this long after the run before the closing scrapes, so that what the run handed to a "+
+			"relay and a consumer has somewhere to arrive")
+	flag.DurationVar(&opts.drain, "drain", 0,
+		"then wait up to this long for the outbox to reach zero, so the closing scrape records an "+
+			"estate that has caught up rather than one still working through the day")
 	flag.StringVar(&opts.scrapeDir, "scrapes", "",
 		"write the ledger scrapes that bracket the measured run into this directory")
 	flag.BoolVar(&opts.skipSeeding, "skip-seeding", false, "assume the accounts are already open and funded")
@@ -349,6 +460,67 @@ func waitForGateway(ctx context.Context, origin string, limit time.Duration) err
 			return fmt.Errorf("the gateway at %s did not answer within %s: %w", origin, limit, err)
 		}
 		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// startProxy hosts the controllable hop, or nothing when the caller did not ask for one. Both flags
+// or neither: a listen address with no upstream would answer every request with a 502, which reads
+// as an estate that is down.
+func startProxy(opts options) (*proxy.Proxy, error) {
+	if opts.proxyListen == "" && opts.proxyUpstream == "" {
+		return nil, nil
+	}
+	if opts.proxyListen == "" || opts.proxyUpstream == "" {
+		return nil, fmt.Errorf("--proxy-listen and --proxy-upstream go together, and only %q is set",
+			opts.proxyListen+opts.proxyUpstream)
+	}
+	return proxy.Start(opts.proxyListen, opts.proxyUpstream)
+}
+
+// waitForOutbox waits for the relay to publish everything the run produced, up to a bound.
+//
+// A fixed settle is a guess, and this run measures why that matters. Compression speeds the day up
+// and the relay's tick does not move with it: the relay ships at most one batch per interval, both
+// of which are the ledger's own configuration, so a day replayed at 720x hands it money movements
+// far faster than a real day ever would. Closing the scrape bracket before it has caught up records
+// a backlog that is an artefact of the dial rather than a property of the estate.
+//
+// It is a wait rather than an assertion. estate-up.sh checks afterwards whether the relay actually
+// drained, and a run told to expect a backlog passes --drain 0 so that the backlog it exists to
+// produce is still there when the scrape is taken.
+func waitForOutbox(ctx context.Context, metricsURL string, bound time.Duration) {
+	const pendingMetric = "ledger_outbox_pending"
+	started := time.Now()
+	deadline := started.Add(bound)
+	first := -1.0
+
+	for {
+		pending := 0.0
+		samples := reconcile.Read(scrapeLedger(metricsURL).Body, pendingMetric)
+		if len(samples) == 0 {
+			fmt.Printf("  the ledger publishes no %s, so the relay is not waited on\n", pendingMetric)
+			return
+		}
+		for _, sample := range samples {
+			pending += sample.Value
+		}
+		if first < 0 {
+			first = pending
+		}
+		if pending == 0 {
+			fmt.Printf("  the relay published the run's last %.0f events in %s\n",
+				first, time.Since(started).Round(time.Second))
+			return
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			fmt.Printf("  %.0f events still unpublished after %s, from %.0f when the day ended\n",
+				pending, bound, first)
+			return
+		}
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+		}
 	}
 }
 

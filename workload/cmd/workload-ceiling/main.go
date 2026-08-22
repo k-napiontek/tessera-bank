@@ -52,6 +52,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/k-napiontek/tessera-bank/workload/internal/hardware"
 	"github.com/k-napiontek/tessera-bank/workload/internal/reconcile"
 )
 
@@ -99,7 +100,7 @@ func run(args []string, stdout io.Writer) error {
 	flags.DurationVar(&opts.timeout, "timeout", 30*time.Second, "per-request timeout")
 	flags.StringVar(&opts.out, "out", "", "write the measurement to this file as JSON")
 	flags.StringVar(&opts.prefix, "prefix", "TB90", "account reference prefix for this run")
-	flags.StringVar(&opts.hardware, "hardware", "unrecorded", "what this ran on")
+	flags.StringVar(&opts.hardware, "hardware", hardware.Describe(), "what this ran on")
 	flags.StringVar(&opts.gitSHA, "git-sha", "unknown", "the commit the ledger was built from")
 	if err := flags.Parse(args); err != nil {
 		return err

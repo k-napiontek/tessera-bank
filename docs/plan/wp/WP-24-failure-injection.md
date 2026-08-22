@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | **Ticket** | TB-1024 |
-| **Branch** | `feat/TB-1024-failure-injection` (24a), `feat/TB-1024-migration-and-soak` (24b) |
+| **Branch** | `feat/TB-1024-failure-injection` (24a), `feat/TB-1024-migration-and-soak` (24b), `feat/TB-1024-signatures` (24c) |
 | **Stratum** | - |
 | **Depends on** | WP-23 |
-| **Status** | `Not started` - 24a and 24b |
+| **Status** | `Done` - 24a. `Not started` - 24b and 24c |
 
 ## Objective
 
@@ -34,7 +34,8 @@ nothing here currently allows anyone to attempt.
   latency it causes recorded. *(24b)*
 - A soak run long enough to show `outbox_record` and `idempotency_record` growing without bound
   (F-28) and `balance` accumulating dead tuples under churn. *(24b)*
-- A signature record per condition: what moved, in what order, and what stayed flat. *(24a)*
+- A signature record per condition: what moved, in what order, and what stayed flat. *(24c, moved
+  out of 24a on 2026-08-22 - see the note under Tasks)*
 - Runbook updates where an observed signature contradicts a documented one. *(both halves, each in
   the change that observed the contradiction)*
 
@@ -73,8 +74,19 @@ nothing here currently allows anyone to attempt.
 
 ## Tasks
 
-Detailed 2026-08-21. The package lands as **two halves on one ticket**, WP-24a and WP-24b, each its
-own branch and pull request, tracked as two rows in `STATUS.md`. Detailed out, this package spans a
+> **2026-08-22: the seven signatures moved out of 24a into a third half, WP-24c.** 24a's first real
+> runs found four defects in its own fixture, each of which invalidated the captures taken before it
+> and cost a full re-capture cycle - about thirty-five minutes each. They are listed in
+> [`estate-under-load.md`](../../architecture/estate-under-load.md) and every one of them is now
+> fixed and committed. A fifth is open and undiagnosed: **`edge/fraud-scoring` scores nothing during
+> an injected run** while the same fixture drives it correctly on its own, and until that is
+> understood a committed signature would be a measurement of the fixture. So 24a lands the contract,
+> the checker, the extended fixture, the injector and the re-taken baseline - all verified - and the
+> seven signatures and the runbook corrections that depend on observing them become **WP-24c**, on
+> the repository owner's instruction. The alternative was committing signatures nobody should quote.
+
+Detailed 2026-08-21. The package lands as **three halves on one ticket**, WP-24a, WP-24b and WP-24c,
+each its own branch and pull request, tracked as three rows in `STATUS.md`. Detailed out, this package spans a
 contract, a checker, an extended fixture, a re-taken baseline, seven injected conditions, a schema
 migration under live traffic and a soak run; the decision log records after WP-09 that the right
 answer at this size is to split the package in the plan rather than the pull request. This file stays
@@ -180,21 +192,9 @@ Branch `feat/TB-1024-failure-injection`. Nine tasks, roughly one commit each, te
    git SHA and the hardware. Closes **F-79**. The old baseline is not deleted: it is the record of
    what the estate did without a broker, and the difference between the two is itself a finding.
 
-7. **Inject all seven, capture each signature, diff it against the baseline.** Each run records which
-   objectives moved, in what order, and which stayed flat, **against what its scenario declared would
-   happen**. A condition that cannot be produced without changing a component is left uninjected and
-   **recorded as a finding about that component's testability**, per the Constraint - which is the
-   honest failure mode WP-23 used when it printed `nothing happened` against three components rather
-   than omitting them.
+7. *(moved to WP-24c)* **Inject all seven, capture each signature, diff it against the baseline.**
 
-8. **Correct every runbook claim that observation contradicted, in this change.** A runbook that
-   survives being wrong is worse than none, because it is read under pressure.
-   [`ledger-observability.md`](../../runbooks/ledger-observability.md) is the first place to look: it
-   claims `outcome="replayed"` rising means clients are timing out, and that
-   `ledger_outbox_lag_seconds` rather than `ledger_outbox_pending` is the one to page on. Both are
-   reasoned rather than observed, and this is the package that finally observes them. A claim that
-   survives contact with the injection is left alone and **said to have been checked**, which is not
-   the same statement as the one it carried before.
+8. *(moved to WP-24c)* **Correct every runbook claim that observation contradicted.**
 
 9. **Documentation, traceability and landing.** The write-up in the register
    [`estate-under-load.md`](../../architecture/estate-under-load.md) and
@@ -203,6 +203,38 @@ Branch `feat/TB-1024-failure-injection`. Nine tasks, roughly one commit each, te
    [`../../compliance/traceability-matrix.md`](../../compliance/traceability-matrix.md); and the
    README of every directory that changed, including the root one that **F-17** and **F-31** both
    record going stale. Then the Verification below, with real output in the pull request.
+
+### WP-24c - the seven signatures
+
+Branch `feat/TB-1024-signatures`. Depends on 24a, and independent of 24b. Four tasks.
+
+1. **Diagnose why `edge/fraud-scoring` scores nothing during an injected run.** `estate-up.sh` driven
+   on its own consumes correctly - a consumer group at offset 3 315 with zero lag - and the same
+   script under `signatures.sh` produces `tessera_fraud_scoring_seconds_count 0.0` in every one of
+   the seven, with the relay reporting nothing pending. Until that is understood, two of the eleven
+   objectives are unmeasured in every signature and a committed capture would be a measurement of the
+   fixture. **F-86.**
+
+2. **Inject all seven, capture each signature, diff it against `with-broker/`.** Each run records
+   which objectives moved, in what order, and which stayed flat, **against what its scenario declared
+   would happen** - which `workload-report --scenario` already prints. A condition that cannot be
+   produced without changing a component is left uninjected and **recorded as a finding about that
+   component's testability**, per the Constraint; `SCN-CLOCK-SKEW` is already known to be one.
+   `workload/scripts/signatures.sh` runs all seven and is committed by 24a.
+
+3. **Where a declaration was contradicted, revise it with the evidence in hand.** The first runs
+   contradicted several, and 24a deliberately left the catalogue as written: a prediction rewritten
+   after seeing the answer is not a prediction. Revising it here, in a change that carries the
+   measurement, is the honest version. **F-83** records what is already known - `SCN-POOL-EXHAUSTION`
+   moved `SLO-GATEWAY-LATENCY`, which its scenario names in neither list.
+
+4. **Correct every runbook claim that observation contradicted, in this change.** A runbook that
+   survives being wrong is worse than none, because it is read under pressure.
+   [`ledger-observability.md`](../../runbooks/ledger-observability.md) is the first place to look: it
+   claims `outcome="replayed"` rising means clients are timing out, and that
+   `ledger_outbox_lag_seconds` rather than `ledger_outbox_pending` is the one to page on. A claim that
+   survives contact with the injection is left alone and **said to have been checked**, which is not
+   the same statement as the one it carried before.
 
 ### WP-24b - the migration under traffic and the soak
 
@@ -234,14 +266,16 @@ baseline to mean anything, which is why they are the second half rather than the
 
 The half that satisfies each box is named, because two pull requests cannot both tick all six.
 
-- [ ] Every condition in the catalogue can be injected, and each produces a recorded signature. *(24a)*
-- [ ] Each signature is compared against a baseline captured under the same manifest. *(24a)*
+- [ ] Every condition in the catalogue can be injected, and each produces a recorded signature. *(24c)*
+- [ ] Each signature is compared against a baseline captured under the same manifest. *(24c)*
+- [x] A scenario is declarable, checkable and injectable, and the estate can show one. *(24a)*
+- [x] A recorded normal exists for the extended fixture, at full WP-22 volume. *(24a)*
 - [ ] A migration is applied under traffic, and the lock it takes and the latency it caused are
       recorded. *(24b)*
 - [ ] A soak run demonstrates unbounded growth in the two tables F-28 names, with figures. *(24b)*
-- [ ] Every runbook claim that observation contradicted is corrected. *(both, each in its own change)*
-- [ ] No component was changed to make a fault injectable, or the change is recorded as a finding.
-      *(both)*
+- [ ] Every runbook claim that observation contradicted is corrected. *(24b and 24c, each in its own change)*
+- [x] No component was changed to make a fault injectable, or the change is recorded as a finding.
+      *(24a; 24b and 24c re-check it)*
 - [ ] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
 
 ## Verification

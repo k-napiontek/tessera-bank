@@ -53,6 +53,11 @@ var engine = []string{
 	"internal/model",
 	"internal/money",
 	"internal/population",
+	// WP-24a. A second contract decoder beside internal/model, and engine for the same reason that
+	// one is: it takes bytes, opens nothing, and both drivers consume it. The boundary is the whole
+	// reason two drivers can share one model, and a catalogue of conditions is shared exactly as the
+	// day is - WP-25 injects the same seven against the older strata.
+	"internal/scenario",
 }
 
 // driver is WP-21's half: the packages that execute a schedule against a running estate. They reach
@@ -63,7 +68,17 @@ var engine = []string{
 var driver = []string{
 	"internal/client",
 	"internal/identity",
+	// WP-24a. It reads the machine - operating system, architecture, core count - which is exactly
+	// what the engine promises not to do, and what a committed measurement has to state.
+	"internal/hardware",
+	// WP-24a. It signals process groups and shells out to docker, so it is as far from the engine as
+	// anything in this module gets - and it is a fixture acting on a fixture, never on the estate's
+	// own configuration or code, which is the line WP-24's Constraint draws.
+	"internal/injector",
 	"internal/metrics",
+	// WP-24a. It listens, dials and forwards, so it is a driver by purity as well as by role - the
+	// only new package in this module that would fail the engine list on its imports alone.
+	"internal/proxy",
 	"internal/reconcile",
 	"internal/runner",
 	"internal/seeding",

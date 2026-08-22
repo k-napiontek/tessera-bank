@@ -1,10 +1,16 @@
-# workload - the bank day as a contract
+# workload - the bank day as a contract, and the ways it is made to go wrong
 
-**Stratum 4 fixture, era-agnostic** | **Added by WP-20**
+**Stratum 4 fixture, era-agnostic** | **Added by WP-20, extended by WP-24a**
 
 What Tessera Bank's demand looks like, declared once so that every driver executing it is executing
 the same day. `workload/` (WP-21) drives the modern spine from this model; WP-25 drives the older
 strata from it. The model is a contract precisely so the second driver cannot drift from the first.
+
+Beside it, and deliberately **not** inside it, a catalogue of the conditions the estate is degraded
+under. The day model states demand; a scenario states degradation. They are different subjects with
+different lifetimes, and every run manifest records the day model's digest so that two runs can be
+compared - so a model that changed because somebody added a fault would be a baseline nothing could
+be diffed against. [ADR 0017](../../docs/governance/adr/0017-a-scenario-is-its-own-contract.md).
 
 Nothing here describes an interface between two running components. It describes an interface between
 **a plan and the tools that execute it**, which is the same reason `reporting/` is here: a format that
@@ -17,6 +23,10 @@ look.
 |---|---|
 | [`workload-model.schema.json`](workload-model.schema.json) | JSON Schema 2020-12. What a workload model is allowed to say. |
 | [`tessera-day-v1.json`](tessera-day-v1.json) | `TB-WORKLOAD-DAY-V1`. The committed day - a mid-size Polish retail bank. |
+| [`scenario.schema.json`](scenario.schema.json) | JSON Schema 2020-12. What a failure scenario is allowed to say. |
+| [`tessera-scenarios-v1.json`](tessera-scenarios-v1.json) | `TB-SCENARIOS-V1`. The seven conditions WP-24a injects. |
+| [`../check-workload-model.py`](../check-workload-model.py) | Validates the day model, and checks the arithmetic a schema cannot |
+| [`../check-workload-scenarios.py`](../check-workload-scenarios.py) | Validates the scenarios, and resolves every objective they name |
 
 ## What the model states, and what it deliberately does not
 
@@ -27,6 +37,30 @@ a run at any other setting has to say so.
 It names **no host, no URL, no topic and no file**. A model that knew where to send a request would
 be half a driver, and the two drivers that consume it send to entirely different places - one to an
 HTTP gateway, the other to a SOAP endpoint and a fixed-width file.
+
+## A scenario declares what should move, and what should not
+
+Each of the seven entries in `tessera-scenarios-v1.json` names the condition, the estate element it
+degrades, how the **fixture** produces it, when in the business day it starts and how long it is
+held - and then the two lists that make a signature falsifiable: the objectives it is expected to
+**move**, and the objectives expected to stay **flat**.
+
+The flat list is the load-bearing half and the one a hand-written write-up always omits. The
+interesting claim about a rate-limit storm is not that refusals rose; it is that
+`SLO-GATEWAY-AVAILABILITY` stayed at 1.0 while customers were being turned away, because a 429 is
+deliberately on the good side of that objective. WP-23 made the same move one layer down when it
+kept the chain wait and the account lock as separate timers: a record of what moved alone would have
+proved nothing about which of the two was the ceiling.
+
+**Three of the seven move nothing, and each says why.** Where no catalogued objective responds to a
+condition, `movesObjectives` is empty and `movesNothingBecause` is required - the same shape as
+`noObjectiveBecause` on an SLO signal. An estate that cannot see a condition is a finding, and
+writing it into the contract is what stops it being an omission.
+
+**A scenario says nothing about what to do.** No severity, no notification route, no dashboard. The
+checker holds the same denylist [ADR 0012](../../docs/governance/adr/0012-slo-catalogue-boundary.md)
+draws for the SLO catalogue, because a boundary that is easy to agree with is eroded one convenient
+field at a time.
 
 ## Two things worth reading before you change it
 
@@ -57,16 +91,26 @@ it can be enforced rather than promised in prose.
 
 ```bash
 python3 contracts/check-workload-model.py
+python3 contracts/check-workload-scenarios.py
 ```
 
-Run by [`../validate.sh`](../validate.sh) along with every other contract check. It validates the
-committed model against the schema with a hand-written checker - standard library only, no JSON
+Both are run by [`../validate.sh`](../validate.sh) along with every other contract check.
+
+`check-workload-model.py` validates the committed model against the schema with a hand-written checker - standard library only, no JSON
 Schema package, for the same reason the two checks either side of it are hand-written - and then
 proves the invariants a schema cannot express: that the cohort shares add to 1 and yield whole
 customers, that every mix adds to 1, that the declared daily volume is what the population actually
 generates, that the declared peak-to-trough ratio is what the curve actually has, and that every
 operation named is one the ledger genuinely serves, read from
 [`../openapi/ledger-core.yaml`](../openapi/ledger-core.yaml).
+
+
+`check-workload-scenarios.py` validates the scenario catalogue the same way - importing the same
+subset rather than carrying a second copy of it - and then resolves **every** objective identifier a
+scenario names against [`../slo/tessera-slo-v1.json`](../slo/tessera-slo-v1.json), so a scenario
+cannot expect an objective the estate does not have. It asserts the two lists are disjoint, because
+an objective expected both to move and to stay flat makes the signature unfalsifiable, and it holds
+the per-condition parameter rules the schema cannot state without `oneOf`.
 
 It does not prove that a schedule the engine emits follows the model. That is `workload/`'s own test,
 and the two claims are checked from opposite sides on purpose.
