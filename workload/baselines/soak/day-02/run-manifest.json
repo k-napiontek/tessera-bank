@@ -1,0 +1,30 @@
+{
+  "formatId": "TB-WORKLOAD-RUN-V1",
+  "modelId": "TB-WORKLOAD-DAY-V1",
+  "modelVersion": "1.0.0",
+  "modelDigest": "d887de999bad57ba1cd02962836b16fef66132c7a55b0ff1862e8290218b377e",
+  "gitSha": "07fa56e",
+  "hardware": "darwin arm64, 10 cores, go1.25.6",
+  "businessDate": "2026-03-03",
+  "weekday": "Tuesday",
+  "seed": 42,
+  "scale": 0.002,
+  "compression": 720,
+  "window": {
+    "fromMinute": 540,
+    "toMinute": 1080,
+    "from": "09:00",
+    "to": "18:00"
+  },
+  "dayMultiplier": 1.05,
+  "eventCount": 29822,
+  "businessRates": {
+    "meanPerSecond": 0.9204451955856008,
+    "peakPerSecond": 1.0477795111804473
+  },
+  "offeredRates": {
+    "meanPerSecond": 662.7205408216325,
+    "peakPerSecond": 754.4012480499221
+  },
+  "realDurationSeconds": 45
+}

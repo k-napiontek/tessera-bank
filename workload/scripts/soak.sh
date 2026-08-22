@@ -28,8 +28,9 @@
 # database and survive a ledger restart, so the boot cost is wall clock rather than a measurement
 # error - and TB_KEEP_DATA=1 is what makes the ledger the *same* ledger across every day.
 #
-# Needs: Docker, a JDK 17, Go and uv. About two and a half minutes per business date, plus roughly
-# eight minutes to load the ledger at the start.
+# Needs: Docker, a JDK 17, Go and uv. Measured at **1 min 45 s per business date** after the first,
+# plus about eleven minutes to load the ledger and three to seed the first day - so twelve dates is
+# a little over half an hour, most of it the load.
 
 set -euo pipefail
 
@@ -65,7 +66,7 @@ while [ $# -gt 0 ]; do
     --window) WINDOW="$2"; shift 2 ;;
     --first-date) FIRST_DATE="$2"; shift 2 ;;
     --skip-load) SKIP_LOAD=1; shift ;;
-    -h|--help) sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,33p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done

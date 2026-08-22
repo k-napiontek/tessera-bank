@@ -26,7 +26,9 @@
 # Kafka boot times are not a constant and a capture whose moment depends on how busy the laptop was
 # is a capture nobody can reproduce.
 #
-# Needs: Docker, a JDK 17, Go and uv. Each variant takes a couple of minutes.
+# Needs: Docker, a JDK 17, Go and uv. The first variant takes about six minutes and the second about
+# four - the difference is seeding, which opens 42 769 accounts the first time and finds them already
+# open the second. Both need the ledger a load left behind; the load itself is about eleven minutes.
 
 set -euo pipefail
 
@@ -70,7 +72,7 @@ while [ $# -gt 0 ]; do
     --compress) COMPRESS="$2"; shift 2 ;;
     --window) WINDOW="$2"; shift 2 ;;
     --after) AFTER="$2"; shift 2 ;;
-    -h|--help) sed -n '2,29p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,31p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
