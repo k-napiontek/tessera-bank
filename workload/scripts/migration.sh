@@ -13,7 +13,7 @@
 #
 # It runs against the database a baseline capture left behind, so run baseline.sh first and do not
 # remove tessera-dataset-db in between. A migration timed against three accounts is a migration
-# against a fixture: the whole question is what CREATE INDEX costs over 4.84 million rows.
+# against a fixture: the whole question is what CREATE INDEX costs over millions of rows.
 #
 # **Each variant gets its own business date.** An idempotency key is derived from the business date
 # and the event's ordinal, so two runs sharing a date replay instead of posting - and the run would
@@ -34,6 +34,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BASELINES="${TB_BASELINE_OUT:-$ROOT/workload/baselines}"
 WORK="${TMPDIR:-/tmp}/tessera-migration"
 RUN_LOG="${TMPDIR:-/tmp}/tessera-workload-run.log"
+# The manifest load-dataset.sh wrote for the ledger this runs against. Copied into each capture so
+# that it names the database it migrated - a lock duration over six million rows and one over three
+# accounts are not the same measurement, and only this file says which was taken.
+DATASET_MANIFEST="${TB_DATASET_MANIFEST:-${TMPDIR:-/tmp}/tessera-dataset-manifest.json}"
 
 BASELINE=""
 VARIANT="both"
@@ -44,7 +48,7 @@ WINDOW=branch-hours
 # seconds of wall clock, so fifteen seconds is a third of the way in - past seeding, with the arrival
 # process at full rate, and with as much of the day as possible still to come.
 #
-# **Deliberately early, because a CREATE INDEX over 4.84 million rows may well outlast the day.** If
+# **Deliberately early, because a CREATE INDEX over millions of rows may well outlast the day.** If
 # it does, the run's settle and drain windows are still ahead of it and the estate is still up, so
 # the closing scrapes are taken against a live gateway either way. The customer-side figures are
 # ratios of counter deltas, so an idle tail neither helps nor hurts them - what would ruin the
@@ -178,6 +182,12 @@ for variant in "${VARIANTS[@]}"; do
               before-ledger-migration.prom after-ledger-migration.prom; do
     cp "$work/$file" "$out/$file"
   done
+  if [ -f "$DATASET_MANIFEST" ]; then
+    cp "$DATASET_MANIFEST" "$out/dataset-manifest.json"
+  else
+    echo "  NOTE  no dataset manifest at $DATASET_MANIFEST, so this capture does not name the" >&2
+    echo "        ledger it ran against. Set TB_DATASET_MANIFEST when loading." >&2
+  fi
   echo "  written to $out"
 done
 

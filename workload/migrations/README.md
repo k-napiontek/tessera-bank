@@ -33,8 +33,8 @@ this is an exercise of its own rather than an eighth entry in the scenario catal
 
 `(currency, amount_minor)` answers no question anything in this estate asks. Every posting in the
 loaded dataset is in one currency, so the leading column has a cardinality of one and the planner
-will never choose it. That is the point: building it is real work over every row in a 4.84-million
-row table, and finishing it changes no plan.
+will never choose it. That is the point: building it is real work over every row in a table of over six
+million, and finishing it changes no plan.
 
 The useful index is the one **F-24** asks for - `value_date` and `posted_at` denormalised onto
 `posting`, so the statement's keyset seek is served by one composite index instead of abandoning

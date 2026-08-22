@@ -1,0 +1,31 @@
+# pg_locks, sampled every 250ms while the concurrent migration on posting was applied.
+# time | backends waiting on a lock | modes granted on posting | modes queued for posting
+# ShareUpdateExclusiveLock was held from 15:32:12.605 to 15:32:16.688 - 14 of 28 samples, about 3.5s.
+15:32:08.399|6|AccessShareLock,RowExclusiveLock|
+15:32:08.734|12|RowExclusiveLock|
+15:32:09.075|9|AccessShareLock,RowExclusiveLock|
+15:32:09.388|0|RowExclusiveLock|
+15:32:09.719|0|AccessShareLock,RowExclusiveLock|
+15:32:10.030|0|AccessShareLock|
+15:32:10.359|5|AccessShareLock,RowExclusiveLock|
+15:32:10.678|0|AccessShareLock,RowExclusiveLock|
+15:32:10.996|0|AccessShareLock,RowExclusiveLock|
+15:32:11.319|0||
+15:32:11.635|0|RowExclusiveLock|
+15:32:11.946|1|RowExclusiveLock|
+15:32:12.275|0|AccessShareLock,RowExclusiveLock|
+15:32:12.605|0|ShareUpdateExclusiveLock|
+15:32:12.913|0|ShareUpdateExclusiveLock|
+15:32:13.223|0|RowExclusiveLock,ShareUpdateExclusiveLock|
+15:32:13.538|0|ShareUpdateExclusiveLock|
+15:32:13.857|1|AccessShareLock,RowExclusiveLock,ShareUpdateExclusiveLock|
+15:32:14.170|0|AccessShareLock,ShareUpdateExclusiveLock|
+15:32:14.490|6|AccessShareLock,RowExclusiveLock,ShareUpdateExclusiveLock|
+15:32:14.809|0|AccessShareLock,ShareUpdateExclusiveLock|
+15:32:15.121|0|AccessShareLock,RowExclusiveLock,ShareUpdateExclusiveLock|
+15:32:15.427|0|ShareUpdateExclusiveLock|
+15:32:15.741|5|RowExclusiveLock,ShareUpdateExclusiveLock|
+15:32:16.057|0|ShareUpdateExclusiveLock|
+15:32:16.371|0|RowExclusiveLock,ShareUpdateExclusiveLock|
+15:32:16.688|0|ShareUpdateExclusiveLock|
+15:32:17.010|1|AccessShareLock,RowExclusiveLock|
