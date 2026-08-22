@@ -38,6 +38,7 @@ import (
 	"github.com/k-napiontek/tessera-bank/workload/internal/metrics"
 	"github.com/k-napiontek/tessera-bank/workload/internal/model"
 	"github.com/k-napiontek/tessera-bank/workload/internal/money"
+	"github.com/k-napiontek/tessera-bank/workload/internal/proxy"
 	"github.com/k-napiontek/tessera-bank/workload/internal/reconcile"
 	"github.com/k-napiontek/tessera-bank/workload/internal/runner"
 	"github.com/k-napiontek/tessera-bank/workload/internal/seeding"
@@ -67,6 +68,8 @@ type options struct {
 	ledgerMetrics string
 	edgeMetrics   string
 	fraudMetrics  string
+	proxyListen   string
+	proxyUpstream string
 	issuer        string
 	audience      string
 	keysPath      string
@@ -107,6 +110,20 @@ func run() error {
 	from, to, err := window(loaded, opts)
 	if err != nil {
 		return err
+	}
+
+	// Started before anything is sent, because the gateway is pointed at it and will start looking
+	// for it as soon as this process writes its public key. In path for every run including the
+	// baseline: a signature taken through one hop and diffed against a normal taken through none
+	// differs by more than the condition.
+	hop, err := startProxy(opts)
+	if err != nil {
+		return err
+	}
+	if hop != nil {
+		defer func() { _ = hop.Close() }()
+		fmt.Printf("== Proxy ==\n  %s in front of %s, adding nothing until a condition says so\n\n",
+			hop.Addr(), hop.Upstream())
 	}
 
 	curve, err := loaded.Curve()
@@ -278,6 +295,10 @@ func parse() options {
 		"the gateway's metrics endpoint, scraped at the same two instants as the ledger's")
 	flag.StringVar(&opts.fraudMetrics, "fraud-metrics", "",
 		"the scorer's metrics endpoint, scraped at the same two instants as the ledger's")
+	flag.StringVar(&opts.proxyListen, "proxy-listen", "",
+		"host a controllable hop on this address; the gateway is pointed at it instead of the ledger")
+	flag.StringVar(&opts.proxyUpstream, "proxy-upstream", "",
+		"what that hop forwards to - the ledger's own base address")
 	flag.DurationVar(&opts.settle, "settle", 0,
 		"wait this long after the run before the closing scrapes, so that what the run handed to a "+
 			"relay and a consumer has somewhere to arrive")
@@ -375,6 +396,20 @@ func waitForGateway(ctx context.Context, origin string, limit time.Duration) err
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
+}
+
+// startProxy hosts the controllable hop, or nothing when the caller did not ask for one. Both flags
+// or neither: a listen address with no upstream would answer every request with a 502, which reads
+// as an estate that is down.
+func startProxy(opts options) (*proxy.Proxy, error) {
+	if opts.proxyListen == "" && opts.proxyUpstream == "" {
+		return nil, nil
+	}
+	if opts.proxyListen == "" || opts.proxyUpstream == "" {
+		return nil, fmt.Errorf("--proxy-listen and --proxy-upstream go together, and only %q is set",
+			opts.proxyListen+opts.proxyUpstream)
+	}
+	return proxy.Start(opts.proxyListen, opts.proxyUpstream)
 }
 
 // scrape is one reading of the ledger: the counter the reconciliation needs, and the whole

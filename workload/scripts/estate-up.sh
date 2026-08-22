@@ -40,6 +40,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 KEYS="${TMPDIR:-/tmp}/tessera-workload-keys.pem"
 RUN_LOG="${TMPDIR:-/tmp}/tessera-workload-run.log"
 LEDGER_PORT=8080
+# The controllable hop the driver hosts, and what the gateway is pointed at instead of the ledger.
+# In path for every run including the baseline, so that a signature and the normal it is diffed
+# against differ by the condition and by nothing else.
+LEDGER_PROXY_PORT=${TB_LEDGER_PROXY_PORT:-8079}
 GATEWAY_PORT=8081
 GATEWAY_ADMIN_PORT=9091
 METRICS_PORT=9100
@@ -77,7 +81,7 @@ cleanup() {
   # Wait for the ports rather than sleeping on a guess. A JVM takes a moment to let go of 8080, and
   # the next run of this script otherwise fails four minutes later with "port already in use", in a
   # log nobody has opened yet.
-  for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT" "$FRAUD_METRICS_PORT"; do
+  for port in "$LEDGER_PORT" "$LEDGER_PROXY_PORT" "$GATEWAY_PORT" "$METRICS_PORT" "$FRAUD_METRICS_PORT"; do
     for _ in $(seq 20); do
       lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || break
       sleep 1
@@ -126,7 +130,7 @@ wait_for_file() {
 
 # A port still held by a previous run is the failure this script is most likely to hit, and the way
 # it presents - a Spring Boot stack trace in a log file, four minutes in - is the least useful one.
-for port in "$LEDGER_PORT" "$GATEWAY_PORT" "$METRICS_PORT" "$FRAUD_METRICS_PORT"; do
+for port in "$LEDGER_PORT" "$LEDGER_PROXY_PORT" "$GATEWAY_PORT" "$METRICS_PORT" "$FRAUD_METRICS_PORT"; do
   for attempt in $(seq 30); do
     lsof -nP -iTCP:"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || break
     if [ "$attempt" = "30" ]; then
@@ -252,6 +256,8 @@ go -C "$ROOT/workload" run ./cmd/workload-run \
   --ledger-metrics "http://localhost:$LEDGER_PORT/actuator/prometheus" \
   --edge-metrics "http://localhost:$GATEWAY_ADMIN_PORT/metrics" \
   --fraud-metrics "http://localhost:$FRAUD_METRICS_PORT/metrics" \
+  --proxy-listen ":$LEDGER_PROXY_PORT" \
+  --proxy-upstream "http://localhost:$LEDGER_PORT" \
   --settle "$SETTLE" \
   --keys "$KEYS" \
   --metrics ":$METRICS_PORT" \
@@ -263,7 +269,7 @@ PIDS+=("$DRIVER")
 wait_for_file "the driver wrote its public key" "$KEYS" 120
 
 step "Gateway"
-TB_GATEWAY_LEDGER_URL="http://localhost:$LEDGER_PORT/v1" \
+TB_GATEWAY_LEDGER_URL="http://localhost:$LEDGER_PROXY_PORT/v1" \
 TB_GATEWAY_JWT_ISSUER="https://issuer.tesserabank.example" \
 TB_GATEWAY_JWT_AUDIENCE="tessera-bank-ledger" \
 TB_GATEWAY_JWT_KEYS="$KEYS" \

@@ -74,6 +74,7 @@ finishes.
 | **Kafka** | the outbox relay has to have somewhere to publish, or its lag only ever grows |
 | the ledger | the component under measurement |
 | **`edge/fraud-scoring`** | a broker with no consumer is a broker nothing is measured through |
+| **a controllable hop** | hosted by the driver, in front of the ledger, adding nothing until a condition says otherwise |
 | the gateway | the edge the driver talks to, so latency is measured where the customer is |
 
 The two in bold were added by **WP-24a**, and closing the broker half of **F-77** is the whole
@@ -89,6 +90,15 @@ point.
 Neither component was changed to make this work. Both already read their configuration from the
 environment, which is the line between extending the fixture and modifying the estate - `workload/`
 is a fixture and says so in its first paragraph.
+
+**The hop is in path for every run, the baseline included.** `internal/proxy` is a transparent
+forwarder until an injected condition sets a delay on it, and it is there always rather than only
+when a condition needs it - a signature taken through one hop and diffed against a normal taken
+through none differs by more than the condition, and comparing them anyway is how a team concludes a
+regression exists. It costs tens of microseconds on localhost against objectives stated at 500 ms
+and 1 s, and the baseline's conditions record that it was there. It is also where the delay has to
+land: the interesting half of a slow-dependency signature is that `ledger_posting_latency_seconds`
+stays flat, and a delay added inside the ledger would move it.
 
 Two environment variables are worth knowing. `TB_FRAUD_METRICS_PORT` defaults to **9102** here
 because the scorer's own default is 9100, which is the driver's, and two processes cannot both have

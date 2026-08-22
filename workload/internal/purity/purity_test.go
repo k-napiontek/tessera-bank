@@ -69,6 +69,9 @@ var driver = []string{
 	"internal/client",
 	"internal/identity",
 	"internal/metrics",
+	// WP-24a. It listens, dials and forwards, so it is a driver by purity as well as by role - the
+	// only new package in this module that would fail the engine list on its imports alone.
+	"internal/proxy",
 	"internal/reconcile",
 	"internal/runner",
 	"internal/seeding",
