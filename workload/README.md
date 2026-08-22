@@ -1,6 +1,6 @@
 # workload - the bank day, and the driver that executes it
 
-**Stratum 4 - Go 1.25, ~2025** | **Built by WP-20 and WP-21** | **A fixture, not a component of the bank**
+**Stratum 4 - Go 1.25, ~2025** | **Built by WP-20 and WP-21, extended by WP-24a** | **A fixture, not a component of the bank**
 
 Tessera Bank has no such module. This one exists so that the estate can be put under demand that
 looks like a bank's rather than like a loop, and it is the same kind of artefact as
@@ -44,15 +44,16 @@ actions, `--manifest run.json` (or `-` for stdout) to write the run record.
 
 ## Driving the estate
 
-One command boots PostgreSQL, the ledger and the gateway, seeds the accounts the run will use, and
-executes a compressed bank day against them. Ctrl-C stops everything it started.
+One command boots PostgreSQL, Kafka, the ledger, the fraud scorer and the gateway, seeds the
+accounts the run will use, and executes a compressed bank day against them. Ctrl-C stops everything
+it started.
 
 ```bash
 bash workload/scripts/estate-up.sh --scale 0.0002 --compress 720 --window branch-hours
 ```
 
-Needs Docker, a JDK 17 and Go. Every argument is passed through to `workload-run`, whose `--help`
-lists the rest. To drive an estate that is already running, skip the script:
+Needs Docker, a JDK 17, Go and uv. Every argument is passed through to `workload-run`, whose
+`--help` lists the rest. To drive an estate that is already running, skip the script:
 
 ```bash
 go -C workload run ./cmd/workload-run \
@@ -64,6 +65,89 @@ go -C workload run ./cmd/workload-run \
 The run publishes `tessera_workload_*` on its own port while it runs, and prints an outcome table,
 a latency summary and a reconciliation against the ledger's own `ledger_transfers_total` when it
 finishes.
+
+## What the fixture boots, and why each piece is there
+
+| Piece | Why |
+|---|---|
+| PostgreSQL | the ledger's own store, `postgres:16-alpine` |
+| **Kafka** | the outbox relay has to have somewhere to publish, or its lag only ever grows |
+| the ledger | the component under measurement |
+| **`edge/fraud-scoring`** | a broker with no consumer is a broker nothing is measured through |
+| **a controllable hop** | hosted by the driver, in front of the ledger, adding nothing until a condition says otherwise |
+| the gateway | the edge the driver talks to, so latency is measured where the customer is |
+
+The two in bold were added by **WP-24a**, and closing the broker half of **F-77** is the whole
+reason. Before them the recorded normal covered two of the five components in the SLO catalogue, and
+`SLO-LEDGER-OUTBOX-FRESHNESS` was permanently *missed* - 140 s against a 60 s target - because with
+no broker the relay could not drain at all. That was the fixture rather than the ledger, and it went
+unnoticed for a package and a half because **an unreachable broker and a working one produce exactly
+the same ledger log line.** So the script now asserts the drain instead of assuming it: at the end of
+every run it reads `ledger_outbox_pending` out of the ledger's own exposition and fails if anything
+is still unpublished. `TB_EXPECT_OUTBOX_BACKLOG=1` is how an injected condition says a backlog is the
+point.
+
+Neither component was changed to make this work. Both already read their configuration from the
+environment, which is the line between extending the fixture and modifying the estate - `workload/`
+is a fixture and says so in its first paragraph.
+
+**The hop is in path for every run, the baseline included.** `internal/proxy` is a transparent
+forwarder until an injected condition sets a delay on it, and it is there always rather than only
+when a condition needs it - a signature taken through one hop and diffed against a normal taken
+through none differs by more than the condition, and comparing them anyway is how a team concludes a
+regression exists. It costs tens of microseconds on localhost against objectives stated at 500 ms
+and 1 s, and the baseline's conditions record that it was there. It is also where the delay has to
+land: the interesting half of a slow-dependency signature is that `ledger_posting_latency_seconds`
+stays flat, and a delay added inside the ledger would move it.
+
+Two environment variables are worth knowing. `TB_FRAUD_METRICS_PORT` defaults to **9102** here
+because the scorer's own default is 9100, which is the driver's, and two processes cannot both have
+it. `TB_SETTLE` defaults to **15s**: the scorer sits behind a relay and a broker, so closing the
+scrape bracket the instant the last request is answered would report a scorer that fell behind when
+what actually happened is that nobody waited. `TB_DRAIN` defaults to **180s** and is a bound rather
+than a wait - the run then polls the ledger's own `ledger_outbox_pending` until it reaches zero.
+
+That second one exists because of a measurement this package produced. **Compression speeds the day
+up and the relay's tick does not move with it.** The relay ships at most `LEDGER_OUTBOX_BATCH` rows
+every `LEDGER_OUTBOX_INTERVAL_MS`, both the ledger's own configuration and both fixed in wall clock,
+so a day replayed at 720x hands it money movements far faster than a real day ever would. A closing
+scrape taken before it has caught up records a backlog that is an artefact of the dial rather than a
+property of the estate - and the run prints how long the catching-up took, which is the figure worth
+having.
+
+## Degrading it on purpose
+
+The same command, told which condition to inject:
+
+```bash
+TB_SCENARIO=contracts/workload/tessera-scenarios-v1.json \
+TB_SCENARIO_ID=SCN-OUTBOX-STUCK \
+  bash workload/scripts/estate-up.sh --scale 0.002 --compress 720 --window branch-hours
+```
+
+The seven conditions are declared in
+[`contracts/workload/tessera-scenarios-v1.json`](../contracts/workload/tessera-scenarios-v1.json),
+not here, and [ADR 0017](../docs/governance/adr/0017-a-scenario-is-its-own-contract.md) says why a
+scenario is a contract rather than a flag: a flag is not reproducible, cannot be diffed against a
+baseline, and would have to be written twice when WP-25 drives the older strata.
+
+The condition runs **beside** the day rather than instead of it. It is applied at the minute the
+scenario names, compressed exactly as the schedule is, held for its declared window and then
+reverted - because a condition applied between two runs measures a maintenance window, which is the
+thing the exercise exists not to be. The revert runs on a context of its own, so a run stopped with
+Ctrl-C does not leave a paused broker behind for tomorrow to boot against.
+
+`internal/injector` acts only on containers this fixture booted and processes this fixture started -
+addressed by the pid holding the port each component serves, never by the pid the script
+backgrounded, because `gradlew bootRun` forks the application into a JVM owned by the Gradle daemon
+and a signal to the launcher's group suspends a wrapper while the ledger carries on answering. It
+never touches the estate's own configuration or code. Where a condition cannot be produced
+inside that line it is reported as **NOT INJECTED** with the reason and the run carries on, because
+that is a finding about the component's testability rather than a failure of the fixture -
+`SCN-CLOCK-SKEW` is the one that comes out that way, and its entry in the catalogue says so.
+
+`workload/scripts/signatures.sh` runs all seven against a committed baseline. **Its output is not
+committed yet** - see [`baselines/README.md`](baselines/README.md) and **F-86**.
 
 ## Reporting a run afterwards
 
@@ -80,6 +164,33 @@ go -C workload run ./cmd/workload-report \
 Every objective it prints comes out of [`contracts/slo/`](../contracts/slo/) rather than out of this
 module: the targets, the thresholds, the error budgets and **how each figure is arrived at** are all
 in the catalogue, so the report cannot drift from the objectives it reports on.
+
+When the run it is describing was degraded, it prints a **Signature** section as well: per
+objective, where that objective stood in the baseline, where it stood in this run, and whether that
+is what the scenario declared would happen.
+
+```bash
+go -C workload run ./cmd/workload-report \
+  --manifest run.json --before before.prom --after after.prom \
+  --scenario ../contracts/workload/tessera-scenarios-v1.json \
+  --baseline-before baselines/with-broker/before.prom \
+  --baseline-after baselines/with-broker/after.prom \
+  --catalogue ../contracts/slo/tessera-slo-v1.json
+```
+
+Three refusals hold that section honest. The condition comes from the **manifest**, never from a
+flag, because a flag would let a capture be labelled with a condition it was not run under. The
+catalogue digest has to match the one the run recorded, or the signature being judged is not the one
+that was asserted. And a baseline is required, because *a degradation described without the normal
+it degraded from is an anecdote* - WP-24's own Constraint, enforced rather than quoted.
+
+**"Moved" is the catalogue's number and never one chosen here.** An objective has moved when its own
+line was crossed: a ratio objective met in the baseline and missed in this run, or a series
+objective whose closing value was inside its declared threshold before and outside it now. A
+tolerance invented in the report would be a fourth place where this estate says what good looks
+like, which is exactly what [ADR 0012](../docs/governance/adr/0012-slo-catalogue-boundary.md) exists
+to prevent. Where the baseline was already over that line the verdict is `inconclusive` rather than
+a move, because a run cannot show a condition crossing a line that was already crossed.
 
 Two things it deliberately will not do. It **reads no clock** - a generation timestamp is what makes
 a byte-identical rerun impossible by construction, which `batch/reporting` already pays for on
@@ -103,11 +214,16 @@ prints the two points instead and says which objective needed the window.
 | `internal/runner` | The open-model executor: releases every event at its intended time, whatever is outstanding. |
 | `internal/metrics` | `tessera_workload_*`, hand-written because this module carries no dependencies. |
 | `internal/reconcile` | Reads the ledger's own counter and lines it up against the driver's. |
+| `internal/scenario` | Decodes the failure-scenario catalogue and refuses a condition the injector cannot run. |
+| `internal/injector` | Applies one declared condition to the running estate at its moment, holds it, reverts it. |
+| `internal/proxy` | The controllable hop in front of the ledger. Transparent until a condition sets a delay. |
+| `internal/hardware` | One sentence naming what a measurement was taken on, so two of them can be compared. |
 | `internal/purity` | The architectural controls. The engine reaches no `net`, `os` or database driver; the driver is named. |
 | `cmd/workload-plan` | Prints the model as a day. Touches one file and no network. |
 | `internal/slo` | Reads the committed SLO catalogue and works out what a run did against it. |
 | `cmd/workload-run` | Executes a day against a running estate. |
 | `cmd/workload-report` | Turns a manifest and two scrapes into a report. Reads no clock, so a rerun is byte-identical. |
+| `cmd/workload-ceiling` | A saturation ladder straight at the ledger, with no gateway, to find where throughput stops rising. |
 
 ## What the driver does that a load tool does not
 

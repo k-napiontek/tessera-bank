@@ -1,0 +1,63 @@
+TESSERA BANK - RUN REPORT
+=========================
+
+Run
+  Model           TB-WORKLOAD-DAY-V1 1.0.0  digest d887de999bad
+  Business date   2026-08-21 (Friday)
+  Window          09:00 to 18:00
+  Seed            42
+  Scale           0.002    Compression 720x
+  Events          34083
+  Offered rate    757.4/s mean, 862.2/s peak
+  Commit          30af797
+  Hardware        darwin arm64, 10 cores, go1.25.6
+
+  Catalogue       TB-SLO-CATALOGUE-V1 1.0.0
+
+Objectives
+
+  ledger-api (services/ledger-api, stratum 3)
+    SLO-LEDGER-MOVEMENT-SUCCESS       met        target 0.99900   1.00000 of 9132 events   budget untouched
+    SLO-LEDGER-OUTBOX-FRESHNESS       no figure  target 0.99500   see below
+    SLO-LEDGER-POOL-HEADROOM          no figure  target 0.99000   see below
+    SLO-LEDGER-POSTING-LATENCY        met        target 0.99000   1.00000 of 9132 events   budget untouched
+
+  api-gateway (edge/api-gateway, stratum 4)
+    SLO-GATEWAY-AVAILABILITY          met        target 0.99900   1.00000 of 34323 events   budget untouched
+    SLO-GATEWAY-LATENCY               met        target 0.99000   1.00000 of 34323 events   budget untouched
+
+  fraud-scoring (edge/fraud-scoring, stratum 4)
+    SLO-FRAUD-DECISION-COMPLETENESS   met        target 0.99990   1.00000 of 23588 events   budget untouched
+    SLO-FRAUD-SCORING-LATENCY         met        target 0.99000   1.00000 of 23588 events   budget untouched
+
+  reporting (batch/reporting, stratum mixed)
+    SLO-REPORTING-RUN-DURATION        no figure  target 0.98000   see below
+
+  recon (batch/recon, stratum mixed)
+    SLO-RECON-ACCOUNTS-AGREE          no events  target 0.99990   nothing happened
+    SLO-RECON-CONTROL-RUNS            no figure  target 0.99000   see below
+
+Objectives this report cannot answer
+  Two scrapes are two points. These objectives are stated over a proportion
+  of a measurement window, and a figure produced from two samples would be
+  invented rather than measured.
+
+    SLO-LEDGER-OUTBOX-FRESHNESS (ledger-api)
+      a proportion of a window needs the window, and this run supplies two samples
+      ledger_outbox_lag_seconds was 54 at the start and 0 at the end
+      the objective wants it <= 60
+
+    SLO-LEDGER-POOL-HEADROOM (ledger-api)
+      a proportion of a window needs the window, and this run supplies two samples
+      hikaricp_connections_pending was 0 at the start and 0 at the end
+      the objective wants it <= 0
+
+    SLO-REPORTING-RUN-DURATION (reporting)
+      a proportion of a window needs the window, and this run supplies two samples
+      tessera_reporting_duration_seconds was unknown at the start and unknown at the end
+      the objective wants it <= 1800
+
+    SLO-RECON-CONTROL-RUNS (recon)
+      a proportion of a window needs the window, and this run supplies two samples
+      tessera_recon_last_success was unknown at the start and unknown at the end
+      the objective wants it <= 93600

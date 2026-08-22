@@ -56,6 +56,11 @@ var floatIsJustified = map[string]string{
 	"internal/slo/evaluate.go":    "an SLI is good events over valid events, and a Prometheus counter is a float64 by specification. Nothing here reads an amount",
 	"cmd/workload-report/main.go": "the report prints proportions, offered rates and event counts. It prints no amount: a report says what a run did, never what it moved",
 
+	// WP-24a. A signature compares where an objective stood in two runs, and an objective's own
+	// threshold is a JSON number - a lag in seconds, a latency bound. None of them is money, and the
+	// section prints no amount for the same reason the report beside it does not.
+	"cmd/workload-report/signature.go": "an objective's threshold is a number in seconds or a proportion; a signature says which line was crossed, never how much money crossed it",
+
 	// WP-23's measurement harness. A saturation point is a rate; the one amount it names is an
 	// int64 of minor units that nothing divides.
 	"cmd/workload-ceiling/main.go": "throughput per second, mean latency and lock wait per posting are rates and durations; the transfer amount is an int64 constant and no arithmetic touches it",

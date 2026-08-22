@@ -103,6 +103,9 @@ func run() error {
 		From:         from,
 		To:           to,
 		GitSHA:       gitSHA(opts.modelPath),
+		// This tool measures nothing - it prints what a model asks for. Naming the laptop it was
+		// printed on would put a condition on a figure that has none.
+		Hardware: "unrecorded",
 	})
 	if err != nil {
 		return err
@@ -162,7 +165,7 @@ func printHeader(loaded model.Model, record manifest.Manifest, path string) {
 //
 //   - workload/baselines/ceiling-*.json walks a concurrency ladder against the ledger directly and
 //     finds money-moving throughput peaking at about 790 postings a second, flat thereafter;
-//   - workload/baselines/baseline-report.txt is a compressed bank day through the gateway that
+//   - workload/baselines/spine-only/report.txt is a compressed bank day through the gateway that
 //     sustained 34 323 requests in 45 seconds - about 760 a second - with every objective met.
 //
 // 800 is where those two agree. It is a property of the machine rather than of the design, which is

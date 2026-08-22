@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tessera-bank.example/contracts/workload/scenario.schema.json",
+  "title": "Tessera Bank failure scenarios",
+  "description": "A catalogue of conditions an operator would recognise, each declared so that injecting one is reproducible, comparable against a baseline, and available to every driver without being rewritten. It is a separate contract from the day model beside it because the two state different subjects with different lifetimes - the day model states demand, a scenario states degradation - and because every run manifest records the day model's digest so that two runs can be compared. A model that changed because somebody added a fault is a baseline nothing can be diffed against. See ADR 0017. What may not appear here is the same list ADR 0012 keeps out of the SLO catalogue: no severity, no notification route, no dashboard. A scenario says what is degraded and which objectives should respond to it; what to do about that is configured somewhere else.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "catalogueId",
+    "catalogueVersion",
+    "summary",
+    "scenarios"
+  ],
+  "properties": {
+    "catalogueId": {
+      "const": "TB-SCENARIOS-V1",
+      "description": "Format identifier. A consumer that does not recognise it must refuse the catalogue rather than guess at it."
+    },
+    "catalogueVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this catalogue instance. Separate from the day model's, which is the entire reason this is a second document."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 800,
+      "description": "Prose. What this catalogue claims and what it deliberately does not."
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "description": "One entry per condition. A condition that can be injected and has no entry here is a branch in a driver, which is the thing this contract exists to prevent.",
+      "items": {
+        "$ref": "#/$defs/scenario"
+      }
+    }
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenarioId",
+        "title",
+        "condition",
+        "target",
+        "mechanism",
+        "startsAtMinute",
+        "holdsForMinutes",
+        "parameters",
+        "movesObjectives",
+        "flatObjectives",
+        "introducedBy",
+        "rationale"
+      ],
+      "properties": {
+        "scenarioId": {
+          "type": "string",
+          "pattern": "^SCN-[A-Z0-9-]{4,40}$",
+          "description": "Stable identifier. A committed signature capture is filed under it, so renaming one orphans a measurement."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 160,
+          "pattern": "^[A-Za-z][ -~]+$",
+          "description": "What an operator would call this if they were living through it."
+        },
+        "condition": {
+          "type": "string",
+          "enum": [
+            "slow-dependency",
+            "partial-outage",
+            "stuck-outbox",
+            "consumer-lag",
+            "rate-limit-storm",
+            "pool-exhaustion",
+            "clock-skew"
+          ],
+          "description": "The kind of degradation. An enum rather than free text, because the injector dispatches on it and a condition nothing can produce is a scenario nobody can run."
+        },
+        "target": {
+          "type": "string",
+          "enum": [
+            "ledger-api",
+            "api-gateway",
+            "fraud-scoring",
+            "reporting",
+            "recon",
+            "postgresql",
+            "kafka"
+          ],
+          "description": "The estate element whose behaviour this condition degrades - not necessarily the one the mechanism touches. A component name here is one the SLO catalogue also knows; the two infrastructure names are the containers the fixture boots."
+        },
+        "mechanism": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 600,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "How the fixture produces the condition, in enough detail that a reader can tell it apart from changing the estate. If a condition cannot be produced without changing a component, that is a finding about the component's testability and the scenario says so here rather than being quietly dropped."
+        },
+        "startsAtMinute": {
+          "$ref": "#/$defs/minuteOfDay"
+        },
+        "holdsForMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440,
+          "description": "How long the condition is held, in minutes of the business day. Compression applies to it exactly as it applies to the schedule, so a scenario reads the same at any dial setting."
+        },
+        "parameters": {
+          "$ref": "#/$defs/parameters"
+        },
+        "movesObjectives": {
+          "$ref": "#/$defs/objectiveIds",
+          "description": "The objectives this condition is expected to move. May be empty, and then movesNothingBecause must say why - an estate that cannot see a condition is a finding, and writing it into the contract is what stops it being an omission."
+        },
+        "movesNothingBecause": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 600,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "Why no catalogued objective responds to this condition. Required when movesObjectives is empty and refused when it is not, which the checker asserts because a schema cannot."
+        },
+        "flatObjectives": {
+          "$ref": "#/$defs/objectiveIds",
+          "description": "The objectives expected not to move. This is the load-bearing half and the one a hand-written write-up always omits: the interesting claim about a rate-limit storm is not that refusals rose but that availability did not."
+        },
+        "introducedBy": {
+          "type": "string",
+          "pattern": "^WP-[0-9]{2}[ab]?$",
+          "description": "The work package that added this condition."
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 1200,
+          "pattern": "^[A-Za-z`][ -~]+$",
+          "description": "Why this signature is worth knowing, and which graph is the misleading one. A scenario with no rationale is an exercise nobody can grade."
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The knobs one condition needs. Every key any condition uses is declared here and all of them are optional, because which apply depends on the condition and this schema is written inside the JSON Schema subset contracts/check-workload-model.py asserts - which has no oneOf. check-workload-scenarios.py holds the per-condition required and permitted sets instead, which is the same division of labour as every other check in this directory.",
+      "properties": {
+        "extraLatencyMillis": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60000,
+          "description": "slow-dependency: how much delay the proxy in front of the dependency adds to every response."
+        },
+        "requestsPerSecond": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "rate-limit-storm: the rate the storm offers, which is meaningful only against the limiter's configured allowance."
+        },
+        "subjects": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "rate-limit-storm: how many distinct token subjects the storm is spread over. One subject exhausts one bucket; the limiter is keyed by subject and route class per ADR 0006, so this is the dial that decides whether the storm is a customer or an outage."
+        },
+        "lockMode": {
+          "type": "string",
+          "enum": [
+            "SHARE",
+            "EXCLUSIVE",
+            "ACCESS EXCLUSIVE"
+          ],
+          "description": "pool-exhaustion: the PostgreSQL table lock the injector holds. SHARE blocks writers and lets readers through, which starves the pool without making the ledger look dead."
+        },
+        "lockTable": {
+          "type": "string",
+          "enum": [
+            "account",
+            "balance",
+            "hold",
+            "journal_entry",
+            "posting",
+            "outbox_record",
+            "idempotency_record",
+            "audit_record"
+          ],
+          "description": "pool-exhaustion: which table the lock is taken on. Bounded to the ledger's own tables so a scenario cannot name one that does not exist."
+        },
+        "skewMinutes": {
+          "type": "integer",
+          "minimum": -1440,
+          "maximum": 1440,
+          "description": "clock-skew: how far the driver's business date is moved relative to the estate's, in minutes. Negative moves it backwards."
+        }
+      }
+    },
+    "objectiveIds": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "pattern": "^SLO-[A-Z0-9-]{4,48}$"
+      },
+      "description": "Objective identifiers, resolved against contracts/slo/tessera-slo-v1.json by the checker. A scenario cannot expect an objective the estate does not have."
+    },
+    "minuteOfDay": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1439,
+      "description": "A minute of the business day, local civil time at the bank, as the day model measures it."
+    }
+  }
+}
