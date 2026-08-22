@@ -10,6 +10,7 @@ Run
   Events          34083
   Offered rate    757.4/s mean, 862.2/s peak
   Commit          3a2bfbc
+  Hardware        unrecorded
 
   Catalogue       TB-SLO-CATALOGUE-V1 1.0.0
 

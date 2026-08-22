@@ -150,6 +150,33 @@ Every objective it prints comes out of [`contracts/slo/`](../contracts/slo/) rat
 module: the targets, the thresholds, the error budgets and **how each figure is arrived at** are all
 in the catalogue, so the report cannot drift from the objectives it reports on.
 
+When the run it is describing was degraded, it prints a **Signature** section as well: per
+objective, where that objective stood in the baseline, where it stood in this run, and whether that
+is what the scenario declared would happen.
+
+```bash
+go -C workload run ./cmd/workload-report \
+  --manifest run.json --before before.prom --after after.prom \
+  --scenario ../contracts/workload/tessera-scenarios-v1.json \
+  --baseline-before baselines/with-broker/before.prom \
+  --baseline-after baselines/with-broker/after.prom \
+  --catalogue ../contracts/slo/tessera-slo-v1.json
+```
+
+Three refusals hold that section honest. The condition comes from the **manifest**, never from a
+flag, because a flag would let a capture be labelled with a condition it was not run under. The
+catalogue digest has to match the one the run recorded, or the signature being judged is not the one
+that was asserted. And a baseline is required, because *a degradation described without the normal
+it degraded from is an anecdote* - WP-24's own Constraint, enforced rather than quoted.
+
+**"Moved" is the catalogue's number and never one chosen here.** An objective has moved when its own
+line was crossed: a ratio objective met in the baseline and missed in this run, or a series
+objective whose closing value was inside its declared threshold before and outside it now. A
+tolerance invented in the report would be a fourth place where this estate says what good looks
+like, which is exactly what [ADR 0012](../docs/governance/adr/0012-slo-catalogue-boundary.md) exists
+to prevent. Where the baseline was already over that line the verdict is `inconclusive` rather than
+a move, because a run cannot show a condition crossing a line that was already crossed.
+
 Two things it deliberately will not do. It **reads no clock** - a generation timestamp is what makes
 a byte-identical rerun impossible by construction, which `batch/reporting` already pays for on
 purpose. And it refuses to answer an objective stated over a proportion of a measurement window: two

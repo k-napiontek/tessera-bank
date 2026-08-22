@@ -223,5 +223,11 @@ func Read(document []byte) (Manifest, error) {
 	}
 	// RealDuration is json:"-", so a manifest read back carries only the seconds it published.
 	record.RealDuration = time.Duration(record.RealDurationSeconds * float64(time.Second))
+	if record.Hardware == "" {
+		// Written before WP-24a added the field. "unrecorded" is what New makes a caller pass when
+		// it does not know, and it is the right answer here too: a blank would read as a machine
+		// with no name rather than as a measurement whose conditions were never captured.
+		record.Hardware = "unrecorded"
+	}
 	return record, nil
 }
