@@ -10,6 +10,7 @@ Run: python3 mainframe/jcl/test-eod-cycle.py
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -119,6 +120,24 @@ def scenario_the_four_steps_run_in_order(binary_work):
     positions = [output.find(step) for step in ["STEP010", "STEP020", "STEP030", "STEP040"]]
     check(all(position >= 0 for position in positions), f"a step never ran:\n{output}")
     check(positions == sorted(positions), f"the steps ran out of order:\n{output}")
+    shutil.rmtree(work)
+
+
+def scenario_every_step_reports_its_elapsed_time(binary_work):
+    """A real job log reports elapsed time per step, and WP-25a measures the window from it.
+
+    Per step rather than one total, because STEP020 match-merges and streams while STEP010 and
+    STEP030 call sortrec.py, which reads the whole file into memory. A single figure would mix the
+    tier's own property with a local stand-in's ceiling.
+    """
+    work = pathlib.Path(tempfile.mkdtemp())
+    master, movements = fixture(work)
+    _, output, _ = run_cycle(work, master, movements)
+
+    for step in ["STEP010", "STEP020", "STEP030", "STEP040"]:
+        match = re.search(rf"{step} RC=0  elapsed (\d+\.\d+)s", output)
+        check(match is not None, f"{step} reports no elapsed time:\n{output}")
+        check(float(match.group(1)) >= 0, f"{step} elapsed {match.group(1)} is not a duration")
     shutil.rmtree(work)
 
 
