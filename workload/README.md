@@ -191,6 +191,30 @@ measures the cost of not answering it. `workload-soak` reports growth **per busi
 posting**, because the first moves with `--scale` and `--compress` and only the second transfers to a
 real day, and it prints the yearly figure in a section that says it is an extrapolation.
 
+## Driving the overnight cycle
+
+Everything above drives the modern spine over HTTP. Stratum 0 has no endpoint, no queue and no
+socket: **the mainframe is driven by files, and files only.** The same WP-20 day that feeds the
+online run is written as a movement file and handed to the COBOL end-of-day cycle:
+
+```bash
+bash workload/scripts/batch-window.sh
+```
+
+No Docker and no database. It draws the day with `workload-dataset`, pipes it into
+`mainframe/data/generate.py --from-stream` - the same pipe `services/ledger-loader` consumes, so
+neither side draws the bank's day twice - and runs `mainframe/jcl/run-eod.sh` over the result at
+three volumes.
+
+**Read the steps apart rather than the window.** `STEP020` is `ACCTPOST`, which match-merges two
+sorted files in one pass and never holds the master in memory; `STEP010` and `STEP030` are
+`sortrec.py`, the local stand-in for DFSORT, which reads the whole file into a list. One total mixes
+the tier's real property with a stand-in's ceiling. The report separates them, and separates the
+cycle's memory from the writer's - the writer needs 5.6 GiB to prepare a day the cycle runs in 1.0.
+
+`workload/baselines/batch-window/` carries the capture: 2 429 346 movements against 2 400 001
+accounts in 9.251 s, nothing rejected. `estate-under-load.md` section 8 reads it.
+
 ## Reporting a run afterwards
 
 `workload-run` prints its outcome as it finishes, and that report dies with the terminal.

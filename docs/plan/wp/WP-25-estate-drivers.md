@@ -62,10 +62,23 @@ movement file that arrives late and pushes reconciliation past the start of busi
 
 ## Tasks
 
+> **2026-08-22: the two-phase run moved out of 25a into a third half, WP-25c.** 25a's tasks 1 to 4
+> are built and verified; task 5 - the online day, the cut-off, the batch and the morning
+> reconciliation in sequence - hit a dependency the detailing did not see. For `batch/recon` to
+> compare the COBOL master against the ledger, both have to start from the same opening balances.
+> The driver funds every account with `seeding.Opening`, twenty times the largest transfer the model
+> can draw, and **`workload-dataset`'s NDJSON header does not carry that figure**, so the stratum-0
+> writer cannot match it. Adding it changes the wire format `services/ledger-loader` also reads,
+> which is WP-20's and WP-22's ground. Without it the reconciliation breaks on every account and
+> measures nothing - a plausible-looking run describing nothing, which is this repository's named
+> failure mode. So 25a lands the generator fix, the volume writer, the per-step timing and the
+> window at three volumes, all verified, and the two-phase run becomes **WP-25c**, on the repository
+> owner's instruction. **F-98** records the missing field.
+
 Detailed 2026-08-22, in its own change rather than inside the branch that executes it - the same
 reason the decision log records for WP-21 and WP-23. The package lands as **two halves on one
 ticket**, WP-25a and WP-25b, each its own branch and pull request, tracked as two rows in
-`STATUS.md`. Detailed out, this package spans a generator fix, a stratum-0 file at volume, a batch
+`STATUS.md` - and a third, WP-25c, split out during execution for the reason above. Detailed out, this package spans a generator fix, a stratum-0 file at volume, a batch
 window timed at three record counts, a two-phase day, a SOAP driver against Tomcat 8.5, an event
 driver through the Boot 2.7 adapter, and a fixture that has to boot Oracle and Tomcat for the first
 time. The decision log's answer at this size, since WP-09, is to split the package in the plan rather
@@ -130,9 +143,10 @@ changes what gets built.
   overruns is worth declaring as a condition **after** F-91 is fixed, and it is logged as such rather
   than smuggled in here.
 
-### WP-25a - the movement file at volume and the two-phase day
+### WP-25a - the movement file at volume and the batch window
 
-Branch `feat/TB-1025-batch-volume`. Six tasks, stratum 0 and the batch tier only.
+Branch `feat/TB-1025-batch-volume`. Five tasks, stratum 0 only. Task 5 as first detailed - the two
+phases in sequence - became WP-25c during execution, per the note above.
 
 1. Set 25a `In progress` and branch from up-to-date `main`.
 
@@ -166,16 +180,32 @@ Branch `feat/TB-1025-batch-volume`. Six tasks, stratum 0 and the batch tier only
    answers the wrong question. Three record counts, the scaling stated as what was measured rather
    than as a fitted curve, and the conditions named on the page beside every figure.
 
-5. **The online day and the overnight batch as two phases of one run.** Drive branch hours, stop at
-   the `online-cut-off` instant the day contract already declares at minute 1200, hand the movement
-   file to the cycle in `overnight-batch`, and run `batch/recon` in `morning-reconciliation`. All
-   three windows and the instant are already in `contracts/workload/tessera-day-v1.json`; this task
-   sequences them and adds nothing to the contract. The run spans two business dates per the second
-   decision above, and the report says which date each phase belongs to. The cycle refuses the same
-   movement file twice, so a repeated run uses a new file or `--rerun`, deliberately.
-
-6. **The write-up, the matrix and the Verification below.** What the batch window costs at each
+5. **The write-up, the matrix and the Verification below.** What the batch window costs at each
    volume, how it scales, and what closing F-18 changed about what the cycle actually exercises.
+
+### WP-25c - the two phases of one day
+
+Branch `feat/TB-1025-two-phase-day`. Split out of 25a on 2026-08-22, per the note at the top of this
+section. Four tasks.
+
+1. Set 25c `In progress` and branch from up-to-date `main`.
+
+2. **The opening balance travels with the day.** `dataset.Header` gains what `seeding.Opening`
+   computes - twenty times the largest transfer the model can draw, in the base currency - so that
+   every consumer of the stream opens an account with the same figure the driver funds it with.
+   `services/ledger-loader` reads the same header, so this is a change to shared ground and belongs
+   in its own commit with a test on each side. **F-98**.
+
+3. **The sequence.** Drive branch hours, stop at the `online-cut-off` instant the day contract
+   declares at minute 1200, write the movement file from the same stream, run the cycle in
+   `overnight-batch`, then `batch/recon` in `morning-reconciliation`. All three windows and the
+   instant already exist in `contracts/workload/tessera-day-v1.json`; this sequences them and adds
+   nothing to the contract. The run spans two business dates and the report names which date each
+   phase belongs to, per the second decision above.
+
+4. **What the reconciliation found**, written up as what it is. A break is not a failure of the job -
+   `batch/recon`'s own exit code says so - and a run that reconciles exactly is a stronger claim than
+   one that was made to. Whichever it is, the conditions go on the page beside it.
 
 ### WP-25b - SOAP and event volume against the older strata
 
@@ -213,14 +243,16 @@ Branch `feat/TB-1025-service-volume`. Five tasks, strata 1 and 2.
 
 The half that satisfies each box is named, because two pull requests cannot both tick all five.
 
-- [ ] One workload model produces both the online day and the overnight movement file. *(25a)*
-- [ ] The end-of-day cycle runs at realistic volume and its duration is recorded against the record
-      count. *(25a)*
+- [x] One workload model produces both the online day and the overnight movement file. *(25a - the
+      same WP-20 stream feeds `services/ledger-loader` and `generate.py --from-stream`)*
+- [x] The end-of-day cycle runs at realistic volume and its duration is recorded against the record
+      count. *(25a - three volumes to 2 429 346 movements, per step)*
 - [ ] SOAP and event volume is driven, and each tier's behaviour under it is recorded. *(25b)*
-- [ ] The stratum-0 run posts the majority of what it is given, rather than rejecting it. *(25a,
-      by closing F-18 first)*
-- [ ] No pinned version in strata 0, 1 or 2 was changed. *(both halves; 25b re-checks it, because it
-      is the half that boots Oracle and Tomcat)*
+- [ ] The online day, the cut-off, the batch and the morning reconciliation run in sequence. *(25c)*
+- [x] The stratum-0 run posts the majority of what it is given, rather than rejecting it. *(25a -
+      300 of 302 on the fixture, 2 429 346 of 2 429 346 at volume; F-18 closed)*
+- [ ] No pinned version in strata 0, 1 or 2 was changed. *(all three halves; 25a holds - COBOL-85
+      via `cobc -std=ibm`, and the one stratum-2 file it touched is a test literal)*
 
 > **The third box read "SOAP and JMS volume" until 2026-08-22.** There is no JMS in this estate and
 > there never was - WP-11 built a `@KafkaListener` against `contracts/asyncapi/esb-adapter-events.yaml`

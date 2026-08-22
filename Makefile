@@ -195,6 +195,7 @@ test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the repor
 	@sh mainframe/copybook/compile-check.sh
 	@python3 mainframe/copybook/check-identity.py
 	@python3 mainframe/data/test_comp3.py 2>&1 | tail -3
+	@python3 mainframe/data/test_generate.py 2>&1 | tail -3
 	@python3 mainframe/data/generate.py --seed 42 >/dev/null
 	@python3 mainframe/data/check-records.py | tail -1
 	@python3 mainframe/cobol/test-acctpost.py

@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import json
 import pathlib
 import random
 import sys
@@ -106,7 +107,16 @@ def moverec(transfer, leg, account, direction, currency, amount, value_date, pos
 
 
 def build_master(rng: random.Random, count: int) -> list:
-    """The account master, sorted ascending by account reference as the match-merge requires.
+    """The account master, sorted ascending by account reference as the match-merge requires."""
+    return [acctrec(**account) for account in draw_accounts(rng, count)]
+
+
+def draw_accounts(rng: random.Random, count: int) -> list:
+    """The accounts as data, before they become bytes.
+
+    Kept separate from the encoding because build_movements has to see what currency and status an
+    account carries. A movement drawn without regard to either rejects, correctly, and a file of such
+    movements measures the reject path rather than the posting path - F-18, open since WP-05.
 
     The awkward balances are deliberate and fixed rather than random. A generator that only emits
     comfortable numbers tests nothing, and these are the cases that break encoders:
@@ -115,12 +125,25 @@ def build_master(rng: random.Random, count: int) -> list:
       * the maximum representable value, every nibble a 9;
       * a negative balance, on an account whose overdraft policy permits it.
     """
-    records = []
+    accounts = []
+
+    def account(ref, customer, acct_type, currency, status, booked, available, opened, last_move):
+        return {
+            "ref": ref,
+            "customer": customer,
+            "acct_type": acct_type,
+            "currency": currency,
+            "status": status,
+            "booked": booked,
+            "available": available,
+            "opened": opened,
+            "last_move": last_move,
+        }
 
     # The bank's own cash account: an ASSET, and the counterparty to every customer movement.
-    records.append(("TB00000000000001", acctrec(
+    accounts.append(account(
         "TB00000000000001", "CU0000000001", "ASSET", "PLN", "OPEN",
-        50_000_000_00, 50_000_000_00, 20100101, int(BUSINESS_DATE))))
+        50_000_000_00, 50_000_000_00, 20100101, int(BUSINESS_DATE)))
 
     fixtures = [
         # (ref number, booked minor units, note)
@@ -131,14 +154,14 @@ def build_master(rng: random.Random, count: int) -> list:
         (6, 1),                    # one minor unit positive
     ]
     for n, booked in fixtures:
-        records.append((account_ref(n), acctrec(
+        accounts.append(account(
             account_ref(n), customer_ref(n), "LIABILITY", "PLN", "OPEN",
-            booked, booked, 20180301 + n, int(BUSINESS_DATE))))
+            booked, booked, 20180301 + n, int(BUSINESS_DATE)))
 
     for n in range(7, count + 1):
         booked = rng.randrange(0, 500_000_00)
         held = rng.randrange(0, 25_000_00) if rng.random() < 0.25 else 0
-        records.append((account_ref(n), acctrec(
+        accounts.append(account(
             account_ref(n),
             customer_ref(n),
             rng.choice(ACCOUNT_TYPES),
@@ -147,34 +170,79 @@ def build_master(rng: random.Random, count: int) -> list:
             booked,
             booked - held,
             20150101 + rng.randrange(0, 90000),
-            int(BUSINESS_DATE))))
+            int(BUSINESS_DATE)))
 
-    records.sort(key=lambda pair: pair[0])
-    return [record for _, record in records]
+    accounts.sort(key=lambda one: one["ref"])
+    return accounts
 
 
-def build_movements(rng: random.Random, transfers: int, accounts: int) -> list:
+# A debit that would take a LIABILITY account below zero is rejected R005 - this core has no arranged
+# overdraft. The generator respects that rather than producing rejects it did not mean to.
+MIN_AMOUNT = 1_00
+MAX_AMOUNT = 25_000_00
+
+
+def build_movements(rng: random.Random, transfers: int, accounts: list) -> list:
     """A day of movements, sorted by account reference for the sequential match-merge.
 
     Each transfer produces exactly two legs - leg 01 the debit, leg 02 the credit - sharing one
     transfer reference. Stratum 0 has no Transfer record at all; the batch reconstructs one from the
     pair, which is why the pairing has to be right in the data.
+
+    Both legs land on accounts that share one currency, and that currency is the movement's. Stratum
+    0 has no cross-currency record: a movement carries one amount in one currency and lands on one
+    account, so a transfer whose legs disagree is not a product this core has. Both accounts are
+    OPEN, and a debit never exceeds what the debited account holds. Every one of those was drawn at
+    random before WP-25a and 162 of 302 movements rejected - F-18 - so the file exercised rejection
+    handling and barely touched posting.
+
+    The two reject fixtures at the bottom are deliberate and stay: WP-04 proves R004 and R001 with
+    them, and a generator with no rejects at all would exercise the reject path less than one whose
+    rejects are accidental.
     """
     rows = []
 
-    for n in range(1, transfers + 1):
-        debit = account_ref(rng.randrange(2, accounts + 1))
-        credit = account_ref(rng.randrange(2, accounts + 1))
-        while credit == debit:
-            credit = account_ref(rng.randrange(2, accounts + 1))
+    postable = [one for one in accounts if one["status"] == "OPEN"]
+    by_currency = {}
+    for one in postable:
+        by_currency.setdefault(one["currency"], []).append(one)
+    # Only currencies with two accounts can carry a transfer at all.
+    currencies = sorted(code for code, pool in by_currency.items() if len(pool) >= 2)
+    if not currencies:
+        raise ValueError("no currency has two open accounts to move between")
 
-        amount = rng.randrange(1_00, 25_000_00)
+    # Weighted by how many accounts hold each currency, so the mix of movements follows the mix of
+    # accounts rather than being flat across currencies the master barely uses.
+    weights = [len(by_currency[code]) for code in currencies]
+
+    balances = {one["ref"]: one["booked"] for one in postable}
+
+    def headroom(account):
+        """What may be debited from this account before ACCTPOST would reject R005."""
+        if account["acct_type"] != "LIABILITY":
+            return MAX_AMOUNT
+        return balances[account["ref"]]
+
+    for n in range(1, transfers + 1):
+        currency = rng.choices(currencies, weights=weights, k=1)[0]
+        pool = by_currency[currency]
+
+        fundable = [one for one in pool if headroom(one) >= MIN_AMOUNT]
+        if len(fundable) < 1 or len(pool) < 2:
+            continue
+        debit = rng.choice(fundable)
+        credit = rng.choice(pool)
+        while credit["ref"] == debit["ref"]:
+            credit = rng.choice(pool)
+
+        amount = rng.randrange(MIN_AMOUNT, min(MAX_AMOUNT, headroom(debit)) + 1)
         reference = f"TRANSFER {BUSINESS_DATE} SEQ {n:06d}"
 
-        rows.append((debit, moverec(transfer_ref(n), 1, debit, "D", "PLN", amount,
-                                    int(BUSINESS_DATE), int(POSTED_TS), reference)))
-        rows.append((credit, moverec(transfer_ref(n), 2, credit, "C", "PLN", amount,
-                                     int(BUSINESS_DATE), int(POSTED_TS), reference)))
+        for account, leg, direction in ((debit, 1, "D"), (credit, 2, "C")):
+            rows.append((account["ref"], moverec(
+                transfer_ref(n), leg, account["ref"], direction, currency, amount,
+                int(BUSINESS_DATE), int(POSTED_TS), reference)))
+            balances[account["ref"]] += effect_of(account["acct_type"], direction, amount)
 
     # The reject fixture. JPY has an ISO 4217 scale of 0, which PIC S9(13)V99 cannot represent - the
     # implied decimal would misstate it a hundredfold. The integration tier rejects such a movement
@@ -195,27 +263,198 @@ def build_movements(rng: random.Random, transfers: int, accounts: int) -> list:
     return [record for _, record in rows]
 
 
+def effect_of(acct_type: str, direction: str, amount: int) -> int:
+    """ACCTPOST's COMPUTE-EFFECT, so the generator can see the balance the cycle will see."""
+    if acct_type in ("ASSET", "EXPENSE"):
+        return amount if direction == "D" else -amount
+    return amount if direction == "C" else -amount
+
+
+# ---------------------------------------------------------------------------------------------
+# The volume mode: a bank day drawn by WP-20, written as stratum-0 files.
+#
+# workload-dataset emits a business day as NDJSON and services/ledger-loader already consumes it -
+# WP-22's decision, so that neither side draws the bank's day twice. This reads the same stream and
+# writes what the online day would have handed the overnight cycle.
+#
+# Three things the stream does not carry, and what is done about each:
+#
+#   * **No account currency.** The model draws a currency per transfer from a mix of up to five and
+#     gives each customer two accounts, so an account has no currency of its own. Every account is
+#     therefore opened in the stream's base currency and every movement drawn in another currency is
+#     posted in it and COUNTED - the convention WP-21 established against the ledger and F-72
+#     records, reused here rather than a second answer being invented one stratum down.
+#   * **No opening balance.** Customer accounts open funded and the treasury is debited for the
+#     total, which is how WP-22's loader states the same thing: every opening balance came from
+#     somewhere.
+#   * **No legs.** A createTransfer is one action; stratum 0 carries two records, leg 01 the debit
+#     and leg 02 the credit, sharing one transfer reference.
+# ---------------------------------------------------------------------------------------------
+
+# Enough that a day's debits post without the file becoming a study of the overdraft path, and far
+# inside PIC S9(13)V99. Stated as a constant because it is an assumption, not a measurement.
+OPENING_BALANCE = 1_000_000_00
+
+
+def accounts_from_stream(header: dict, opens: list) -> list:
+    """The account master, from the stream's open records. Sorted as the match-merge requires."""
+    currency = header["baseCurrency"]
+    business_date = int(header["from"].replace("-", ""))
+
+    accounts = []
+    treasury_total = 0
+    for record in opens:
+        treasury = record.get("treasury", False)
+        booked = 0 if treasury else OPENING_BALANCE
+        if not treasury:
+            treasury_total += OPENING_BALANCE
+        accounts.append({
+            "ref": record["accountRef"],
+            "customer": record["customerRef"],
+            "acct_type": record["accountType"],
+            "currency": currency,
+            "status": "OPEN",
+            "booked": booked,
+            "available": booked,
+            "opened": business_date,
+            "last_move": business_date,
+        })
+
+    # The treasury funded every one of them, so it carries the contra balance rather than zero.
+    for account in accounts:
+        if account["ref"] == header["treasuryAccountRef"]:
+            account["booked"] = treasury_total
+            account["available"] = treasury_total
+
+    accounts.sort(key=lambda one: one["ref"])
+    return accounts
+
+
+def movements_from_stream(header: dict, actions: list, accounts: list) -> tuple:
+    """The movement file, from the stream's actions. Returns (records, counts).
+
+    Only createTransfer moves money between two accounts, which is the only shape MOVEREC has. Every
+    other operation in the model is a read, a hold or a reversal, and each is counted rather than
+    dropped silently - a file that omits without saying so is a file whose totals cannot be checked.
+    """
+    currency = header["baseCurrency"]
+    business_date = int(header["from"].replace("-", ""))
+    posted_ts = business_date * 1000000 + 91500
+
+    known = {one["ref"]: one for one in accounts}
+    balances = {one["ref"]: one["booked"] for one in accounts}
+
+    counts = {
+        "actions": len(actions),
+        "transfers": 0,
+        "notAMovement": 0,
+        "unknownAccount": 0,
+        "currencySubstituted": 0,
+        "wouldOverdraw": 0,
+    }
+
+    rows = []
+    for action in actions:
+        if action.get("operation") != "createTransfer":
+            counts["notAMovement"] += 1
+            continue
+
+        debit = known.get(action.get("accountRef"))
+        credit = known.get(action.get("counterpartyRef"))
+        if debit is None or credit is None:
+            counts["unknownAccount"] += 1
+            continue
+
+        amount = int(action.get("amountMinor", 0))
+        if amount <= 0:
+            counts["notAMovement"] += 1
+            continue
+
+        if action.get("currency", currency) != currency:
+            counts["currencySubstituted"] += 1
+
+        if debit["acct_type"] == "LIABILITY" and balances[debit["ref"]] - amount < 0:
+            counts["wouldOverdraw"] += 1
+            continue
+
+        counts["transfers"] += 1
+        reference = f"TRANSFER {business_date} SEQ {counts['transfers']:06d}"
+        transfer = transfer_ref(counts["transfers"])
+        for account, leg, direction in ((debit, 1, "D"), (credit, 2, "C")):
+            rows.append((account["ref"], moverec(
+                transfer, leg, account["ref"], direction, currency, amount,
+                business_date, posted_ts, reference)))
+            balances[account["ref"]] += effect_of(account["acct_type"], direction, amount)
+
+    rows.sort(key=lambda pair: pair[0])
+    return [record for _, record in rows], counts
+
+
+def read_stream(handle) -> tuple:
+    """The NDJSON stream, split into its header, its open records and its actions."""
+    header, opens, actions = None, [], []
+    for line in handle:
+        line = line.strip()
+        if not line:
+            continue
+        record = json.loads(line)
+        kind = record.get("kind")
+        if kind == "population":
+            header = record
+        elif kind == "open":
+            opens.append(record)
+        elif kind == "action":
+            actions.append(record)
+    if header is None:
+        raise ValueError("the stream carries no population header")
+    return header, opens, actions
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=42, help="same seed, same bytes")
     parser.add_argument("--accounts", type=int, default=200)
     parser.add_argument("--transfers", type=int, default=150)
+    parser.add_argument("--from-stream", action="store_true",
+                        help="read a workload-dataset NDJSON day on stdin instead of drawing one")
+    parser.add_argument("--out", type=pathlib.Path, default=OUT,
+                        help="where to write, so a volume run never overwrites the fixture")
     args = parser.parse_args()
 
-    rng = random.Random(args.seed)
-    OUT.mkdir(parents=True, exist_ok=True)
+    args.out.mkdir(parents=True, exist_ok=True)
 
-    master = build_master(rng, args.accounts)
-    movements = build_movements(rng, args.transfers, args.accounts)
+    if args.from_stream:
+        header, opens, actions = read_stream(sys.stdin)
+        accounts = accounts_from_stream(header, opens)
+        master = [acctrec(**account) for account in accounts]
+        movements, counts = movements_from_stream(header, actions, accounts)
+        label = f"{header['from']} from {header['modelId']} seed {header['seed']}"
+    else:
+        rng = random.Random(args.seed)
+        accounts = draw_accounts(rng, args.accounts)
+        master = [acctrec(**account) for account in accounts]
+        movements = build_movements(rng, args.transfers, accounts)
+        counts, label = None, f"seed {args.seed}"
 
-    master_path = OUT / "ACCTMAST.DAT"
-    movement_path = OUT / "MOVEMENT.DAT"
+    master_path = args.out / "ACCTMAST.DAT"
+    movement_path = args.out / "MOVEMENT.DAT"
     master_path.write_bytes(b"".join(master))
     movement_path.write_bytes(b"".join(movements))
 
-    print(f"seed {args.seed}")
-    print(f"  {master_path.relative_to(REPO)}   {len(master):>4} records x {ACCTREC_LEN} = {len(master) * ACCTREC_LEN} bytes")
-    print(f"  {movement_path.relative_to(REPO)}   {len(movements):>4} records x {MOVEREC_LEN} = {len(movements) * MOVEREC_LEN} bytes")
+    print(label)
+    print(f"  {master_path}   {len(master):>8} records x {ACCTREC_LEN} = {len(master) * ACCTREC_LEN} bytes")
+    print(f"  {movement_path}   {len(movements):>8} records x {MOVEREC_LEN} = {len(movements) * MOVEREC_LEN} bytes")
+    if counts is not None:
+        # Every action the stream offered, accounted for. A file that omits without saying so is a
+        # file whose totals cannot be checked - and the substitution count is what says how much of
+        # the drawn day this file actually represents.
+        print(f"  actions offered      {counts['actions']:>8}")
+        print(f"  transfers written    {counts['transfers']:>8}  (two legs each)")
+        print(f"  not a movement       {counts['notAMovement']:>8}  reads, holds and reversals")
+        print(f"  unknown account      {counts['unknownAccount']:>8}")
+        print(f"  would overdraw       {counts['wouldOverdraw']:>8}")
+        print(f"  currency substituted {counts['currencySubstituted']:>8}  posted in "
+              f"{header['baseCurrency']} rather than the currency drawn - F-72")
     return 0
 
 
