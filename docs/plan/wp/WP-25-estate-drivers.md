@@ -75,10 +75,19 @@ movement file that arrives late and pushes reconciliation past the start of busi
 > window at three volumes, all verified, and the two-phase run becomes **WP-25c**, on the repository
 > owner's instruction. **F-98** records the missing field.
 
+> **2026-08-22: the four-era hop moved out of 25b into a fourth half, WP-25d.** 25b's tasks 1 to 3
+> are built and verified - the SOAP client, the Oracle and Tomcat 8.5 fixture, and the ladder with
+> two committed captures. Task 4 is the one task in this package that needs **every stratum up at
+> once**: PostgreSQL, Kafka, the ledger and the gateway from `estate-up.sh`, Oracle and Tomcat from
+> `legacy-up.sh`, and the Boot 2.7 adapter between them consuming what the ledger's outbox relay
+> publishes. That is a fixture composition rather than a driver, and the measurement it produces -
+> where the backlog forms when the tier below is slower than the tier above - deserves its own run
+> rather than the end of somebody else's branch. Split on the repository owner's instruction.
+
 Detailed 2026-08-22, in its own change rather than inside the branch that executes it - the same
 reason the decision log records for WP-21 and WP-23. The package lands as **two halves on one
 ticket**, WP-25a and WP-25b, each its own branch and pull request, tracked as two rows in
-`STATUS.md` - and a third, WP-25c, split out during execution for the reason above. Detailed out, this package spans a generator fix, a stratum-0 file at volume, a batch
+`STATUS.md` - and two more, WP-25c and WP-25d, split out during execution for the reasons above. Detailed out, this package spans a generator fix, a stratum-0 file at volume, a batch
 window timed at three record counts, a two-phase day, a SOAP driver against Tomcat 8.5, an event
 driver through the Boot 2.7 adapter, and a fixture that has to boot Oracle and Tomcat for the first
 time. The decision log's answer at this size, since WP-09, is to split the package in the plan rather
@@ -207,9 +216,10 @@ section. Four tasks.
    `batch/recon`'s own exit code says so - and a run that reconciles exactly is a stronger claim than
    one that was made to. Whichever it is, the conditions go on the page beside it.
 
-### WP-25b - SOAP and event volume against the older strata
+### WP-25b - SOAP volume against stratum 1
 
-Branch `feat/TB-1025-service-volume`. Five tasks, strata 1 and 2.
+Branch `feat/TB-1025-service-volume`. Four tasks, stratum 1. Task 4 as first detailed - event
+volume through `esb-adapter` - became WP-25d during execution, per the note above.
 
 1. Set 25b `In progress` and branch from up-to-date `main`.
 
@@ -229,25 +239,42 @@ Branch `feat/TB-1025-service-volume`. Five tasks, strata 1 and 2.
    WP-23's separation of the two lock timers is the shape to copy - one averaged "wait" that moves
    for two unrelated reasons answers neither question.
 
-4. **Event volume through `esb-adapter`.** Kafka in, canonical XML by XSLT, SOAP to Tomcat, COMP-3
-   movement record out - the whole four-era hop under sustained load, which `FourEraTransferIT`
-   exercises exactly once. What is recorded is where the backlog forms and what the adapter does when
-   the tier below it is slower than the tier above: consumer lag, the SOAP call's own latency, and
-   whether anything reaches the dead-letter path. The Constraint that **nothing is written to the
-   movement file unless the SOAP call succeeded** is WP-11b's, it is what makes the file trustworthy,
-   and a load run is the first thing that will test it in anger.
+4. **The write-up, the matrix, `REQ-PERF-008`, and the Verification below.**
 
-5. **The write-up, the matrix, `REQ-PERF-008`, and the Verification below.**
+### WP-25d - the four-era hop under load
+
+Branch `feat/TB-1025-four-era-volume`. Split out of 25b on 2026-08-22. Four tasks, stratum 2 and every
+stratum it touches.
+
+1. Set 25d `In progress` and branch from up-to-date `main`.
+
+2. **One fixture that holds the whole estate up.** `estate-up.sh` boots PostgreSQL, Kafka, the ledger,
+   `fraud-scoring` and the gateway; `legacy-up.sh` boots Oracle and Tomcat 8.5 with the WAR. This
+   composes them and starts `esb-adapter` between the two, against the Kafka already there and the
+   Tomcat endpoint the other script published. Composition rather than reimplementation, the way
+   `soak.sh` composes the scripts either side of it.
+
+3. **Event volume through the whole hop.** Kafka in, canonical XML by XSLT, SOAP to Tomcat, COMP-3
+   movement record out - which `FourEraTransferIT` exercises exactly once. The events are the ledger's
+   own: driving the modern spine makes the outbox relay publish, and the adapter consumes what a real
+   day produced rather than messages a driver injected. What is recorded is where the backlog forms
+   when the tier below is slower than the tier above - consumer lag, the SOAP call's own latency, and
+   whether anything reaches the dead-letter path.
+
+4. **The constraint under load, and the write-up.** *Nothing is written to the movement file unless
+   the SOAP call succeeded* is WP-11b's, it is what makes the file trustworthy to the overnight cycle,
+   and a sustained run is the first thing that will test it in anger. Then the Verification below.
 
 ## Definition of Done
 
-The half that satisfies each box is named, because two pull requests cannot both tick all five.
+The half that satisfies each box is named, because four pull requests cannot each tick all five.
 
 - [x] One workload model produces both the online day and the overnight movement file. *(25a - the
       same WP-20 stream feeds `services/ledger-loader` and `generate.py --from-stream`)*
 - [x] The end-of-day cycle runs at realistic volume and its duration is recorded against the record
       count. *(25a - three volumes to 2 429 346 movements, per step)*
-- [ ] SOAP and event volume is driven, and each tier's behaviour under it is recorded. *(25b)*
+- [ ] SOAP and event volume is driven, and each tier's behaviour under it is recorded. *(25b
+      drove SOAP against stratum 1; the event half is 25d)*
 - [ ] The online day, the cut-off, the batch and the morning reconciliation run in sequence. *(25c)*
 - [x] The stratum-0 run posts the majority of what it is given, rather than rejecting it. *(25a -
       300 of 302 on the fixture, 2 429 346 of 2 429 346 at volume; F-18 closed)*
