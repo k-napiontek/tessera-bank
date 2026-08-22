@@ -888,7 +888,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `08e5fcd` |
 | [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Done` | [#82](https://github.com/k-napiontek/tessera-bank/pull/82) | `b567bda` |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP volume against stratum 1 | 1 | 21, 10b | `Done` | [#80](https://github.com/k-napiontek/tessera-bank/pull/80) | `646ba46` |
-| [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `Not started` | | |
+| [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `In progress` | | |
 
 ## Critical path
 
