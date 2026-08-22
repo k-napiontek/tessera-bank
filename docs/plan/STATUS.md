@@ -9,14 +9,68 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-25b is done and merged** ([#80](https://github.com/k-napiontek/tessera-bank/pull/80), `PENDING`),
+> and **the 2011 tier has been driven over the wire it actually speaks.** A JAX-WS endpoint deployed
+> as a WAR on a **real Tomcat 8.5.100** in front of **real Oracle**, both booted by
+> `workload/scripts/legacy-up.sh` from parts this repository already had. Nothing in `legacy/`
+> changed and no pinned version moved.
+>
+> **The next actionable packages are WP-25c, WP-25d and WP-18.** WP-25 has now been split four ways -
+> 25a and 25b when it was detailed, 25c and 25d during execution - and only WP-18 still carries frame
+> only.
+>
+> **Stratum 1 answers about 7 900 reads a second and 4 000 writes**, levelling off from eight workers
+> and sixteen respectively, with **not one call failing at any level**. On the same machine the modern ledger peaks at
+> about 790 postings a second. The comparison is not fair - one writes an audit chain under an
+> advisory lock and the other reads a row - and that is exactly the point: **the era a component was
+> built in predicts very little about its throughput, and the work it does predicts almost all of it.**
+>
+> **The premise WP-25 was written on is false on this estate, and a second run is what shows it.** The
+> Objective names *"a SOAP endpoint whose thread pool is smaller than anyone remembers"*. Everything
+> answered late and nothing failed, with the mean doubling at every doubling of workers past sixteen -
+> the arithmetic of a queue in front of something of fixed capacity. That rules out Tomcat's connector,
+> which would refuse at the socket rather than answer slowly, but it cannot tell a datasource pool
+> from a saturated machine, because both answer everything late. So the ladder was run again with
+> `maxTotal` raised from DBCP's default of **8** to **32**, everything else identical - WP-24b's
+> two-migrations shape. **Four times the connections buys 11% at sixteen workers and then halves the
+> throughput at sixty-four** - 7 637/s down to 3 833/s, the mean from 8.4 ms to 16.7 ms, and the worst
+> case a customer would see from **35 ms to 683 ms**. The pool was never the ceiling; what is left is
+> a ten-core machine running Oracle, a JDK 8 Tomcat and the driver at once. **The narrow win at low
+> concurrency is the trap** - it is exactly what a team would measure before shipping a change that
+> halves throughput the first time the tier is genuinely busy.
+>
+> **The driver's own verdict line asserted the wrong mechanism and was corrected.** It printed *"the
+> queue is inside the WAR, waiting for a pooled connection"* - inferred from the shape, which is the
+> exact claim the control run disproved. It now says what the shape supports and no more: not the
+> connector, something of fixed capacity, and which one takes a second run.
+>
+> **The estate caught two defects in the driver, through two different controls.** Every
+> `NotifyTransferPosted` faulted twice over: first `SAME_ACCOUNT`, because the driver named one
+> account on both legs and a transfer from an account to itself is not a transfer; then `ORA-02290`,
+> because it invented a `WL`-prefixed transfer reference where `TransferRefType` declares
+> `TB[0-9]{18}` and the Oracle schema enforces the same pattern a **second** time. The contract and
+> the database agreed with each other against the driver, which is what both are for - and 167 731
+> faults would otherwise have been reported as a throughput figure. `workload-soap` now refuses to
+> print one when faults dominate, which is the control that finding produced.
+>
+> **Seeding stratum 1 has no sanctioned route and that is F-99.** Its schema declares an identity
+> NOT NULL, and the only generator that fills one is test-scope on purpose. The fixture fills the
+> columns with a constant instead - every customer SYNTHETIC SYNTHETIC with a `SYN-<ordinal>`
+> identifier - so **there is nothing to anonymise because there was never an identity**. **F-100**:
+> `customer-master` exposes no metrics at all, no endpoint and no manager application, so everything
+> recorded about this tier was seen from outside. That is not a defect of 2011; it is why the pool
+> question needed a control run rather than a scrape, and adding an actuator to a Java 8 WAR would be
+> modernising the tier to make it measurable.
+>
+> **`REQ-PERF-008` is `Partially met` across two of three strata now.** Stratum 2 - the four-era hop
+> under sustained load - is WP-25d, split out here because it is the one task needing every stratum up
+> at once.
+>
 > **WP-25a is done and merged** ([#78](https://github.com/k-napiontek/tessera-bank/pull/78), `08e5fcd`),
 > and **stratum 0 has finally been given a day worth running.** Every measurement in this repository
 > until now was of the modern spine; this one is the 1995 core, driven by files and nothing else,
 > over a day the same WP-20 model drew. WP-25 was split into 25a and 25b when it was detailed and
 > into a third half, **WP-25c**, during execution - see the decision below.
->
-> **The next actionable packages are WP-25b, WP-25c and WP-18.** 25b carries a detailed task list;
-> 25c's was written when it was split out; WP-18 alone still carries frame only.
 >
 > **F-18 is closed after nineteen packages, and it was worse than a defect - it was a measurement of
 > the wrong path.** `build_movements` hard-coded `PLN` on both legs while `build_master` drew from
@@ -778,7 +832,8 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
 | [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `08e5fcd` |
 | [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Not started` | | |
-| [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP and event volume against the older strata | 1/2 | 21, 10b, 11b | `In progress` | | |
+| [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP volume against stratum 1 | 1 | 21, 10b | `Done` | [#80](https://github.com/k-napiontek/tessera-bank/pull/80) | `PENDING` |
+| [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `Not started` | | |
 
 ## Critical path
 
@@ -799,7 +854,7 @@ The workload strand hangs off the contracts, not off the ledger:
               |
               +-> 25a  (also needs 05) -> 25c
               |
-              +-> 25b  (also needs 10b, 11b)
+              +-> 25b  (also needs 10b) -> 25d  (also needs 11b)
 ```
 
 `12`, `13`, `14`, `15`, `17`, `19` and `20` to `25` sit off the critical path and can be taken
@@ -917,6 +972,8 @@ becomes its own change when picked up.
 | F-96 | WP-25a | **A stratum-2 test is pinned byte-for-byte to what a stratum-0 generator writes, and nothing declares it.** `MovementRecordTest.aRecordMatchesOneTheGeneratorWroteByteForByte` reads a record out of `mainframe/data/out/MOVEMENT.DAT` and asserts `esb-adapter`'s Java COMP-3 encoder produces the same 120 bytes. That is deliberate and it is the strongest check available - two encoders in two languages held to one another through real output rather than through a shared expectation. It also means **closing F-18 in a 1995 data generator failed a 2019 integration module's build**, at byte 36, because transfer 20 was drawn onto a different account. The test did its job and said so legibly. What is missing is any statement that the coupling exists: nothing in `mainframe/data/README.md`, `integration/esb-adapter/README.md` or either package's file mentions the other, so the first sign is a red build in a tier the change never touched. The literals were re-read and the pin is now stronger - the record is EUR rather than PLN, so the encoder is held to a non-base currency for the first time. | Open |
 | F-97 | WP-25a | **The volume writer needs 5.63 GiB to prepare a day the cycle then runs in 1.02 GiB.** `generate.py --from-stream` holds the whole day as Python objects - every account, every action and every encoded record - before it writes a byte. At the model's full declared population, 1.2 million customers and 2 429 346 movements, that peaks at 5.63 GiB against the cycle's own 1.02 GiB, so **the fixture is the ceiling and stratum 0 is not**. Both figures are on the report, separated, because a single number would have been read as the cycle's. The fix is a streaming writer: the stream arrives in order and the master could be written as the `open` records pass, with only the balances held. Nothing needed one until this measurement existed, and the three committed volumes were chosen to fit under it. | Open |
 | F-98 | WP-25a | **The dataset stream does not carry the opening balance the driver funds accounts with, so nothing built from it can be reconciled against the ledger.** `seeding.Opening` funds every account with twenty times the largest transfer the model can draw, and `dataset.Header` carries the base currency, the cohorts' median amounts and the treasury references - but not that figure. A stratum-0 master written from the stream therefore opens every account at a number of its own choosing, and `batch/recon` comparing it against the ledger would report a break on every account: a reconciliation that measures nothing, which is worse than one that was not run. This is what moved WP-25a's task 5 into **WP-25c**. The fix is one additive field on the header plus a reader on each side - `services/ledger-loader` consumes the same stream - and it is WP-20's and WP-22's shared ground rather than something a stratum-0 branch should change on its way past. | Open |
+| F-99 | WP-25b | **Stratum 1 cannot be seeded without an identity, because its schema requires one.** `customer-master`'s CUSTOMER table declares family_name, given_name, date_of_birth and national_id NOT NULL - a 2011 core built around customers has nowhere to put a customer without them - and the only generator in this repository that fills them, `SyntheticData`, is deliberately **test scope** so that code manufacturing personal data is not inside a deployable artefact. A load fixture therefore has three options and no good one: grow a second name generator, reach into another module's test scope, or fill the columns with something that is not a name. `workload-legacy-seed` takes the third: every customer is SYNTHETIC SYNTHETIC, born on one date, with an identifier of the form `SYN-<ordinal>`. **There is nothing to anonymise because there was never an identity**, which is stronger than a well-anonymised alternative and is all a fixture keyed by reference needs. The finding is not the choice; it is that a tier whose schema mandates identity has no sanctioned way to be populated outside a JUnit run, and every future fixture touching stratum 1 will meet the same wall. | Open |
+| F-100 | WP-25b | **`customer-master` exposes no metrics at all, so its own pools cannot be observed while it is under load.** There is no metrics endpoint (`/metrics` is a 404), Micrometer appears nowhere in the module, and Tomcat's manager application is not deployed (`/manager/status` is a 401). Everything WP-25b recorded about this tier was observed **from outside**, by the driver. That is why the question *which* pool limits it needed a **second full run with `maxTotal` moved** rather than a scrape: a datasource pool and a saturated machine produce the same shape from outside - everything answered, late - and only the control run separates them. WP-09 gave the modern ledger business-level metrics under `REQ-OPS-002` and WP-23 catalogued 39 of them; stratum 1 has none, and no requirement asks it to, which is consistent with 2011 and is exactly the operational asymmetry this repository exists to show. Recorded rather than fixed: adding an actuator to a Java 8 WAR would be modernising the tier to make it measurable, which is what WP-24's Constraint refused and F-85 recorded instead. | Open |
 
 ---
 
@@ -1069,3 +1126,5 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-22 | **The stratum-0 volume writer opens every account in the base currency and counts the substitutions.** WP-20's stream carries a currency on every action and none on any account, and `ACCTREC` needs one. Deriving it from the actions that touch an account puts every other movement on the wrong currency and `ACCTPOST` rejects it `R003` - **F-18's failure mode reproduced through a different door**, at volume, in the run WP-25a exists to measure. WP-21 met the same problem against the ledger and **F-72** is the standing answer: open the population in the heaviest currency the model declares and count every substitution, about 8% on the committed model. 25a reuses that rather than inventing a second convention one stratum down, and reports the count beside every figure. Multi-currency posting is exercised in the committed fixture, where the master genuinely draws five currencies, rather than pretended at volume. Found while planning 25a's execution, after the task list was written and before it was merged. |
 | 2026-08-22 | **WP-25a's two-phase run moved into a third half, WP-25c, on the repository owner's instruction.** The same shape as WP-24c being split out of 24a, and for the same kind of reason: the work was not unsafe, it was **dependent on something the detailing had not seen**. `batch/recon` can only compare the COBOL master against the ledger if both start from the same opening balances, the driver funds with `seeding.Opening`, and the dataset stream does not carry that figure - **F-98**. Adding it changes the wire format `services/ledger-loader` also reads, which is WP-20's and WP-22's ground and not something a stratum-0 branch should alter in passing. The alternative was a reconciliation that breaks on every account, which is a plausible-looking run describing nothing. 25a lands its four verified tasks; 25c takes the field and the sequence. |
 | 2026-08-22 | **The batch window is measured per step, and both memory figures are reported apart.** `STEP020` is `ACCTPOST`, which match-merges two sorted files in one pass and never holds the master - the property stratum 0 exists to demonstrate, and the one `CLAUDE.md` keeps a trap entry about. `STEP010` and `STEP030` are `sortrec.py`, the local stand-in for DFSORT, which reads the whole file into a list. A single window figure would mix the tier's real property with a stand-in's ceiling and answer neither question; the same applies to memory, where the **writer's 5.63 GiB dwarfs the cycle's 1.02 GiB** and a single number would have been read as the cycle's. The report separates all four and says which are properties of this fixture rather than of the tier. |
+| 2026-08-22 | **WP-25b's four-era hop moved into a fourth half, WP-25d, on the repository owner's instruction.** The second split this package has taken during execution and the same reasoning as the first: the work is not unsafe, it needs something the branch does not have. Task 4 is the one task in WP-25 that needs **every stratum up at once** - PostgreSQL, Kafka, the ledger and the gateway from `estate-up.sh`, Oracle and Tomcat from `legacy-up.sh`, and `esb-adapter` between them consuming what the outbox relay publishes. That is a fixture composition rather than a driver, and a measurement of where a backlog forms deserves its own run rather than the end of somebody else's branch. |
+| 2026-08-22 | **The pool question was settled with a second run rather than asserted from a shape, and the expected answer was wrong.** WP-25's Objective names *"a SOAP endpoint whose thread pool is smaller than anyone remembers"*. The ladder showed everything answered and nothing failing, with the mean doubling at every doubling of workers past sixteen - the arithmetic of a queue in front of a fixed-capacity resource. That rules out Tomcat's connector, which would refuse at the socket, but it does **not** distinguish a datasource pool from a saturated machine, because both answer everything late. So the ladder was run again with `maxTotal` raised from DBCP's default of 8 to 32, everything else identical - WP-24b's two-migrations shape. **Four times the connections buys 11% at sixteen workers and halves the throughput at sixty-four - 7 637/s down to 3 833/s, with the worst observed latency going from 35 ms to 683 ms.** The pool was never the ceiling, and the narrow win at low concurrency is the trap: it is exactly what a team would measure before shipping a change that halves throughput the first time the tier is busy. The driver's verdict line was corrected too: it had asserted the connection pool from the shape alone, which is the claim this run disproved. |

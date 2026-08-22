@@ -676,7 +676,96 @@ Everything the stream offered is accounted for on the run's own output: transfer
 holds that are not movements, unknown accounts, and debits that would have overdrawn. A file that
 omits without saying so is a file whose totals cannot be checked.
 
-## 9. What changed because of these numbers
+## 9. Stratum 1 answers 7 800 reads a second, and the pool everyone blames is not the ceiling
+
+WP-25's Objective names *"a SOAP endpoint whose thread pool is smaller than anyone remembers"* as one
+of the operational failures that happen where the eras meet. This tested it, and on this estate the
+sentence is wrong.
+
+> A concurrency ladder against `legacy/customer-master` deployed as a WAR on a **real Tomcat 8.5.100**
+> against **real Oracle Database 23ai Free**, both booted by `workload/scripts/legacy-up.sh`. 4 000
+> account references seeded from the WP-20 population and read back out of the database; 8 s per rung;
+> darwin arm64, 10 cores. Captured by WP-25b in [`soap/`](../../workload/baselines/soap/), as
+> `pool-default.json` and `pool-32.json`.
+
+### The ladder
+
+| Workers | `GetAccount` | mean | p95 | `NotifyTransferPosted` | mean |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 1 834/s | 0.5 ms | 0.8 ms | 1 000/s | 1.0 ms |
+| 2 | 4 067/s | 0.5 ms | 0.6 ms | 2 591/s | 0.8 ms |
+| 4 | 5 884/s | 0.7 ms | 0.8 ms | 3 345/s | 1.2 ms |
+| 8 | 7 541/s | 1.0 ms | 1.3 ms | 3 993/s | 2.0 ms |
+| 16 | 7 874/s | 2.0 ms | 2.7 ms | **4 069/s** | 3.9 ms |
+| **32** | **7 886/s** | 4.0 ms | 6.4 ms | 3 959/s | 8.1 ms |
+| 64 | 7 637/s | 8.4 ms | 14.5 ms | 4 001/s | 16.0 ms |
+
+**Reads level off at about 7 900 a second from eight workers and writes at about 4 000 from sixteen**,
+and **not one call failed at any level** - no refusal at the socket, no timeout, nothing unknown. Past
+the knee the mean doubles every time the worker count doubles: 2.0 ms at 16, 4.0 at 32, 8.4 at 64.
+That is the arithmetic of a queue in front of a resource of fixed capacity, and it is the only thing
+the single run establishes.
+
+A 2011 SOAP endpoint answering **7 900 reads a second** is worth stating plainly, because the shape of
+this repository invites the assumption that the old tier is the slow one. On the same machine the
+modern ledger peaks at about **790 postings a second** (section 3). The comparison is not fair - one
+writes an audit chain under an advisory lock and the other reads a row - and that is the point: *the
+era a component was built in predicts very little about its throughput, and the work it does predicts
+almost all of it.*
+
+### The control: the same ladder with one setting moved
+
+Everything above answers everything, late. That rules out **Tomcat's connector** - a thread pool that
+ran out would refuse at the socket rather than answer slowly - but it does not say which resource the
+queue formed behind, because a datasource pool and a saturated machine produce the same shape from
+outside. So the ladder was run again with `maxTotal` raised from Tomcat DBCP's default of **8** to
+**32**, everything else held identical. The same shape as WP-24b's two migrations: one setting apart,
+so the difference is a consequence of that setting and of nothing else.
+
+| `GetAccount` | pool 8 (default) | pool 32 |
+|---|---:|---:|
+| 8 workers | 7 541/s, 1.0 ms | 7 452/s, 1.1 ms |
+| 16 workers | 7 874/s, 2.0 ms | **8 775/s, 1.7 ms** |
+| 32 workers | **7 886/s**, 4.0 ms | **4 439/s**, 7.2 ms |
+| 64 workers | **7 637/s**, 8.4 ms | **3 833/s**, 16.7 ms |
+| Worst observed latency at 64 | **34.7 ms** | **682.9 ms** |
+
+**Four times the connections buys about 11% at sixteen workers and then loses half the throughput at
+sixty-four.** 7 637/s becomes 3 833/s, the mean doubles from 8.4 ms to 16.7 ms, and the worst case a
+customer would see goes from 35 ms to **683 ms**. `NotifyTransferPosted` does the same: 4 001/s
+becomes 2 656/s at 64 workers.
+
+So the datasource pool is **not** the ceiling. What is left is the machine - Oracle in a container, a
+JDK 8 Tomcat and the driver itself on ten cores - and past that point more connections means more
+contention rather than more work. The narrow win at sixteen is real and it is the trap: a team that
+measured only at their current concurrency would raise the pool, see an improvement, and ship a change
+that halves throughput the first time the tier is genuinely busy.
+
+### Why this matters more than the number
+
+**The premise was tested rather than assumed, and it failed.** "The pool is too small" is the first
+thing anyone says about a tier like this, it is cheap to act on, and acting on it here **halves the
+throughput** at the concurrency that matters. The 683 ms worst case in the right-hand column is what
+that looks like from a customer's side, against 35 ms with the setting left alone.
+
+It also does not license the opposite claim. This says the pool is not the constraint **on this
+machine at this volume with this working set** - 4 000 accounts, every one of them in Oracle's buffer
+cache. A master that does not fit in cache would put I/O wait behind every borrowed connection, and
+the pool could matter again. The lock modes and the shape transfer; the seconds do not.
+
+### What the driver caught about itself, twice
+
+The write path faulted on **every call** in its first two runs, and both times the estate was right.
+
+`SAME_ACCOUNT` first: the driver named one account on both legs, and a transfer from an account to
+itself is not a transfer. Then `ORA-02290: APPLIED_TRANSFER_REF_CK violated`: the driver invented a
+`WL`-prefixed transfer reference where `TransferRefType` declares `TB[0-9]{18}` and the Oracle schema
+enforces the same pattern a second time. **The contract and the database agreed with each other
+against the driver**, which is what both are for - and a ladder of 167 731 faults would otherwise have
+been reported as a throughput figure. The report now refuses to print one when faults dominate, which
+is the control that finding produced.
+
+## 10. What changed because of these numbers
 
 - **F-69 is closed.** `workload-plan` warned above 2 000 requests a second, a round number named in
   its own comment as standing in for a figure nobody had. It is now **800**, which is where the two
@@ -712,12 +801,29 @@ omits without saying so is a file whose totals cannot be checked.
   (**F-96**), the volume writer needing 5.6 GiB to prepare a day the cycle runs in 1.0 GiB
   (**F-97**), and the dataset stream not carrying the opening balance the driver funds with, which is
   what a reconciliation across the two would need (**F-98**).
+- **Stratum 1 has a number, and it is 7 900 reads a second.** A 2011 JAX-WS endpoint on Tomcat 8.5
+  against real Oracle, ten times the modern ledger's posting rate on the same machine - because the
+  ledger writes an audit chain under an advisory lock and this reads a row.
+- **"The pool is too small" was tested and is false here.** Four times the connections buys 11% at
+  sixteen workers and **halves the throughput at sixty-four**, with the worst observed latency going
+  from 35 ms to 683 ms. The narrow win at low concurrency is the trap: it is exactly what a team
+  would measure before shipping the change.
+- **Two more findings.** Seeding stratum 1 cannot be done without manufacturing personal data or
+  filling the columns with a marker, because the 2011 schema requires an identity (**F-99**), and
+  `legacy-up.sh` cannot ask Tomcat what its pools are actually doing, because the WAR exposes no
+  metrics at all (**F-100**).
 
 ## Reproducing
 
 ```bash
 # The batch window. No Docker and no database - stratum 0 is driven by files and files only.
 bash workload/scripts/batch-window.sh
+
+# Stratum 1. Boots Oracle and a real Tomcat 8.5 with the WAR, then walks the ladder.
+bash workload/scripts/legacy-up.sh --keep --customers 2000 --accounts 4000
+go -C workload run ./cmd/workload-soap \
+  --accounts "${TMPDIR:-/tmp}/tessera-legacy/accounts.txt" \
+  --levels 1,2,4,8,16,32,64 --duration 8s --writes
 
 bash workload/scripts/ceiling.sh --levels 1,2,4,8,16,32,64 --duration 10s
 

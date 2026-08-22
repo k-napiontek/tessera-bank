@@ -41,6 +41,7 @@ var floatIsJustified = map[string]string{
 	"internal/dataset/dataset.go":       "the scale dial is a fraction of the model's volume, which is a ratio; an Action carries the int64 minor units population.Draw produced and nothing arithmetic happens to it on the way out",
 	"cmd/workload-plan/main.go":         "the summary prints rates per second, which are not money; the one amount it prints arrives from the engine as an int64",
 	"cmd/workload-dataset/main.go":      "the scale dial and the event estimate printed beside it are fractions and rates; the stream carries the int64 minor units the engine produced and this file does no arithmetic on them",
+	"cmd/workload-soap/main.go":         "the ladder reports rates per second and latency quantiles in milliseconds, both of which are durations and counts over time. The one amount it sends is a 1_00 int64 constant that reaches the wire through strconv.FormatInt",
 
 	// WP-21's driver half. The rule is the same one: a float may appear in a file that has said
 	// why, and none of these is an amount.
@@ -95,6 +96,14 @@ var driverMayCall = map[string]map[string]string{
 	},
 	"cmd/workload-ceiling/main.go": {
 		"time.Now": "a saturation point is a rate and a rate needs a real clock. Nothing here is reproducible from a seed and nothing here claims to be: this measures a machine, it does not describe a bank's day",
+	},
+	// WP-25b's driver. The same two reasons one stratum down.
+	"internal/soap/soap.go": {
+		"time.Now": "one call's latency is measured here, and a latency is a duration of real time. The amounts this package sends arrive as int64 minor units and are rendered by strconv.FormatInt in envelope.go",
+	},
+	"cmd/workload-soap/main.go": {
+		"time.Now":            "a ladder measures a rate against a real clock, exactly as cmd/workload-ceiling does: it measures a machine, it does not describe a bank's day",
+		"strconv.FormatFloat": "the report renders latencies in milliseconds and rates per second. The one amount this driver sends is an int64 constant and never passes through here",
 	},
 }
 

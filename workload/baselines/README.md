@@ -209,6 +209,20 @@ Two numbers on that page are properties of this fixture rather than of the tier,
 so on its own last lines: the share of the window spent in `sortrec.py`, which holds files in memory
 where DFSORT spills to work datasets, and the writer's peak memory, which is larger than the cycle's.
 
+## What `soap/` is, and why there are two of them
+
+`soap/` is stratum 1 and, like `batch-window/`, shares nothing with the captures above: no run
+manifest, no scrape pair and no SLO report, because `customer-master` exposes **no metrics at all** -
+no endpoint, and Tomcat's manager application is not deployed. Everything in these two files was
+observed from outside, by the driver, which is why the pool question needed a second run rather than
+a scrape.
+
+That is what the two files are. `pool-default.json` is Tomcat DBCP's own default of `maxTotal=8`;
+`pool-32.json` is the identical ladder with that one setting raised to 32. Committed beside each other
+rather than one over the other, each stating its own conditions, exactly as `spine-only/` and
+`with-broker/` are - two captures that do not state their conditions cannot be compared, and comparing
+them anyway is how a team concludes a regression exists.
+
 ## What they show
 
 The interpretation, with the numbers and what they mean, is in

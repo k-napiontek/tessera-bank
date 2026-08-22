@@ -116,7 +116,12 @@ sqlplus_in() {
 printf '   waiting'
 READY=no
 for _ in $(seq 1 180); do
-    if echo 'SELECT 1 FROM dual; EXIT' | sqlplus_in 2>/dev/null | grep -q '^ *1$'; then
+    # A sentinel string rather than a number, on two lines rather than one. Both matter: sqlplus
+    # indents a numeric result with a tab, so a pattern anchored on spaces silently never matches,
+    # and a statement sharing its line with EXIT is never executed at all. Either mistake is a
+    # readiness probe that is always false against a database that is answering perfectly well -
+    # a fixture reporting itself as the estate.
+    if printf "SELECT 'TESSERA-READY' FROM dual;\nEXIT\n" | sqlplus_in 2>/dev/null | grep -q TESSERA-READY; then
         READY=yes
         break
     fi

@@ -925,3 +925,34 @@ looks satisfied and is not.
 | **REQ-MF-004** Invalid movements are rejected with a reason, never silently dropped | WP-04 | **F-18 closed.** The synthetic movement file rejected 162 of 302 records - 111 `R003` currency mismatches and 48 `R002` closed accounts - so every run of the cycle in nineteen packages exercised rejection handling and barely touched posting, and **multi-currency posting was never exercised at all**. A movement now takes the currency of the account it lands on, both legs of a transfer share it, movements land only on `OPEN` accounts, and the amount is drawn against the debited account's running balance. **300 of 302 post**, and the two that remain are the deliberate `R001` and `R004` fixtures WP-04's own tests depend on. The requirement was always met - every one of those 162 rejections was correct and carried its reason. What was wrong is that a file of mostly-rejects meant WP-04's control was the only path the data exercised | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | Nothing in the capture is a customer's. The generator carries account and customer *references* from the canonical patterns and no names, addresses or identifiers of any kind - unchanged by this package, which altered which account a movement is drawn against and nothing about what an account record contains. The volume mode reads a WP-20 population, which is drawn rather than collected | Met at this tier |
 | **REQ-OPS-001** Every scheduled process has a runbook | WP-05 | The cycle now reports elapsed time per step in its own job log, which is what a real job log carries and what an operator reads to know whether the window is growing. `test-eod-cycle.py::scenario_every_step_reports_its_elapsed_time` holds it | Met at this tier |
+
+---
+
+## WP-25b - estate-wide drivers: SOAP volume against stratum 1
+
+Ticket TB-1025. The half that drives the 2011 tier over the wire it actually speaks. A SOAP client in
+`workload/internal/soap`, a fixture that boots real Oracle and a real Tomcat 8.5 with the WAR on it,
+and a concurrency ladder with two committed captures.
+
+**Nothing in `legacy/` changed and no pinned version moved.** The fixture assembles parts that already
+exist: the Oracle image `test-customer-master` starts through Testcontainers, the schema scripts the
+WAR itself applies in the order `scripts.list` declares, the Tomcat 8.5.100 zip Cargo installs from
+the Apache archive, and the WAR Maven builds. The one file touched outside `workload/` in this half is
+none.
+
+**`REQ-PERF-008` moves from stratum 0 to strata 0 and 1, and is still `Partially met`.** Stratum 2 -
+event volume through `esb-adapter` - is WP-25d, split out during execution because it is the one task
+needing every stratum up at once.
+
+### Owned by WP-25b
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-008** Every stratum is exercised at volume, not only the one that is easy to drive | Stratum 1. `internal/soap` writes SOAP 1.1 document/literal envelopes for the three operations the WSDL binds and classifies what comes back in four terms, keeping WP-21's two load-bearing distinctions: a **fault is not a transport failure** (the endpoint answered, with a refusal it is entitled to give) and anything unanswered is **unknown** rather than failed. `workload/scripts/legacy-up.sh` boots Oracle and Tomcat 8.5, applies the schema, seeds a WP-20 population and reads the references back **out of the database** rather than re-deriving them - a driver given references the master does not hold measures the fault path, which is F-18 one stratum up. `cmd/workload-soap` holds a fixed worker count busy per rung, which is `workload-ceiling`'s reasoning applied here: a saturation question needs a closed loop, and ADR 0016's open model answers the other question. **Reads level off at about 7 886/s and writes at about 4 069/s, with not one call failing at any level**; the control run with `maxTotal` at 32 shows the datasource pool is not the ceiling, halving throughput at 64 workers rather than raising it | The two ladders committed under `workload/baselines/soap/`, taken with `maxTotal` at Tomcat DBCP's default of 8 and at 32 with everything else identical. `soap_test.go` pins the client against a fake endpoint: the envelope is SOAP 1.1 in the service namespace, references are escaped rather than interpolated, money crosses as minor units and a currency with no decimal anywhere, `NotifyTransferPosted` carries exactly two movements, a fault is `Faulted` **at 200 and at 500 alike**, an unreachable endpoint and a timeout are both `Unknown`, and the three soapAction values are the WSDL's own | **Partially met** - strata 0 and 1; stratum 2 is WP-25d |
+
+### Contributed by WP-25b, verified by the owning package
+
+| Requirement | Owner | What WP-25b contributes | Status |
+|---|---|---|---|
+| **REQ-DP-001** All test data is synthetic | WP-03 | The seeded master carries **no identity at all**. `customer-master`'s CUSTOMER table declares family_name, given_name, date_of_birth and national_id NOT NULL, and the only generator that fills them - `SyntheticData` - is deliberately test-scope so that code manufacturing personal data is not in a deployable artefact. `workload-legacy-seed` fills them with a constant instead: every customer is SYNTHETIC SYNTHETIC, born on one date, with an identifier of the form `SYN-<ordinal>`. **There is nothing to anonymise because there was never an identity**, which is a stronger position than a well-anonymised one and is all the fixture needs, since every operation it drives is keyed by reference. The driver also refuses to record a fault string verbatim, keeping only its length: the contract forbids personal data in a fault and the endpoint's tests assert it, and an error path is where such a leak would first appear | Met at this tier |
+| **REQ-INT-002** Each era's contract is idiomatic to that era | WP-02 | The 2011 contract exercised by a second, independent client - the first evidence in this repository that the WSDL is idiomatic enough to be spoken by something other than the stack that generated it. Every request this driver sends is written against `contracts/wsdl/customer-master-v1.wsdl` and the canonical schema rather than generated from the endpoint's own classes, so the two agree through the contract rather than through a shared code generator. Two defects it found were its own and the estate caught both: `SAME_ACCOUNT` for naming one account on both legs, and `ORA-02290` for inventing a transfer reference where `TransferRefType` declares `TB[0-9]{18}` and the Oracle schema enforces the same pattern a second time | Met at this tier |
