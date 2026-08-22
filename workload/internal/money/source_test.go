@@ -65,9 +65,12 @@ var floatIsJustified = map[string]string{
 	// int64 of minor units that nothing divides.
 	"cmd/workload-ceiling/main.go": "throughput per second, mean latency and lock wait per posting are rates and durations; the transfer amount is an int64 constant and no arithmetic touches it",
 
-	// WP-24b. The migration exercise measures how long a lock was held; nothing in it reads an
-	// amount, because a posting's value is not something the exercise looks at.
+	// WP-24b. The migration exercise measures how long a lock was held; the soak measures how a
+	// table grows. Counts, seconds and bytes throughout, and neither reads an amount - what grows
+	// here is the record of a movement rather than the movement.
 	"internal/migration/migration.go": "how long the migration took, in seconds, which a JSON capture carries as a number; nothing here reads a posting, let alone its amount",
+	"internal/soak/growth.go":         "rows, bytes and dead tuples over time, and the difference between two of them - every figure is a count or a size, and the tables it counts rows in are the ones nothing prunes rather than the ones holding money",
+	"cmd/workload-soak/main.go":       "it reads the ledger's own posted count out of two scrapes and prints growth per business day and per posting; it prints no amount, because what grows here is the record of a movement rather than the movement",
 }
 
 // The driver half of this module does two things the engine may not, and each is named per file

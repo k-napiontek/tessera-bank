@@ -86,6 +86,12 @@ var driver = []string{
 	"internal/reconcile",
 	"internal/runner",
 	"internal/seeding",
+	// WP-24b. It performs no I/O - cmd/workload-soak hands it the scrapes - so it would pass the
+	// engine list on its imports. It is driver by **role**, exactly as internal/slo beside it is: a
+	// report on what one estate's tables did over time is not part of the model either driver
+	// executes, and WP-25 shares the model rather than this. F-80 is the open note that this list
+	// classifies by role rather than by purity, and this entry neither widens nor closes it.
+	"internal/soak",
 	// WP-23. It performs no I/O either - cmd/workload-report hands it bytes, exactly as cmd hands
 	// the model bytes - but it is classified by role rather than by purity, like internal/reconcile
 	// beside it: both read what a run produced, and neither describes what a bank's day looks like.
