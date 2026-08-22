@@ -6,10 +6,11 @@
 > WP-20, WP-21, WP-22, WP-23, WP-24a, WP-24b, WP-24c, WP-25a, WP-25b, WP-25c and WP-25d. Every work
 > package adds its own as part of the Definition of Done, and WP-18 verifies that none is missing.
 >
-> This list had gone stale by four packages before WP-25d, which is **F-87** for the second time: it
-> is maintained by hand and nothing checks it, so it is wrong exactly when somebody trusts it. It is
-> corrected here rather than added to, because adding one section while leaving four unlisted would
-> be knowingly writing a false line into the document the correction belongs in.
+> This list had gone stale by four packages before WP-25d - WP-24b, WP-25a, WP-25b and WP-25c all had
+> sections and none was listed - which is **F-87** happening again: it is maintained by hand, nothing
+> checks it, and it is therefore wrong exactly when somebody trusts it. Corrected here rather than
+> added to, because adding one section while leaving four unlisted would be knowingly writing a false
+> line into the document the correction belongs in.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
 

@@ -9,6 +9,75 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-25d is done and merged** ([#84](https://github.com/k-napiontek/tessera-bank/pull/84), `92ee669`),
+> and **the whole estate has been driven at once for the first time.** Four containers and four
+> processes across two JDKs: PostgreSQL, Kafka, the ledger and the gateway, Oracle and Tomcat 8.5, and
+> `integration/esb-adapter` between them on JDK 8. A Kafka event the ledger's own outbox relay
+> published became canonical XML by XSLT, a SOAP call to a 2011 monolith and a COMP-3 record for 1995 -
+> **24 023 times**, against `FourEraTransferIT`'s one. Nothing in `integration/`, `legacy/`,
+> `mainframe/` or `services/` changed.
+>
+> **WP-25 is complete, and `REQ-PERF-008` is met across all three strata.** That was the last
+> requirement blocking **WP-18**, which is now the only actionable package - and it still carries
+> `## Tasks` as "To be detailed before execution", so the next session details it before executing it.
+>
+> **The narrow part of this estate is the era boundary, and the narrow part of the era boundary is the
+> write to 1995 rather than the call to 2011.** The movement-file append went from **1.1 ms to 15.0 ms
+> across one day** - 13.6x - and throughput with it, from 169.5 transfers a second to 56.8, while the
+> leg containing the SOAP call stayed flat at about 3 ms. `MovementFileWriter` scans every record
+> already in the file before it appends, so the cost of writing transfer *n* is proportional to *n*.
+> Its own javadoc had said *"unmeasured for anything larger"* than a bank day; this is that
+> measurement, and at a bank day's worth the scan is already the dominant cost of crossing four
+> decades. **It is not a defect** - the scan is what makes the file its own unique constraint under
+> ADR 0014, which is what makes at-least-once delivery safe without a second source of truth about the
+> bank's money. The estate pays for that guarantee in a cost that grows all day, and nothing had
+> priced it.
+>
+> **The backlog formed at the adapter and the control says why.** Peak consumer lag **7 983** against
+> `fraud-scoring`'s **59** on the same topic, both draining to zero: one partition, no declared
+> listener concurrency and a synchronous SOAP call make the whole hop a single thread whatever the
+> tiers either side can do. The arithmetic closes to the record - 24 706 money movements, 683 of them
+> hold placements and releases that publish nothing, **24 023 published, 24 023 crossed, 48 046 records
+> written and 24 023 held by the system of record**.
+>
+> **The estate refused the first run outright, and three correct rules were why.** **F-105**:
+> `internal/client.Fund` dates an opening credit D-1 and `ledger-loader`'s `openingDate()` agrees,
+> because an opening balance is the position the day starts from; `workload-legacy-seed` opened
+> stratum-1 accounts on D; and `customer-master` declares `CHECK (last_movement_date >= opened_date)`.
+> Every funding posting was refused `ORA-02290` by a 2011 check constraint. Each rule is right on its
+> own and nothing had ever run them against each other.
+>
+> **The refusal never reached the dead-letter path, and both components were behaving as designed.**
+> **F-106**: `CustomerMasterEndpoint` deliberately lets a `DataAccessException` become a generic SOAP
+> fault rather than the declared `ServiceFault`, reasoning that a caller "cannot tell 'your request was
+> wrong' from 'we are broken'". The hole is where the **database** raises the data error: a check
+> violation is technical by exception type and permanent in fact, so the message was never
+> acknowledged, retried at Spring Kafka's default **zero backoff**, the partition blocked by design,
+> and nothing was ever dead-lettered. `REQ-INT-005` says undeliverable messages are captured rather
+> than lost; for this class they are neither, and the matrix says so rather than claiming the row.
+>
+> **The two writers of `MOVEMENT.DAT` disagree and nothing declares it (F-107).**
+> `generate.py --from-stream` writes a record for `createTransfer` only; the real adapter writes one
+> for everything that publishes a `TransferPosted`, **hold captures and reversals included**. WP-25c
+> classified exactly that population as *timing* on the grounds that it never reaches the master -
+> true of the batch path, false of the ESB path - and ADR 0015 makes the movement file the
+> reconciliation cut-off, so which writer produced it changes what `batch/recon` calls drift.
+>
+> **Three more findings, and two of them are about being unable to see.** **F-108**: `esb-adapter` has
+> no actuator, no Micrometer and no web starter, so stratum 2 is as unobservable as stratum 1 - F-100
+> one tier up, and the estate now has two adjacent tiers with no telemetry with the four-era hop
+> running entirely inside them. **F-109**: the dead-letter topic is created by nothing and
+> `DeadLetterRecorder` never awaits its send. **F-110**: `CLAUDE.md` says the requirement catalogue
+> holds 60 ids and it holds 68 - the fifth occurrence of F-17.
+>
+> **The instrument had to be fixed twice before it measured anything, and one of those was silent.**
+> The sampler asked the broker on the wrong listener - `estate-up.sh` advertises PLAINTEXT as the host
+> port and its own comment warns about it - so every call failed, the readiness probe took thirteen
+> minutes to give up and then carried on anyway, and the report printed **"peak consumer lag 0"**
+> because that is the zero value of a field nothing had filled in. A reader would have taken it for a
+> hop that never fell behind. `internal/hop` now refuses to state a lag it did not measure, and the
+> readiness probe fails loudly instead of falling through.
+
 > **WP-25c is done and merged** ([#82](https://github.com/k-napiontek/tessera-bank/pull/82), `5ea7c43`),
 > and **the two cores have been held against each other under a day's
 > load for the first time.** WP-16 built the reconciliation and proved it against a spine of three
@@ -888,7 +957,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `2ca45dd` |
 | [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Done` | [#82](https://github.com/k-napiontek/tessera-bank/pull/82) | `5ea7c43` |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP volume against stratum 1 | 1 | 21, 10b | `Done` | [#80](https://github.com/k-napiontek/tessera-bank/pull/80) | `be14902` |
-| [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `In progress` | | |
+| [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `Done` | [#84](https://github.com/k-napiontek/tessera-bank/pull/84) | `92ee669` |
 
 ## Critical path
 
@@ -1015,7 +1084,7 @@ becomes its own change when picked up.
 | F-84 | WP-24a | **The outbox relay's throughput does not scale with the compression dial.** It ships at most `LEDGER_OUTBOX_BATCH` rows every `LEDGER_OUTBOX_INTERVAL_MS` - 100 every 500 ms by default - and both are fixed in wall clock while `--scale` and `--compress` move the demand. A day at 720x hands the relay money movements roughly seven hundred times faster than the bank ever would: after a 45-second day it **published the run's last 12 888 events in 1 minute 14 seconds**. In real time the bank offers about 0.28 postings a second against a ceiling of 200 and never approaches it, so this is a property of the fixture's dial rather than a defect in the ledger - but any report quoting outbox lag has to say which of the two it is describing. `workload-run --drain` now waits for the relay rather than guessing at a settle. | Open |
 | F-85 | WP-24a | **`SCN-CLOCK-SKEW` cannot be produced by this fixture**, and the injector reports it as uninjected with the reason rather than pretending. PostgreSQL stamps the value date from its own `now()`, so moving the two sides of the batch boundary apart means moving a clock inside a container - which needs `SYS_TIME` on a kernel shared with the host, or a faketime shim built into the image. Both change the estate's runtime rather than the fixture, which WP-24's Constraint refuses. Skewing the driver's own date is not the same condition: the ledger stamps its value dates itself, so a driver that thinks it is Tuesday changes nothing but its own idempotency keys. A finding about the estate's testability, recorded rather than worked around. | Open |
 | F-86 | WP-24a **Closed by WP-24c, and the scorer was never the problem.** `signatures.sh` pins its seven business dates and `TB_KEEP_DATA=1` keeps `idempotency_record`, so the **second** sweep against a ledger replayed every request instead of posting it: the ledger's own counter recorded 9 080 replays and 0 postings, no journal entry was written, no outbox row followed, nothing reached the broker and `tessera_fraud_scoring_seconds_count 0.0` was a correct reading of a run in which nothing happened. The surviving evidence came from that second sweep. `workload-run --require-postings` now refuses to finish such a run; the scorer scored 8 411 events in six of the seven captures and 8 409 in the seventh. || **Closed** by WP-24c |
-| F-87 | WP-24a | **The traceability matrix's "Partially filled" banner had gone stale twice over**, listing packages up to WP-21 while sections for WP-22 and WP-23 already existed below it. Corrected here because WP-24a was adding a section to the same file, and leaving the banner wrong would have made the document contradict itself on one page. It is the third occurrence of exactly what **F-17** describes - a repository-level document belonging to no package - and it strengthens the case for the check F-17 proposes rather than for a fourth manual correction. | Open |
+| F-87 | WP-24a | **The traceability matrix's "Partially filled" banner had gone stale twice over**, listing packages up to WP-21 while sections for WP-22 and WP-23 already existed below it. Corrected here because WP-24a was adding a section to the same file, and leaving the banner wrong would have made the document contradict itself on one page. It is the third occurrence of exactly what **F-17** describes - a repository-level document belonging to no package - and it strengthens the case for the check F-17 proposes rather than for a fourth manual correction.  **It went stale again before WP-25d**, by four packages this time - WP-24b, WP-25a, WP-25b and WP-25c all had sections and none was listed - and was corrected there for the same reason: a package adding a section cannot leave the banner saying its section does not exist. Nothing has been built that checks it, which is the finding rather than any one correction. | Open |
 | F-88 | WP-24c | **`datasetDigest` is not reproducible across two loads of the same seed**, while everything the ledger itself checks is. Two loads at the same commit with the same flags - `--customers 150000 --from 2025-09-01 --to 2026-08-21 --seed 42 --scale 0.0017` - produced an identical `chainHead` over 3 804 955 audit rows, identical `rowsWritten` at 14 491 832 and all fifteen counters identical, and two different digests: `04f66dda...` and `37ef7dc3...`. Nothing in `services/ledger-loader`, `workload/internal/population`, the day contract or `workload-dataset` changed between the capture and the re-load, and `workload-dataset` emits a byte-identical NDJSON stream across two runs (checked). `LoadedLedgerTest.theSameStreamLoadedTwiceProducesTheSameDigest` loads **one fixed stream** twice in a single process, so it cannot see a difference arising inside a full load. The field is what a run manifest carries to name the ledger a run was taken against, so a digest that changes per load cannot serve that purpose - and the audit chain head, which does not change, is the stronger statement anyway. WP-22's. **WP-24b loaded it twice more and it has now produced a wrong number in a committed document.** The two further loads gave `cafa90ad` and `35747263`, so five loads at identical flags have produced four distinct digests, with `rowsWritten`, `chainLength` and `chainHead` identical in every one. `workload/baselines/README.md` claimed `with-broker`'s digest was `35747263` while the manifest committed beside it says `04f66dda` - the README was written from one load and the manifest from the re-load F-86 forced, and nothing noticed. The line is corrected. That a value seen in WP-24a recurred in a WP-24b load also says the digest is **one of a limited set of outcomes** rather than a per-run random number, which narrows the search to an ordering among a few writers. | Open |
 | F-89 | WP-24c | **`edge/api-gateway` strips `Idempotency-Replayed`, so F-71's fix does not work end to end.** The ledger sets the header (`IdempotencyFilter.REPLAYED_HEADER`), `contracts/openapi/ledger-core.yaml` documents it on all five money-moving operations, the workload driver reads it (`internal/client/send.go`) and the workload's own proxy is tested to preserve it - but `internal/proxy/proxy.go`'s `responseHeaders` allowlist does not carry it, and `relay()` copies only allowlisted names. Through the gateway the driver can therefore never see a replay. Measured: a run the ledger recorded entirely as `replayed` was reported by the driver as `posted 9080`, and only the reconciliation cross-check noticed - seeding is worse, counting every replayed funding as `Funded` with nothing to cross-check it against. F-71 chose the header precisely so that neither side would guess; one hop in between guesses by omission. **WP-24b measured the seeding half from the other side and it is exactly as bad as this entry says.** On the soak's second day the driver reported `opened 384, already open 36976, funded 37359, replayed 0`, and the ledger wrote **417 new `idempotency_record` rows** between that day's opening scrape and the previous day's closing one - not 37 359. The fundings were replays, correctly, because a funding key is `wl-funding-<accountRef>` and an account is funded once; the driver simply cannot see it. The table growth is the cross-check seeding was said to lack. | Open |
 | F-90 | WP-24c | **The shared schema check catches an object that omits `additionalProperties`, not one that sets it to `true`.** `check_schema_cannot_carry_personal_data` tests `"additionalProperties" not in sub`, so `"additionalProperties": true` planted on `$defs/scenario` passes while the same object with the key deleted fails. The omission is the realistic accident and the check is doing its job for it, but the claim the traceability matrix makes - *every object closed* - is asserted by one of the two forms only. Found while re-demonstrating the fifteen planted faults against the revised catalogue. WP-20's checker, shared by three contracts. | Open |
