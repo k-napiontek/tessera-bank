@@ -79,3 +79,4 @@ date for a real one.
 | [0015](0015-the-cut-off-is-the-movement-file.md) | The cut-off is the movement file, not a timestamp | Accepted | 2026-08-20 |
 | [0016](0016-the-workload-model-is-open.md) | The workload model is open, and latency is measured from the intended send time | Accepted | 2026-08-20 |
 | [0017](0017-a-scenario-is-its-own-contract.md) | A failure scenario is its own contract, not a field on the day model | Accepted | 2026-08-22 |
+| [0018](0018-the-migration-exercise-is-not-a-condition.md) | The migration under traffic is an exercise of its own, not a catalogue condition | Accepted | 2026-08-22 |
