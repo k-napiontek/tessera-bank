@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1024-failure-injection` (24a), `feat/TB-1024-migration-and-soak` (24b), `feat/TB-1024-signatures` (24c) |
 | **Stratum** | - |
 | **Depends on** | WP-23 |
-| **Status** | `Done` - 24a and 24c. `Not started` - 24b |
+| **Status** | `Done` - 24a, 24b and 24c |
 
 ## Objective
 
@@ -38,6 +38,15 @@ nothing here currently allows anyone to attempt.
   out of 24a on 2026-08-22 - see the note under Tasks)*
 - Runbook updates where an observed signature contradicts a documented one. *(both halves, each in
   the change that observed the contradiction)*
+
+**24b added one document rather than correcting one.** There was no runbook, section or procedure
+anywhere in this repository for applying a schema change, so
+[`schema-change-under-traffic.md`](../../runbooks/schema-change-under-traffic.md) fills a gap rather
+than correcting a claim - and every figure on it was measured by the exercise rather than reasoned
+about. [ADR 0018](../../governance/adr/0018-the-migration-exercise-is-not-a-condition.md) records why
+the migration is an exercise of its own rather than an eighth entry in `TB-SCENARIOS-V1`: the
+catalogue digest covers the whole catalogue, so an eighth entry would have made all seven of WP-24c's
+committed captures unreportable.
 
 ## Out of scope
 
@@ -270,13 +279,13 @@ The half that satisfies each box is named, because two pull requests cannot both
 - [x] Each signature is compared against a baseline captured under the same manifest. *(24c)*
 - [x] A scenario is declarable, checkable and injectable, and the estate can show one. *(24a)*
 - [x] A recorded normal exists for the extended fixture, at full WP-22 volume. *(24a)*
-- [ ] A migration is applied under traffic, and the lock it takes and the latency it caused are
+- [x] A migration is applied under traffic, and the lock it takes and the latency it caused are
       recorded. *(24b)*
-- [ ] A soak run demonstrates unbounded growth in the two tables F-28 names, with figures. *(24b)*
+- [x] A soak run demonstrates unbounded growth in the two tables F-28 names, with figures. *(24b)*
 - [x] Every runbook claim that observation contradicted is corrected. *(24c done; 24b re-checks it)*
 - [x] No component was changed to make a fault injectable, or the change is recorded as a finding.
       *(24a; 24b and 24c re-check it)*
-- [ ] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
+- [x] Checked against [`../../ways-of-working/definition-of-done.md`](../../ways-of-working/definition-of-done.md).
 
 ## Verification
 

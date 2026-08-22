@@ -1,0 +1,195 @@
+{
+  "variant": "concurrent",
+  "table": "posting",
+  "index": "posting_exercise_ix",
+  "historyTable": "workload_exercise_concurrent_history",
+  "statement": "CREATE INDEX CONCURRENTLY posting_exercise_ix ON posting (currency, amount_minor);",
+  "image": "flyway/flyway:9.22.3-alpine",
+  "tookSeconds": 8.846688583,
+  "flywayOutput": "WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested\nWARNING: This version of Flyway is out of date. Upgrade to Flyway 13.3.0: https://rd.gt/3rXiSlV\n\nFlyway Community Edition 9.22.3 by Redgate\nSee release notes here: https://rd.gt/416ObMi\n\nDatabase: jdbc:postgresql://localhost:5432/tessera (PostgreSQL 16.15)\nWARNING: Flyway upgrade recommended: PostgreSQL 16.15 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 15.\nSchema history table \"public\".\"workload_exercise_concurrent_history\" does not exist yet\nSuccessfully validated 1 migration (execution time 00:00.059s)\nCreating Schema History table \"public\".\"workload_exercise_concurrent_history\" with baseline ...\nSuccessfully baselined schema with version: 0\nCurrent version of schema \"public\": 0\nMigrating schema \"public\" to version \"1 - posting exercise ix\" [non-transactional]\nSuccessfully applied 1 migration to schema \"public\", now at version v1 (execution time 00:04.455s)\nA Flyway report has been generated here: /flyway/report.html",
+  "locks": {
+    "samples": 28,
+    "maxWaiting": 12,
+    "modesGranted": [
+      "AccessShareLock",
+      "RowExclusiveLock",
+      "ShareUpdateExclusiveLock"
+    ],
+    "modesQueued": [],
+    "ownLockMode": "ShareUpdateExclusiveLock",
+    "lockHeldFrom": "15:32:12.605",
+    "lockHeldTo": "15:32:16.688",
+    "samplesWithTheLockHeld": 14,
+    "maxWaitingWhileHeld": 6,
+    "samples_raw": [
+      {
+        "at": "15:32:08.399",
+        "waiting": 6,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:08.734",
+        "waiting": 12,
+        "grantedOnTable": "RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:09.075",
+        "waiting": 9,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:09.388",
+        "waiting": 0,
+        "grantedOnTable": "RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:09.719",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:10.030",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:10.359",
+        "waiting": 5,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:10.678",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:10.996",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:11.319",
+        "waiting": 0,
+        "grantedOnTable": "",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:11.635",
+        "waiting": 0,
+        "grantedOnTable": "RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:11.946",
+        "waiting": 1,
+        "grantedOnTable": "RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:12.275",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:12.605",
+        "waiting": 0,
+        "grantedOnTable": "ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:12.913",
+        "waiting": 0,
+        "grantedOnTable": "ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:13.223",
+        "waiting": 0,
+        "grantedOnTable": "RowExclusiveLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:13.538",
+        "waiting": 0,
+        "grantedOnTable": "ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:13.857",
+        "waiting": 1,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:14.170",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:14.490",
+        "waiting": 6,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:14.809",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:15.121",
+        "waiting": 0,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:15.427",
+        "waiting": 0,
+        "grantedOnTable": "ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:15.741",
+        "waiting": 5,
+        "grantedOnTable": "RowExclusiveLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:16.057",
+        "waiting": 0,
+        "grantedOnTable": "ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:16.371",
+        "waiting": 0,
+        "grantedOnTable": "RowExclusiveLock,ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:16.688",
+        "waiting": 0,
+        "grantedOnTable": "ShareUpdateExclusiveLock",
+        "queuedOnTable": ""
+      },
+      {
+        "at": "15:32:17.010",
+        "waiting": 1,
+        "grantedOnTable": "AccessShareLock,RowExclusiveLock",
+        "queuedOnTable": ""
+      }
+    ]
+  }
+}

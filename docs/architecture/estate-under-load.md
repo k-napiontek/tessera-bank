@@ -1,7 +1,7 @@
 # The estate under load - what it actually does
 
 **Produced by [WP-23](../plan/wp/WP-23-slo-baseline.md), extended by
-[WP-24a and WP-24c](../plan/wp/WP-24-failure-injection.md)** | Companion to
+[WP-24a, WP-24b and WP-24c](../plan/wp/WP-24-failure-injection.md)** | Companion to
 [`query-plans-at-volume.md`](query-plans-at-volume.md)
 
 Three measurements and what they mean. The first answers **F-27**, open since WP-09: how much money
@@ -337,7 +337,225 @@ single-use against a given ledger and did not say so.** `workload-run --require-
 to finish a run the ledger answered entirely out of its idempotency store, and `signatures.sh` passes
 it. The scorer scored 8 411 events in six of the seven runs here and 8 409 in the seventh.
 
-## 6. What changed because of these numbers
+## 6. A migration under traffic costs what the keyword says it costs, and nothing else
+
+The exercise `master-plan.md` names as a reason this repository exists. The same index is built twice
+against a live ledger, part way through a compressed bank day, with requests in flight - once with
+`CREATE INDEX` and once with `CREATE INDEX CONCURRENTLY`. Everything else is held identical, so the
+difference between the two captures is a consequence of that one keyword and of nothing else.
+
+> Both runs: 338 052 accounts, **6 616 226 postings**, 3 804 955 audit rows. Scale 0.002, 720x over
+> branch hours, seed 42, the migration applied 15 s into a 45 s day. `CREATE INDEX
+> posting_exercise_ix ON posting (currency, amount_minor)` - deliberately **not** the index F-24 asks
+> for, and dropped again afterwards. darwin arm64, 10 cores. Captured by WP-24b in
+> [`migration/blocking/`](../../workload/baselines/migration/blocking/) and
+> [`migration/concurrent/`](../../workload/baselines/migration/concurrent/).
+
+| | `CREATE INDEX` | `CREATE INDEX CONCURRENTLY` |
+|---|---:|---:|
+| The whole Flyway invocation | 7.794 s | 8.847 s |
+| Its own lock, held for | **2.25 s** `ShareLock` | **3.5 s** `ShareUpdateExclusiveLock` |
+| Queued on `posting` while held | **`RowExclusiveLock`** | **nothing** |
+| Backends waiting on a lock, peak | **16** | 6 |
+| Requests served in the window | 4 756 | 7 601 |
+| `SLO-GATEWAY-AVAILABILITY` | 1.00000 **met** | 1.00000 **met** |
+| `SLO-GATEWAY-LATENCY` | **0.85744 missed** | 1.00000 **met** |
+| Run latency, mean | **251 ms** | 5 ms |
+| Run latency, p95 | **2.5 s** | 25 ms |
+| Run latency, max | 2.835 s | 146 ms |
+| Peak requests in flight | **2 255** | 72 |
+| Money movements posted | 9 132 | 9 132 |
+
+Both runs posted **exactly 9 132** money movements and reconciled exactly against the ledger's own
+count. The same demand, the same ledger, the same day. One of them cost the customer nothing.
+
+### The safer migration is the slower one, and that is the entire lesson
+
+`CREATE INDEX CONCURRENTLY` took **56% longer** to do the same work - 3.5 s of lock against 2.25 s -
+and it is the one to reach for. It makes two passes over the table and waits for every transaction
+that could see it, which is precisely what buys it a lock nothing has to queue behind. A team
+optimising for how long the migration takes would pick the wrong one, confidently, and the number
+they optimised would be the number that does not matter.
+
+### The pool is not what failed; it is what filled
+
+**Sixteen backends were waiting on a lock in every one of the nine samples the `ShareLock` was
+held** - not fifteen, not seventeen, and not a number that varied. `LEDGER_DB_POOL` defaults to 16.
+The lock did not exhaust the pool by leaking connections; it stopped every connection that touched
+`posting` from finishing, and the pool filled behind it in under 250 ms and stayed exactly full until
+the lock was released.
+
+That is visible in [`locks.txt`](../../workload/baselines/migration/blocking/locks.txt) as a step
+function - `0`, `2`, `3`, `7`, then **`16` nine times running**, then `10` - and it is why the lock
+samples are committed rather than summarised. A mean over that window would read as eight.
+
+### The ledger stayed met while the bank was blocked, for the third time
+
+The whole-day objectives, out of each capture's own `report.txt`:
+
+| Objective, over the whole day | `CREATE INDEX` | `CREATE INDEX CONCURRENTLY` |
+|---|---:|---:|
+| `SLO-LEDGER-MOVEMENT-SUCCESS` | met, 1.00000 | met, 1.00000 |
+| `SLO-LEDGER-POSTING-LATENCY` | **met**, 0.99321, 0.68x budget | met, 1.00000, untouched |
+| `SLO-GATEWAY-AVAILABILITY` | met, 1.00000 | met, 1.00000 |
+| `SLO-GATEWAY-LATENCY` | **missed, 0.88996, 11.0x budget** | met, 1.00000, untouched |
+
+**The ledger's own latency objective was met while every writer in the bank was queued behind a table
+lock**, and it was met with a third of its error budget spent. That is the same mechanism F-83
+recorded for `SCN-POOL-EXHAUSTION` and the runbook now carries: `ledger_posting_latency_seconds`
+times the posting the ledger performed, not the wait to get a connection to perform it in. A posting
+that never started is not a slow posting - it is not a posting at all, and a ratio computed from a
+component's own counters cannot fall while the component is not counting.
+
+Two independent conditions, two packages apart, producing the same misleading signal is no longer a
+coincidence. **A ledger-side latency objective is not a detector for anything that blocks the ledger
+from being asked.**
+
+### The customer sees latency, again, and never an error
+
+`SLO-GATEWAY-AVAILABILITY` is **1.00000 in both runs**. Not one request failed while every writer in
+the bank was queued behind a table lock. This is the ninth and tenth independent confirmation of what
+WP-24c's seven signatures found: *every condition arrives at the edge as latency and never as
+failure*. A migration that caused no 5xx is not evidence that it caused nothing, and any runbook step
+of the form "check for errors after the migration" is a step that will pass while the bank is
+unusable.
+
+What it cost instead: `SLO-GATEWAY-LATENCY` at 0.85744 against a 0.99 target **over the migration
+window**, which is 14.3x its error budget - and 0.88996, **11.0x the budget, over the whole day**, a
+day in which the lock was held for 5% of the wall clock. The concurrent run spent none of it.
+
+### A 2.25-second lock is a 45-second event
+
+The blocking run's *whole-day* mean latency is **251 ms against the concurrent run's 5 ms** - fifty
+times worse - and its peak in-flight count is **2 255 against 72**. The lock lasted 5% of the day and
+moved the day's average by a factor of fifty, because an open-model driver goes on offering requests
+at the rate the model says while nothing is being answered. The queue it built took the rest of the
+day to drain, which is why p95 is 2.5 s in a run whose median request took 5 ms.
+
+This is the shape an operator should expect and the reason a maintenance window is not the same
+exercise: the cost of a lock is not its duration, it is its duration multiplied by the arrival rate.
+
+### What this does and does not license
+
+It licenses the claim that on **this** estate, at this volume, a plain `CREATE INDEX` over six and a
+half million rows costs about two and a quarter seconds of blocked writes and fourteen error budgets,
+and the concurrent form costs nothing measurable. It does not license a duration for any other
+statement, any other table or any other machine - the lock modes in the table above transfer, and the
+seconds do not.
+
+It also does not license *"migrations are safe if you use CONCURRENTLY"*. `CREATE INDEX CONCURRENTLY`
+is one statement of many, it can fail and leave an invalid index behind, and it cannot run inside a
+transaction - which is where the next section's trap comes from.
+
+### The trap that hangs rather than fails
+
+**`CREATE INDEX CONCURRENTLY` under Flyway never returns unless
+`flyway.postgresql.transactional.lock=false` is set.** Flyway holds its schema-history lock on a
+second connection, in an open transaction, for the length of the migration; `CREATE INDEX
+CONCURRENTLY` waits for every transaction that could see the table to finish, including that one.
+Neither ever gives up. There is no error and no timeout, and the estate goes on serving normally
+throughout - measured here, with the statement `active` on `wait_event_type = Lock` and Flyway's own
+session `idle in transaction` beside it, until it was killed.
+
+**The setting that looks like the fix is not the fix.** Flyway 9 already detects that the statement
+cannot run in a transaction and runs it non-transactionally unprompted - it prints
+`[non-transactional]` either way - so `executeInTransaction=false` changes nothing here and is
+deliberately not shipped. A team that sets it, sees the hang persist and concludes the problem lies
+elsewhere is the failure this paragraph exists to prevent. It is written up in
+[`schema-change-under-traffic.md`](../runbooks/schema-change-under-traffic.md), which is a page this
+repository did not have at all before WP-24b.
+
+---
+
+## 7. F-28 has its figures, and the retention period is still not an engineering question
+
+**F-28 has been open since WP-09 and has never had a number.** Nothing prunes `outbox_record` or
+`idempotency_record`: a dispatched outbox row and a completed idempotency record are kept forever,
+because a retention sweep needs a retention period and that is a regulatory question rather than an
+engineering one. `V5__idempotency.sql` anticipated it in a comment and nothing has answered it since.
+This measures the cost of not answering it. It does not answer it.
+
+> Twelve business dates, 2026-03-02 to 2026-03-17, driven back to back against **one** ledger loaded
+> to 300 001 accounts and 6 616 226 postings. Scale 0.002, 720x over branch hours, seed 42, one boot
+> per date with `TB_KEEP_DATA=1`. darwin arm64, 10 cores. Captured by WP-24b in
+> [`soak/`](../../workload/baselines/soak/); the report is regenerable from the twelve daily scrapes
+> committed beside it.
+
+| | `outbox_record` | `idempotency_record` |
+|---|---:|---:|
+| At the end of day 1 | 48 786 rows, 64.9 MiB | 49 557 rows, 54.8 MiB |
+| At the end of day 12 | 158 627 rows, 199.4 MiB | 166 143 rows, 210.0 MiB |
+| Added over the soak | **+109 841 rows, +134.4 MiB** | **+116 586 rows, +155.2 MiB** |
+| Per driven day | 8 010 rows | 8 704 rows |
+| **Per posting** | **0.93 rows** | **1.01 rows** |
+| Bytes per row | **1 283 B** | **1 396 B** |
+
+**The per-posting figure is the only one that transfers.** Rows per day moves with `--scale` and
+`--compress` and describes this fixture's dial; rows *per posting* is a property of the ledger. At
+roughly **one row in each table per money movement, at about 1.3 kB each**, a bank posting a million
+movements a day writes about **2.6 GB a day into two tables nothing ever deletes from**. That
+sentence is arithmetic on a measured rate, and it is the sentence a retention policy has to be argued
+against.
+
+The report prints the same arithmetic over 250 business days - 2.0 million rows and 2.6 GiB for the
+outbox, 2.2 million rows and 1.3 GiB for idempotency - in a section headed *"Extrapolation, which is
+not a measurement"*, because it is not one.
+
+### The row counts are estimates, and they went backwards twice
+
+`ledger_db_live_tuples` is `n_live_tup` from `pg_stat_user_tables`, which the statistics collector
+maintains and autovacuum corrects. `ledger_db_table_size_bytes` is `pg_table_size`, which is exact.
+Presenting both as measurements would overstate half the report, so it does not.
+
+This is not a theoretical caveat. Between two consecutive closing scrapes the estimate **fell** - by
+2 rows once and by 763 rows once - in a table nothing deletes from, and between two others it rose by
+19 140 in a gap where the fixture wrote a few hundred. Those are the collector revising itself, not
+the ledger losing or gaining rows. Anyone reading a row count off this metric to the unit is reading
+an estimate as a measurement.
+
+### The rate is taken from inside each day, and that is a correction
+
+A run **seeds before it drives** - it opens and funds the accounts the day will use - and the driver
+takes its opening scrape after seeding. So everything the fixture writes to set a day up falls
+between one day's closing scrape and the next day's opening one. A rate taken from consecutive
+closing scrapes would divide row growth that includes the fixture's setup by a posting count that
+excludes it, and the first version of this report did exactly that. Both figures are now taken from
+each day's own two scrapes.
+
+The trajectory row above is the other claim and deliberately still includes everything, because it is
+what the table actually holds.
+
+### Autovacuum did not run on `balance` at all, and that is the expected state
+
+`balance` is the table every posting rewrites in place - one row per account, an `UPDATE` per leg -
+so it is a pure dead-tuple generator against a fixed live count. Dead tuples climbed monotonically
+across all twelve days, **4 913 to 16 187**, and `ledger_db_autovacuums` never moved.
+
+That reads like a collector falling behind and it is not. Autovacuum triggers at
+`autovacuum_vacuum_threshold + scale_factor x live_tuples`, which on this estate's defaults is
+`50 + 0.2 x 336 956` - about **67 400 dead tuples**. Twelve business days reached under a quarter of
+it. The collector was never asked.
+
+The general form is worth carrying: **the default threshold scales with the whole table rather than
+with the part being written**, so a large table with a small hot working set vacuums rarely, however
+hard that working set is hit. `balance` is exactly that shape, and "dead tuples climbing while
+nothing vacuums" is its normal rather than its incident. The report says so rather than reporting a
+collector that is losing, and `ledger-observability.md` now carries the arithmetic.
+
+### What this does and does not license
+
+It licenses the growth rates **per posting** and the per-row sizes, which are properties of the
+schema and transfer to any volume. It does not license the per-day figures anywhere except at this
+fixture's dials, and it licenses nothing at all about a retention period - twelve days say nothing
+about what a regulator requires to be kept.
+
+It also does not license a claim that autovacuum keeps up on `balance`, because **the collector never
+ran**. A soak long enough to cross 67 400 dead tuples would answer that question; this one is not it,
+and the report says so in those words rather than reporting a healthy vacuum.
+
+---
+
+## 8. What changed because of these numbers
 
 - **F-69 is closed.** `workload-plan` warned above 2 000 requests a second, a round number named in
   its own comment as standing in for a figure nobody had. It is now **800**, which is where the two
@@ -349,6 +567,22 @@ it. The scorer scored 8 411 events in six of the seven runs here and 8 409 in th
 - **F-71 is closed.** A first `releaseHold` was counted as a replay by the ledger's own metric and by
   the driver, so a baseline recorded before fixing it would have carried a replay rate that was
   wrong in both accounts at once - and they agreed, so the reconciliation looked perfect.
+- **F-28 has figures and stays open.** One row in each unpruned table per money movement, at about
+  1.3 kB each. The retention period is still a regulatory question, and WP-24b did not invent one.
+- **This repository has a schema-change procedure for the first time**, and every claim on it was
+  measured rather than reasoned about -
+  [`schema-change-under-traffic.md`](../runbooks/schema-change-under-traffic.md).
+- **F-89 was confirmed from the other side.** The soak's second day reported `funded 37359,
+  replayed 0` while the ledger wrote 417 new idempotency rows. The fundings were replays, correctly -
+  a funding key is `wl-funding-<accountRef>` and an account is funded once - and the driver cannot
+  see it because the gateway strips the header. The table growth is the cross-check seeding lacked.
+- **F-88 has produced a wrong number in a committed document.** `workload/baselines/README.md`
+  claimed `with-broker`'s dataset digest was `35747263` while the manifest committed beside it says
+  `04f66dda`. Five loads at identical flags have now produced four distinct digests, with
+  `rowsWritten`, `chainLength` and `chainHead` identical in every one.
+- **Four new findings.** The catalogue digest's granularity (**F-91**), no `lock_timeout` anywhere
+  (**F-92**), no requirement about data growth or a change procedure (**F-93**), and the Flyway image
+  being amd64-only (**F-94**).
 
 ## Reproducing
 
@@ -362,13 +596,27 @@ bash workload/scripts/baseline.sh --out-name with-broker \
   --customers 150000 --from 2025-09-01 --to 2026-08-21 --date 2026-08-21
 
 bash workload/scripts/signatures.sh --baseline with-broker
+
+bash workload/scripts/migration.sh --baseline with-broker --variant both
+
+bash workload/scripts/soak.sh --days 12
 ```
 
-All three need Docker, a JDK 17 and Go; the last also needs uv, for the scorer. `--date` is pinned
+All of them need Docker, a JDK 17 and Go; every one from the baselines down also needs uv,
+for the scorer. `--date` is pinned
 because it has to be: left to the fixture it is today, and today has a weekday multiplier - a Friday
 is 1.2 and a Saturday 0.45, so the same command run at the weekend produces a third of the demand and
 a diff nobody should read as a regression. The `with-broker` capture takes about twelve minutes, most
 of it the load.
+
+`migration.sh` runs against the database a load left behind, the way `signatures.sh` does, and takes
+about six minutes for the first variant and four for the second - the difference is seeding, which
+opens 42 769 accounts the first time and finds them already open the second. `soak.sh` loads its own
+ledger and then drives 1 min 45 s per business date, so twelve dates is a little over half an hour
+with the load. **Do not edit either script while it is running**: bash reads a script incrementally,
+and an edit that shifts byte offsets under a running interpreter makes it resume mid-token. That is
+how WP-24b lost the report step of an otherwise complete soak, and re-running the report over the
+twelve committed captures was the whole of the repair.
 
 `signatures.sh` runs against the database `baseline.sh` leaves behind, and it is **single-use against
 it**: its seven business dates are pinned, so a second sweep over the same ledger replays instead of

@@ -1,0 +1,18 @@
+-- V1 - the exercise's index, built the way that blocks writes.
+--
+-- This migration exists to be applied while money is moving, and for no other reason. It is the
+-- exercise's own, not the ledger's: it runs under its own Flyway history table and is dropped again
+-- afterwards, so services/ledger-persistence's migration set is untouched. A package that measures
+-- should not leave a permanent row in the schema history of the thing it measured.
+--
+-- **It is deliberately not the index F-24 asks for.** F-24 wants value_date and posted_at
+-- denormalised onto posting so the statement's keyset seek can be served by one composite index.
+-- That is a change to the shape of WP-07's schema, WP-22's Out of scope forbade it, and taking it
+-- here would answer half of an open finding as a side effect of a lock measurement. An index on
+-- (currency, amount_minor) is real work over every row in the table and answers no question any
+-- query in this estate asks, which is exactly what an exercise needs.
+--
+-- Plain CREATE INDEX takes a SHARE lock on the table. SHARE blocks every writer and lets readers
+-- through, so the bank goes on answering balance enquiries while every transfer queues. See the
+-- concurrent variant beside this one for the same index built the other way.
+CREATE INDEX posting_exercise_ix ON posting (currency, amount_minor);

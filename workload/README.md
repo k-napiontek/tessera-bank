@@ -146,8 +146,50 @@ inside that line it is reported as **NOT INJECTED** with the reason and the run 
 that is a finding about the component's testability rather than a failure of the fixture -
 `SCN-CLOCK-SKEW` is the one that comes out that way, and its entry in the catalogue says so.
 
-`workload/scripts/signatures.sh` runs all seven against a committed baseline. **Its output is not
-committed yet** - see [`baselines/README.md`](baselines/README.md) and **F-86**.
+`workload/scripts/signatures.sh` runs all seven against a committed baseline, and WP-24c committed
+what they produced - one directory per condition under
+[`baselines/signatures/`](baselines/signatures/). **The sweep is single-use against a given ledger**:
+its business dates are pinned, so a second sweep over the same database replays every request instead
+of posting it. Load the ledger again in between. That is **F-86**, and `--require-postings` is the
+control it produced.
+
+## Changing the schema while it runs
+
+The single most DevOps thing in this repository, and the one `master-plan.md` names as a reason it
+exists. A Flyway migration is applied to the ledger **part way through a bank day**, with requests in
+flight, and both the lock it takes and what the customer experienced while it held it are recorded:
+
+```bash
+bash workload/scripts/migration.sh --baseline with-broker --variant both
+```
+
+Two variants of one index - `CREATE INDEX` and `CREATE INDEX CONCURRENTLY` - because a lock duration
+recorded on its own has nothing to be read against. The migrations are
+[the exercise's own](migrations/), never the ledger's: they run under their own Flyway history table
+and are dropped again, so `services/ledger-persistence`'s migration set is untouched.
+[ADR 0018](../docs/governance/adr/0018-the-migration-exercise-is-not-a-condition.md) records why this
+is an exercise rather than an eighth entry in the scenario catalogue, and
+[the runbook](../docs/runbooks/schema-change-under-traffic.md) records what it taught - including the
+one setting whose absence makes a concurrent migration hang forever rather than fail.
+
+The moment is taken from the driver announcing the day rather than from a sleep, the lock is sampled
+from `pg_locks` **while it is held** rather than looked for afterwards, and the customer-side figures
+are computed over a scrape pair bracketing the **migration** rather than the run - the run's own
+brackets cover a whole compressed day and would average a lock held for seconds into nothing.
+
+## Soaking it
+
+The same day over many business dates against one ledger, to put figures on what nothing prunes:
+
+```bash
+bash workload/scripts/soak.sh --days 12
+```
+
+`outbox_record` and `idempotency_record` are never pruned - **F-28** has said so since WP-09, and a
+retention period is a regulatory question rather than an engineering one. This does not answer it; it
+measures the cost of not answering it. `workload-soak` reports growth **per business day and per
+posting**, because the first moves with `--scale` and `--compress` and only the second transfers to a
+real day, and it prints the yearly figure in a section that says it is an extrapolation.
 
 ## Reporting a run afterwards
 
@@ -216,6 +258,8 @@ prints the two points instead and says which objective needed the window.
 | `internal/reconcile` | Reads the ledger's own counter and lines it up against the driver's. |
 | `internal/scenario` | Decodes the failure-scenario catalogue and refuses a condition the injector cannot run. |
 | `internal/injector` | Applies one declared condition to the running estate at its moment, holds it, reverts it. |
+| `internal/migration` | Applies a schema migration mid-day and samples `pg_locks` while it is held. |
+| `internal/soak` | Turns a series of daily scrapes into what the tables nothing prunes actually did. |
 | `internal/proxy` | The controllable hop in front of the ledger. Transparent until a condition sets a delay. |
 | `internal/hardware` | One sentence naming what a measurement was taken on, so two of them can be compared. |
 | `internal/purity` | The architectural controls. The engine reaches no `net`, `os` or database driver; the driver is named. |
@@ -224,6 +268,8 @@ prints the two points instead and says which objective needed the window.
 | `cmd/workload-run` | Executes a day against a running estate. |
 | `cmd/workload-report` | Turns a manifest and two scrapes into a report. Reads no clock, so a rerun is byte-identical. |
 | `cmd/workload-ceiling` | A saturation ladder straight at the ledger, with no gateway, to find where throughput stops rising. |
+| `cmd/workload-migration` | Migrates a live ledger mid-run, and records the lock and the customer-side latency. |
+| `cmd/workload-soak` | Turns a soak's daily captures into a growth report. Reads no clock either. |
 
 ## What the driver does that a load tool does not
 
