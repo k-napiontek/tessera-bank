@@ -238,6 +238,19 @@ inject_when_the_day_starts() {
         sleep 1
     done
     sleep 1
+    # **Seeding's own movements are rotated out before the day starts, and this is not tidiness.**
+    # The ledger is seeded by real transfers, so the ESB writes a MOVEREC for every one of them - and
+    # the master the cycle starts from already opens each account at its funded balance. Give the
+    # cycle both and it applies the opening balance twice: the first run of this exercise put all
+    # 16 001 accounts in VALUE_DRIFT at exactly 2x the opening figure. two-phase-day.sh never met it
+    # because its movement file comes from generate.py, which writes the day's transfers and no
+    # funding. This is F-107's asymmetry - the two writers of MOVEMENT.DAT do not agree about what
+    # belongs in it - in the one place it changes an answer.
+    if [ -f "$MOVEMENT_FILE" ]; then
+        mv "$MOVEMENT_FILE" "$WORK/MOVEMENT-seeding.DAT"
+        echo "  rotated $(( $(wc -c <"$WORK/MOVEMENT-seeding.DAT") / 120 )) seeding records out of the day's file"
+    fi
+
     docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" >/dev/null 2>&1 <<SQL
 UPDATE account SET opened_date = DATE '$NEXT_DATE' WHERE account_ref = '$VICTIM';
 COMMIT;
@@ -331,6 +344,10 @@ run_cycle_and_reconcile() {
 step "Day D: the overnight cycle and the morning reconciliation"
 run_cycle_and_reconcile "$D_COMPACT" "$WORK/files/ACCTMAST.DAT" "day D"
 
+# --skip-seeding, because the accounts are already open and funded from day D. Without it the driver
+# tries to open them again under an idempotency key derived from the new date, every open conflicts
+# with the account that is already there, and the run dies with "14226 of 14227 accounts could not be
+# prepared" - which is what the first run of this exercise did.
 step "Day D+1: the same estate, one day later"
 set +e
 TB_DB_PORT="$DB_PORT" TB_DB_CONTAINER="$DB_CONTAINER" \
@@ -338,7 +355,7 @@ TB_KAFKA_PORT="$KAFKA_PORT" TB_KAFKA_CONTAINER="$KAFKA_CONTAINER" \
 TB_KEEP_DATA=1 TB_KEEP_BROKER=1 TB_MANIFEST="$WORK/manifest-d1.json" TB_SCRAPE_DIR="$WORK/d1" \
     bash "$ROOT/workload/scripts/estate-up.sh" \
         --date "$NEXT_DATE" --seed "$SEED" --scale "$SCALE" --compress "$COMPRESS" \
-        --window "$WINDOW" --customers "$CUSTOMERS" --require-postings \
+        --window "$WINDOW" --customers "$CUSTOMERS" --require-postings --skip-seeding \
     >"$WORK/day-d1.log" 2>&1
 day_d1=$?
 set -e
