@@ -38,6 +38,16 @@ BUSINESS_DATE=2026-03-02
 SEED=42
 VOLUMES=(200000:0.02 600000:0.06 1200000:0.2)
 
+# **F-101, and this script is the reason the override exists.** The stream carries
+# seeding.Opening's figure - twenty times the largest transfer the model can draw, 10 000 000 000
+# minor units - and the master's treasury balance is the account count times that. ACCT-BOOKED-BAL
+# is PIC S9(13)V99 COMP-3 and holds fifteen digits, so the stream's own figure caps the master at
+# 99 999 accounts, below the smallest volume below. This is the figure WP-25a's three measurements
+# were taken at, kept so they stay reproducible, and generate.py reports the substitution on every
+# run. A master written this way does not reconcile against a driven ledger - see WP-25c, which is
+# the run that needs them to agree.
+OPENING_BALANCE=100000000
+
 usage() {
     sed -n '3,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
@@ -79,7 +89,8 @@ for volume in "${VOLUMES[@]}"; do
         bash -c "go -C '$ROOT/workload' run ./cmd/workload-dataset \
             --model '$MODEL' --from '$BUSINESS_DATE' --to '$BUSINESS_DATE' \
             --seed '$SEED' --scale '$scale' --customers '$customers' 2>'$run/dataset.err' \
-            | python3 '$ROOT/mainframe/data/generate.py' --from-stream --out '$run'" \
+            | python3 '$ROOT/mainframe/data/generate.py' --from-stream --out '$run' \
+              --opening-balance $OPENING_BALANCE" \
         > "$run/generate.txt" 2>"$run/generate-rss.txt"
     cat "$run/generate.txt"
 
