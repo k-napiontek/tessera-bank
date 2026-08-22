@@ -9,7 +9,7 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-24c is done and merged** ([#73](https://github.com/k-napiontek/tessera-bank/pull/73), `PENDING`),
+> **WP-24c is done and merged** ([#73](https://github.com/k-napiontek/tessera-bank/pull/73), `7716b8b`),
 > and **the estate has been degraded on purpose and judged against what was predicted.** Seven
 > conditions were injected against the recorded normal, one run each, and every capture is committed
 > under `workload/baselines/signatures/` with the scrapes it was judged from. **Not one verdict reads
@@ -617,7 +617,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Done` | [#68](https://github.com/k-napiontek/tessera-bank/pull/68) | `eb48dc0` |
 | [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `27d843d` |
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Not started` | | |
-| [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `PENDING` |
+| [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
 | [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11b | `Not started` | | |
 
 ## Critical path
