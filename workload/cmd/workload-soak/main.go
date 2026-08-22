@@ -95,6 +95,7 @@ func read(capture string) ([]soak.Day, soak.Conditions, error) {
 
 		days = append(days, soak.Day{
 			BusinessDate: record.BusinessDate,
+			Before:       string(before),
 			Scrape:       string(scrape),
 			Postings:     postings,
 		})

@@ -43,14 +43,23 @@ var Grown = []string{"outbox_record", "idempotency_record"}
 // posting, so under churn it is a pure dead-tuple generator against a fixed live count.
 var Churned = []string{"balance"}
 
-// Day is one business date of the soak: what the ledger's scrape said at the end of it, and how many
-// money movements the run posted.
+// Day is one business date of the soak: the ledger's scrapes at each end of the driven day, and how
+// many money movements the ledger posted between them.
+//
+// **Both ends, not just the closing one, and that is a correctness fix rather than a convenience.**
+// A run seeds before it drives - it opens and funds the accounts the day will use - and the driver
+// takes its opening scrape *after* seeding. So the growth between two consecutive closing scrapes
+// includes the next day's seeding, while the postings counted between that day's own two scrapes do
+// not. Dividing the first by the second would inflate rows-per-posting by whatever the fixture's
+// setup wrote, which on this fixture is several times the day itself. Numerator and denominator are
+// therefore both taken from the same bracket.
 type Day struct {
 	BusinessDate string
+	Before       string
 	Scrape       string
-	// Postings is the run's own count of what the ledger posted, or zero when it did not report one.
-	// Zero means unknown and is never treated as none: a rate divided by a count nobody supplied
-	// would be invented.
+	// Postings is the ledger's own count of what it posted between Before and Scrape, or zero when
+	// the run did not report one. Zero means unknown and is never treated as none: a rate divided by
+	// a count nobody supplied would be invented.
 	Postings float64
 }
 
@@ -66,8 +75,16 @@ type Series struct {
 	Name string  `json:"table"`
 	Rows []Point `json:"points"`
 
-	RowsPerDay  float64 `json:"rowsPerDay"`
-	BytesPerDay float64 `json:"bytesPerDay"`
+	// The absolute trajectory: where the table stood at the end of the first day and the last, and
+	// how much of that the soak as a whole added. This includes everything the fixture did, seeding
+	// and all, because it is what the table actually holds.
+	AddedOverTheSoak float64 `json:"rowsAddedOverTheSoak"`
+	BytesOverTheSoak float64 `json:"bytesAddedOverTheSoak"`
+
+	// The rate, from each day's own bracket rather than from consecutive closing scrapes, so that
+	// the fixture's seeding is outside both the numerator and the denominator.
+	RowsPerDay  float64 `json:"rowsPerDrivenDay"`
+	BytesPerDay float64 `json:"bytesPerDrivenDay"`
 	// RowsPerPosting is zero when no run reported its postings, which means unknown rather than none.
 	RowsPerPosting float64 `json:"rowsPerPosting"`
 }
@@ -114,30 +131,32 @@ func Measure(days []Day) (Growth, error) {
 	}
 
 	growth := Growth{Days: len(days)}
-	// The denominator for rows per posting: the work done *between* the first and last readings,
-	// which excludes the first day - its postings are already inside the first scrape. Zero means
-	// the runs did not report their postings, which is unknown rather than none.
-	postings := postingsAfterTheFirstDay(days)
+	postings := 0.0
+	for _, day := range days {
+		postings += day.Postings
+	}
 
 	for _, table := range Grown {
 		series := Series{Name: table}
+		driven, drivenBytes := 0.0, 0.0
 		for _, day := range days {
 			series.Rows = append(series.Rows, Point{
 				BusinessDate: day.BusinessDate,
 				Rows:         gauge(day.Scrape, liveTuples, table),
 				Bytes:        gauge(day.Scrape, tableSize, table),
 			})
+			// What the driven day itself added, from that day's own two scrapes.
+			driven += gauge(day.Scrape, liveTuples, table) - gauge(day.Before, liveTuples, table)
+			drivenBytes += gauge(day.Scrape, tableSize, table) - gauge(day.Before, tableSize, table)
 		}
-		// End to end over the soak rather than a least-squares fit. The series these tables produce
-		// is a running total that only rises, so the first and last points carry the whole of it,
-		// and a fitted slope would differ only by weighting days nothing distinguishes. Every point
-		// is kept beside it, so a reader who wants the shape has it.
-		spans := float64(len(days) - 1)
 		first, last := series.Rows[0], series.Rows[len(series.Rows)-1]
-		series.RowsPerDay = (last.Rows - first.Rows) / spans
-		series.BytesPerDay = (last.Bytes - first.Bytes) / spans
+		series.AddedOverTheSoak = last.Rows - first.Rows
+		series.BytesOverTheSoak = last.Bytes - first.Bytes
+
+		series.RowsPerDay = driven / float64(len(days))
+		series.BytesPerDay = drivenBytes / float64(len(days))
 		if postings > 0 {
-			series.RowsPerPosting = (last.Rows - first.Rows) / postings
+			series.RowsPerPosting = driven / postings
 		}
 		growth.Tables = append(growth.Tables, series)
 	}
@@ -160,21 +179,6 @@ func Measure(days []Day) (Growth, error) {
 		growth.Churns = append(growth.Churns, churn)
 	}
 	return growth, nil
-}
-
-// postingsAfterTheFirstDay is the denominator for rows per posting.
-//
-// The numerator is the growth between the first and last scrapes, so the denominator has to be the
-// work done between them - which excludes the first day, whose postings are already inside the first
-// reading. Dividing by every day's postings would understate the rate by one day's worth, and the
-// error would shrink with the length of the soak, which is the sort of mistake that never looks
-// wrong.
-func postingsAfterTheFirstDay(days []Day) float64 {
-	total := 0.0
-	for _, day := range days[1:] {
-		total += day.Postings
-	}
-	return total
 }
 
 // gauge reads one table's value of one metric out of a scrape.
@@ -254,18 +258,23 @@ func (g Growth) Render(conditions Conditions) string {
 	for _, series := range g.Tables {
 		first, last := series.Rows[0], series.Rows[len(series.Rows)-1]
 		fmt.Fprintf(&out, "  %s\n", series.Name)
-		fmt.Fprintf(&out, "    %-22s %.0f rows, %s\n", "at "+first.BusinessDate, first.Rows, bytes(first.Bytes))
-		fmt.Fprintf(&out, "    %-22s %.0f rows, %s\n", "at "+last.BusinessDate, last.Rows, bytes(last.Bytes))
-		fmt.Fprintf(&out, "    %-22s %+.0f rows, %s\n", "over the soak",
-			last.Rows-first.Rows, signedBytes(last.Bytes-first.Bytes))
-		fmt.Fprintf(&out, "    %-22s %.0f rows, %s\n", "per business day", series.RowsPerDay, bytes(series.BytesPerDay))
+		fmt.Fprintf(&out, "    %-26s %.0f rows, %s\n", "at "+first.BusinessDate, first.Rows, bytes(first.Bytes))
+		fmt.Fprintf(&out, "    %-26s %.0f rows, %s\n", "at "+last.BusinessDate, last.Rows, bytes(last.Bytes))
+		fmt.Fprintf(&out, "    %-26s %+.0f rows, %s\n", "added over the whole soak",
+			series.AddedOverTheSoak, signedBytes(series.BytesOverTheSoak))
+		fmt.Fprintf(&out, "    %-26s %.0f rows, %s\n", "per driven day",
+			series.RowsPerDay, bytes(series.BytesPerDay))
 		if series.RowsPerPosting > 0 {
-			fmt.Fprintf(&out, "    %-22s %.2f rows\n", "per posting", series.RowsPerPosting)
+			fmt.Fprintf(&out, "    %-26s %.2f rows\n", "per posting", series.RowsPerPosting)
 		} else {
-			fmt.Fprintf(&out, "    %-22s not reported by these runs\n", "per posting")
+			fmt.Fprintf(&out, "    %-26s not reported by these runs\n", "per posting")
 		}
 		fmt.Fprintf(&out, "\n")
 	}
+	fmt.Fprintf(&out, "  \"Added over the whole soak\" includes what the fixture wrote to set each day\n")
+	fmt.Fprintf(&out, "  up - it opens and funds the accounts a day will use before driving it. \"Per\n")
+	fmt.Fprintf(&out, "  driven day\" and \"per posting\" are taken from each day's own two scrapes, which\n")
+	fmt.Fprintf(&out, "  bracket the day and not its setup, so the fixture's seeding is outside both.\n\n")
 
 	fmt.Fprintf(&out, "== What is rewritten in place ==\n")
 	for _, churn := range g.Churns {

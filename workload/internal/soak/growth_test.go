@@ -35,9 +35,9 @@ func format(v float64) string {
 
 func TestASeriesIsReadPerTableAcrossEveryDay(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2)},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3)},
-		{BusinessDate: "2026-06-03", Scrape: scrape(3000, 12000, 30, 3e6, 4)},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 0, 0, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2)},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 10, 1e6, 3), Scrape: scrape(2000, 8000, 20, 2e6, 3)},
+		{BusinessDate: "2026-06-03", Before: scrape(2000, 8000, 20, 2e6, 4), Scrape: scrape(3000, 12000, 30, 3e6, 4)},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -63,8 +63,8 @@ func TestASeriesIsReadPerTableAcrossEveryDay(t *testing.T) {
 // could not tell a rising series from a flat one would not be evidence of anything.
 func TestAFlatSeriesIsNotReportedAsGrowth(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2)},
-		{BusinessDate: "2026-06-02", Scrape: scrape(1000, 4000, 10, 1e6, 9)},
+		{BusinessDate: "2026-06-01", Before: scrape(1000, 4000, 10, 1e6, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2)},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 10, 1e6, 9), Scrape: scrape(1000, 4000, 10, 1e6, 9)},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -78,7 +78,7 @@ func TestAFlatSeriesIsNotReportedAsGrowth(t *testing.T) {
 // A soak needs at least two points to have a slope at all, and one point presented as a rate is the
 // most confident wrong answer this report could produce.
 func TestASingleDayIsRefusedRatherThanExtrapolatedFrom(t *testing.T) {
-	_, err := Measure([]Day{{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2)}})
+	_, err := Measure([]Day{{BusinessDate: "2026-06-01", Before: scrape(0, 0, 0, 0, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2)}})
 	if err == nil {
 		t.Fatal("a rate was computed from one point")
 	}
@@ -92,8 +92,8 @@ func TestASingleDayIsRefusedRatherThanExtrapolatedFrom(t *testing.T) {
 // quoting the first alone would be F-84 in another costume.
 func TestGrowthIsReportedPerPostingAsWellAsPerDay(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 500},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3), Postings: 500},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 5, 0, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 500},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 10, 1e6, 3), Scrape: scrape(2000, 8000, 20, 2e6, 3), Postings: 500},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -101,14 +101,14 @@ func TestGrowthIsReportedPerPostingAsWellAsPerDay(t *testing.T) {
 	}
 	outbox := growth.Table("outbox_record")
 	if outbox.RowsPerPosting != 2 {
-		t.Errorf("rows per posting read as %g; 1000 rows arrived over 500 postings", outbox.RowsPerPosting)
+		t.Errorf("rows per posting read as %g; 1000 rows arrived over 500 postings each day", outbox.RowsPerPosting)
 	}
 }
 
 func TestPostingsAreNotInventedWhenTheRunDidNotReportThem(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2)},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3)},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 0, 0, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2)},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 10, 1e6, 3), Scrape: scrape(2000, 8000, 20, 2e6, 3)},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -124,8 +124,8 @@ func TestPostingsAreNotInventedWhenTheRunDidNotReportThem(t *testing.T) {
 // finding from one where the collector is running and losing.
 func TestDeadTuplesAreReadAgainstTheAutovacuumCount(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 100, 1e6, 2)},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 900, 2e6, 2)},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 50, 0, 2), Scrape: scrape(1000, 4000, 100, 1e6, 2)},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 100, 1e6, 2), Scrape: scrape(2000, 8000, 900, 2e6, 2)},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -148,8 +148,8 @@ func TestDeadTuplesAreReadAgainstTheAutovacuumCount(t *testing.T) {
 
 func TestAutovacuumKeepingPaceIsSaidSoRatherThanInferred(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 800, 1e6, 2)},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 120, 2e6, 7)},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 400, 0, 2), Scrape: scrape(1000, 4000, 800, 1e6, 2)},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 800, 1e6, 3), Scrape: scrape(2000, 8000, 120, 2e6, 7)},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -168,8 +168,8 @@ func TestAutovacuumKeepingPaceIsSaidSoRatherThanInferred(t *testing.T) {
 // a hurry. Renders it as its own labelled section rather than as another row in the table.
 func TestTheExtrapolationSaysThatItIsOne(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 500},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3), Postings: 500},
+		{BusinessDate: "2026-06-01", Before: scrape(500, 2000, 5, 5e5, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 500},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 10, 1e6, 3), Scrape: scrape(2000, 8000, 20, 2e6, 3), Postings: 500},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -193,8 +193,8 @@ func TestTheExtrapolationSaysThatItIsOne(t *testing.T) {
 // that presented both as measurements would be overstating half of itself.
 func TestTheRowCountIsLabelledAnEstimateAndTheSizeIsNot(t *testing.T) {
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2)},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3)},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 0, 0, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2)},
+		{BusinessDate: "2026-06-02", Before: scrape(1000, 4000, 10, 1e6, 3), Scrape: scrape(2000, 8000, 20, 2e6, 3)},
 	}
 	growth, err := Measure(days)
 	if err != nil {
@@ -206,38 +206,36 @@ func TestTheRowCountIsLabelledAnEstimateAndTheSizeIsNot(t *testing.T) {
 	}
 }
 
-// The numerator is the growth between the first and last scrapes, so the denominator has to be the
-// work done between them. Counting the first day's postings too would understate the rate by one
-// day's worth - an error that shrinks as the soak lengthens, which is the kind that never looks
-// wrong.
-func TestTheFirstDaysPostingsAreNotInTheDenominator(t *testing.T) {
+// The invariant the bracket change exists for.
+//
+// A run seeds before it drives - it opens and funds the accounts the day will use - and the driver
+// takes its opening scrape *after* seeding. So everything the fixture wrote to set the day up sits
+// between one day's closing scrape and the next day's opening one. Both figures below are taken from
+// each day's own two scrapes, so seeding is outside the numerator and the denominator alike; a rate
+// taken from consecutive closing scrapes would charge the ledger for the fixture's setup.
+func TestTheFixturesSeedingIsOutsideTheRateEntirely(t *testing.T) {
+	// Between day one closing at 1000 and day two opening at 40000, the fixture wrote 39000 rows
+	// setting the day up. Each driven day itself adds exactly 1000 over 500 postings.
 	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 999},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3), Postings: 500},
+		{BusinessDate: "2026-06-01", Before: scrape(0, 0, 5, 0, 2), Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 500},
+		{BusinessDate: "2026-06-02", Before: scrape(40000, 4000, 10, 4e7, 3), Scrape: scrape(41000, 8000, 20, 4.1e7, 3), Postings: 500},
 	}
 	growth, err := Measure(days)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 1000 new rows arrived over the 500 postings of the second day; the first day's 999 are
-	// already inside the opening reading.
-	if got := growth.Table("outbox_record").RowsPerPosting; got != 2 {
-		t.Errorf("rows per posting read as %g, wanted 2", got)
+	outbox := growth.Table("outbox_record")
+	if outbox.RowsPerDay != 1000 {
+		t.Errorf("rows per driven day read as %g; each day drove exactly 1000 and the fixture "+
+			"wrote 39000 more between them", outbox.RowsPerDay)
 	}
-}
-
-// A run that reported postings only for the day already inside the opening reading has told us
-// nothing about the growth that followed it.
-func TestPostingsOnTheFirstDayAloneDoNotProduceARate(t *testing.T) {
-	days := []Day{
-		{BusinessDate: "2026-06-01", Scrape: scrape(1000, 4000, 10, 1e6, 2), Postings: 500},
-		{BusinessDate: "2026-06-02", Scrape: scrape(2000, 8000, 20, 2e6, 3)},
+	if outbox.RowsPerPosting != 2 {
+		t.Errorf("rows per posting read as %g, wanted 2", outbox.RowsPerPosting)
 	}
-	growth, err := Measure(days)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := growth.Table("outbox_record").RowsPerPosting; got != 0 {
-		t.Errorf("a rate of %g was produced from postings that predate the growth it divides", got)
+	// The trajectory is the other claim, and it does include everything, because it is what the
+	// table actually holds.
+	if outbox.AddedOverTheSoak != 40000 {
+		t.Errorf("the soak's total growth read as %g; the table went from 1000 to 41000",
+			outbox.AddedOverTheSoak)
 	}
 }
