@@ -1,0 +1,49 @@
+# HELP tessera_fraud_decisions_total Decisions published, by outcome.
+# TYPE tessera_fraud_decisions_total counter
+# HELP tessera_fraud_score Distribution of the scores produced.
+# TYPE tessera_fraud_score histogram
+tessera_fraud_score_bucket{le="0.0"} 0.0
+tessera_fraud_score_bucket{le="100.0"} 0.0
+tessera_fraud_score_bucket{le="200.0"} 0.0
+tessera_fraud_score_bucket{le="300.0"} 0.0
+tessera_fraud_score_bucket{le="400.0"} 0.0
+tessera_fraud_score_bucket{le="500.0"} 0.0
+tessera_fraud_score_bucket{le="600.0"} 0.0
+tessera_fraud_score_bucket{le="700.0"} 0.0
+tessera_fraud_score_bucket{le="750.0"} 0.0
+tessera_fraud_score_bucket{le="850.0"} 0.0
+tessera_fraud_score_bucket{le="1000.0"} 0.0
+tessera_fraud_score_bucket{le="+Inf"} 0.0
+tessera_fraud_score_count 0.0
+tessera_fraud_score_sum 0.0
+# HELP tessera_fraud_score_created Distribution of the scores produced.
+# TYPE tessera_fraud_score_created gauge
+tessera_fraud_score_created 1.787408104288436e+09
+# HELP tessera_fraud_scoring_seconds How long scoring one event took, excluding the publish.
+# TYPE tessera_fraud_scoring_seconds histogram
+tessera_fraud_scoring_seconds_bucket{le="0.0005"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="0.001"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="0.005"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="0.01"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="0.05"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="0.1"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="0.5"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="1.0"} 0.0
+tessera_fraud_scoring_seconds_bucket{le="+Inf"} 0.0
+tessera_fraud_scoring_seconds_count 0.0
+tessera_fraud_scoring_seconds_sum 0.0
+# HELP tessera_fraud_scoring_seconds_created How long scoring one event took, excluding the publish.
+# TYPE tessera_fraud_scoring_seconds_created gauge
+tessera_fraud_scoring_seconds_created 1.7874081042884521e+09
+# HELP tessera_fraud_malformed_total Messages that could not be read as a transfer event and were skipped.
+# TYPE tessera_fraud_malformed_total counter
+tessera_fraud_malformed_total 0.0
+# HELP tessera_fraud_malformed_created Messages that could not be read as a transfer event and were skipped.
+# TYPE tessera_fraud_malformed_created gauge
+tessera_fraud_malformed_created 1.787408104288463e+09
+# HELP tessera_fraud_publish_failures_total Attempts to publish a decision that failed. The event is redelivered.
+# TYPE tessera_fraud_publish_failures_total counter
+tessera_fraud_publish_failures_total 0.0
+# HELP tessera_fraud_publish_failures_created Attempts to publish a decision that failed. The event is redelivered.
+# TYPE tessera_fraud_publish_failures_created gauge
+tessera_fraud_publish_failures_created 1.787408104288467e+09

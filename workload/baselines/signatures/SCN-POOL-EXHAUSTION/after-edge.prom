@@ -1,0 +1,305 @@
+# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 1.5625e-05
+go_gc_duration_seconds{quantile="0.25"} 4.1375e-05
+go_gc_duration_seconds{quantile="0.5"} 5.5459e-05
+go_gc_duration_seconds{quantile="0.75"} 7.7167e-05
+go_gc_duration_seconds{quantile="1"} 0.000595833
+go_gc_duration_seconds_sum 0.038679316
+go_gc_duration_seconds_count 633
+# HELP go_gc_gogc_percent Heap size target percentage configured by the user, otherwise 100. This value is set by the GOGC environment variable, and the runtime/debug.SetGCPercent function. Sourced from /gc/gogc:percent.
+# TYPE go_gc_gogc_percent gauge
+go_gc_gogc_percent 100
+# HELP go_gc_gomemlimit_bytes Go runtime memory limit configured by the user, otherwise math.MaxInt64. This value is set by the GOMEMLIMIT environment variable, and the runtime/debug.SetMemoryLimit function. Sourced from /gc/gomemlimit:bytes.
+# TYPE go_gc_gomemlimit_bytes gauge
+go_gc_gomemlimit_bytes 9.223372036854776e+18
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 724
+# HELP go_info Information about the Go environment.
+# TYPE go_info gauge
+go_info{version="go1.25.6"} 1
+# HELP go_memstats_alloc_bytes Number of bytes allocated in heap and currently in use. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_alloc_bytes gauge
+go_memstats_alloc_bytes 2.8623376e+07
+# HELP go_memstats_alloc_bytes_total Total number of bytes allocated in heap until now, even if released already. Equals to /gc/heap/allocs:bytes.
+# TYPE go_memstats_alloc_bytes_total counter
+go_memstats_alloc_bytes_total 2.291333392e+09
+# HELP go_memstats_buck_hash_sys_bytes Number of bytes used by the profiling bucket hash table. Equals to /memory/classes/profiling/buckets:bytes.
+# TYPE go_memstats_buck_hash_sys_bytes gauge
+go_memstats_buck_hash_sys_bytes 1.444374e+06
+# HELP go_memstats_frees_total Total number of heap objects frees. Equals to /gc/heap/frees:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_frees_total counter
+go_memstats_frees_total 2.4954257e+07
+# HELP go_memstats_gc_sys_bytes Number of bytes used for garbage collection system metadata. Equals to /memory/classes/metadata/other:bytes.
+# TYPE go_memstats_gc_sys_bytes gauge
+go_memstats_gc_sys_bytes 3.874096e+06
+# HELP go_memstats_heap_alloc_bytes Number of heap bytes allocated and currently in use, same as go_memstats_alloc_bytes. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_heap_alloc_bytes gauge
+go_memstats_heap_alloc_bytes 2.8623376e+07
+# HELP go_memstats_heap_idle_bytes Number of heap bytes waiting to be used. Equals to /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_idle_bytes gauge
+go_memstats_heap_idle_bytes 8.9407488e+07
+# HELP go_memstats_heap_inuse_bytes Number of heap bytes that are in use. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes
+# TYPE go_memstats_heap_inuse_bytes gauge
+go_memstats_heap_inuse_bytes 3.9108608e+07
+# HELP go_memstats_heap_objects Number of currently allocated objects. Equals to /gc/heap/objects:objects.
+# TYPE go_memstats_heap_objects gauge
+go_memstats_heap_objects 319927
+# HELP go_memstats_heap_released_bytes Number of heap bytes released to OS. Equals to /memory/classes/heap/released:bytes.
+# TYPE go_memstats_heap_released_bytes gauge
+go_memstats_heap_released_bytes 7.2851456e+07
+# HELP go_memstats_heap_sys_bytes Number of heap bytes obtained from system. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes + /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_sys_bytes gauge
+go_memstats_heap_sys_bytes 1.28516096e+08
+# HELP go_memstats_last_gc_time_seconds Number of seconds since 1970 of last garbage collection.
+# TYPE go_memstats_last_gc_time_seconds gauge
+go_memstats_last_gc_time_seconds 1.787408295111787e+09
+# HELP go_memstats_mallocs_total Total number of heap objects allocated, both live and gc-ed. Semantically a counter version for go_memstats_heap_objects gauge. Equals to /gc/heap/allocs:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_mallocs_total counter
+go_memstats_mallocs_total 2.5274184e+07
+# HELP go_memstats_mcache_inuse_bytes Number of bytes in use by mcache structures. Equals to /memory/classes/metadata/mcache/inuse:bytes.
+# TYPE go_memstats_mcache_inuse_bytes gauge
+go_memstats_mcache_inuse_bytes 12080
+# HELP go_memstats_mcache_sys_bytes Number of bytes used for mcache structures obtained from system. Equals to /memory/classes/metadata/mcache/inuse:bytes + /memory/classes/metadata/mcache/free:bytes.
+# TYPE go_memstats_mcache_sys_bytes gauge
+go_memstats_mcache_sys_bytes 15704
+# HELP go_memstats_mspan_inuse_bytes Number of bytes in use by mspan structures. Equals to /memory/classes/metadata/mspan/inuse:bytes.
+# TYPE go_memstats_mspan_inuse_bytes gauge
+go_memstats_mspan_inuse_bytes 782400
+# HELP go_memstats_mspan_sys_bytes Number of bytes used for mspan structures obtained from system. Equals to /memory/classes/metadata/mspan/inuse:bytes + /memory/classes/metadata/mspan/free:bytes.
+# TYPE go_memstats_mspan_sys_bytes gauge
+go_memstats_mspan_sys_bytes 2.17056e+06
+# HELP go_memstats_next_gc_bytes Number of heap bytes when next garbage collection will take place. Equals to /gc/heap/goal:bytes.
+# TYPE go_memstats_next_gc_bytes gauge
+go_memstats_next_gc_bytes 4.4097786e+07
+# HELP go_memstats_other_sys_bytes Number of bytes used for other system allocations. Equals to /memory/classes/other:bytes.
+# TYPE go_memstats_other_sys_bytes gauge
+go_memstats_other_sys_bytes 4.138442e+06
+# HELP go_memstats_stack_inuse_bytes Number of bytes obtained from system for stack allocator in non-CGO environments. Equals to /memory/classes/heap/stacks:bytes.
+# TYPE go_memstats_stack_inuse_bytes gauge
+go_memstats_stack_inuse_bytes 1.409024e+07
+# HELP go_memstats_stack_sys_bytes Number of bytes obtained from system for stack allocator. Equals to /memory/classes/heap/stacks:bytes + /memory/classes/os-stacks:bytes.
+# TYPE go_memstats_stack_sys_bytes gauge
+go_memstats_stack_sys_bytes 1.409024e+07
+# HELP go_memstats_sys_bytes Number of bytes obtained from system. Equals to /memory/classes/total:byte.
+# TYPE go_memstats_sys_bytes gauge
+go_memstats_sys_bytes 1.54249512e+08
+# HELP go_sched_gomaxprocs_threads The current runtime.GOMAXPROCS setting, or the number of operating system threads that can execute user-level Go code simultaneously. Sourced from /sched/gomaxprocs:threads.
+# TYPE go_sched_gomaxprocs_threads gauge
+go_sched_gomaxprocs_threads 10
+# HELP go_threads Number of OS threads created.
+# TYPE go_threads gauge
+go_threads 17
+# HELP process_cpu_seconds_total Total user and system CPU time spent in seconds.
+# TYPE process_cpu_seconds_total counter
+process_cpu_seconds_total 24.622841
+# HELP process_max_fds Maximum number of open file descriptors.
+# TYPE process_max_fds gauge
+process_max_fds 92160
+# HELP process_open_fds Number of open file descriptors.
+# TYPE process_open_fds gauge
+process_open_fds 624
+# HELP process_resident_memory_bytes Resident memory size in bytes.
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes 1.29974272e+08
+# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
+# TYPE process_start_time_seconds gauge
+process_start_time_seconds 1.787408214e+09
+# HELP process_virtual_memory_bytes Virtual memory size in bytes.
+# TYPE process_virtual_memory_bytes gauge
+process_virtual_memory_bytes 4.47282774016e+11
+# HELP process_virtual_memory_max_bytes Maximum amount of virtual memory available in bytes.
+# TYPE process_virtual_memory_max_bytes gauge
+process_virtual_memory_max_bytes 9.223372036854776e+18
+# HELP tessera_gateway_limiter_buckets Rate-limit buckets currently held. NaN when nothing has been bound to read them.
+# TYPE tessera_gateway_limiter_buckets gauge
+tessera_gateway_limiter_buckets 110688
+# HELP tessera_gateway_refusals_total Requests the edge refused itself, by reason. A ledger failure is not one of these.
+# TYPE tessera_gateway_refusals_total counter
+tessera_gateway_refusals_total{reason="unauthenticated"} 1
+# HELP tessera_gateway_request_duration_seconds How long the edge took to answer, including the ledger.
+# TYPE tessera_gateway_request_duration_seconds histogram
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.005"} 12598
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.01"} 12628
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.025"} 12653
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.05"} 12690
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.1"} 12722
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.25"} 12790
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="0.5"} 12907
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="1"} 13177
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="2.5"} 13972
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="5"} 13974
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="10"} 13974
+tessera_gateway_request_duration_seconds_bucket{route="accounts.balance",le="+Inf"} 13974
+tessera_gateway_request_duration_seconds_sum{route="accounts.balance"} 1682.2828548159985
+tessera_gateway_request_duration_seconds_count{route="accounts.balance"} 13974
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.005"} 1646
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.01"} 1656
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.025"} 1657
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.05"} 1662
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.1"} 1665
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.25"} 1674
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="0.5"} 1686
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="1"} 1722
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="2.5"} 1820
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="5"} 1820
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="10"} 1820
+tessera_gateway_request_duration_seconds_bucket{route="accounts.get",le="+Inf"} 1820
+tessera_gateway_request_duration_seconds_sum{route="accounts.get"} 209.11207378000015
+tessera_gateway_request_duration_seconds_count{route="accounts.get"} 1820
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.005"} 42697
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.01"} 42765
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.025"} 42768
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.05"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.1"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.25"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="0.5"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="1"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="2.5"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="5"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="10"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.open",le="+Inf"} 42769
+tessera_gateway_request_duration_seconds_sum{route="accounts.open"} 36.10842489599988
+tessera_gateway_request_duration_seconds_count{route="accounts.open"} 42769
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.005"} 5911
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.01"} 5940
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.025"} 5950
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.05"} 5963
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.1"} 5977
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.25"} 6008
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="0.5"} 6063
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="1"} 6183
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="2.5"} 6574
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="5"} 6574
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="10"} 6574
+tessera_gateway_request_duration_seconds_bucket{route="accounts.statement",le="+Inf"} 6574
+tessera_gateway_request_duration_seconds_sum{route="accounts.statement"} 804.8234271929994
+tessera_gateway_request_duration_seconds_count{route="accounts.statement"} 6574
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.005"} 16
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.01"} 100
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.025"} 116
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.05"} 116
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.1"} 120
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.25"} 120
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="0.5"} 121
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="1"} 122
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="2.5"} 127
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="5"} 127
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="10"} 127
+tessera_gateway_request_duration_seconds_bucket{route="holds.capture",le="+Inf"} 127
+tessera_gateway_request_duration_seconds_sum{route="holds.capture"} 12.345751749000003
+tessera_gateway_request_duration_seconds_count{route="holds.capture"} 127
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.005"} 727
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.01"} 731
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.025"} 732
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.05"} 733
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.1"} 734
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.25"} 740
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="0.5"} 745
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="1"} 759
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="2.5"} 794
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="5"} 794
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="10"} 794
+tessera_gateway_request_duration_seconds_bucket{route="holds.list",le="+Inf"} 794
+tessera_gateway_request_duration_seconds_sum{route="holds.list"} 74.25720009700008
+tessera_gateway_request_duration_seconds_count{route="holds.list"} 794
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.005"} 342
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.01"} 401
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.025"} 411
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.05"} 417
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.1"} 418
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.25"} 418
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="0.5"} 422
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="1"} 428
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="2.5"} 457
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="5"} 458
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="10"} 458
+tessera_gateway_request_duration_seconds_bucket{route="holds.place",le="+Inf"} 458
+tessera_gateway_request_duration_seconds_sum{route="holds.place"} 60.136855168999986
+tessera_gateway_request_duration_seconds_count{route="holds.place"} 458
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.005"} 220
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.01"} 236
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.025"} 240
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.05"} 241
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.1"} 243
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.25"} 244
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="0.5"} 246
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="1"} 249
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="2.5"} 263
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="5"} 263
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="10"} 263
+tessera_gateway_request_duration_seconds_bucket{route="holds.release",le="+Inf"} 263
+tessera_gateway_request_duration_seconds_sum{route="holds.release"} 27.47834103399999
+tessera_gateway_request_duration_seconds_count{route="holds.release"} 263
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.005"} 45918
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.01"} 49562
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.025"} 50180
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.05"} 50249
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.1"} 50288
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.25"} 50350
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="0.5"} 50399
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="1"} 50552
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="2.5"} 51029
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="5"} 51046
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="10"} 51046
+tessera_gateway_request_duration_seconds_bucket{route="transfers.create",le="+Inf"} 51046
+tessera_gateway_request_duration_seconds_sum{route="transfers.create"} 1155.1617401540018
+tessera_gateway_request_duration_seconds_count{route="transfers.create"} 51046
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.005"} 1837
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.01"} 1839
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.025"} 1847
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.05"} 1854
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.1"} 1859
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.25"} 1869
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="0.5"} 1892
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="1"} 1933
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="2.5"} 2028
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="5"} 2028
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="10"} 2028
+tessera_gateway_request_duration_seconds_bucket{route="transfers.get",le="+Inf"} 2028
+tessera_gateway_request_duration_seconds_sum{route="transfers.get"} 219.30580266199985
+tessera_gateway_request_duration_seconds_count{route="transfers.get"} 2028
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.005"} 2
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.01"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.025"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.05"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.1"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.25"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="0.5"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="1"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="2.5"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="5"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="10"} 6
+tessera_gateway_request_duration_seconds_bucket{route="transfers.reverse",le="+Inf"} 6
+tessera_gateway_request_duration_seconds_sum{route="transfers.reverse"} 0.039655500999999996
+tessera_gateway_request_duration_seconds_count{route="transfers.reverse"} 6
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.005"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.01"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.025"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.05"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.1"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.25"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="0.5"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="1"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="2.5"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="5"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="10"} 1
+tessera_gateway_request_duration_seconds_bucket{route="unrouted",le="+Inf"} 1
+tessera_gateway_request_duration_seconds_sum{route="unrouted"} 7.6167e-05
+tessera_gateway_request_duration_seconds_count{route="unrouted"} 1
+# HELP tessera_gateway_requests_total Requests served, by route class, method and status.
+# TYPE tessera_gateway_requests_total counter
+tessera_gateway_requests_total{method="GET",route="accounts.balance",status="200"} 13974
+tessera_gateway_requests_total{method="GET",route="accounts.get",status="200"} 1820
+tessera_gateway_requests_total{method="GET",route="accounts.statement",status="200"} 6574
+tessera_gateway_requests_total{method="GET",route="holds.list",status="200"} 794
+tessera_gateway_requests_total{method="GET",route="transfers.get",status="200"} 2028
+tessera_gateway_requests_total{method="GET",route="unrouted",status="401"} 1
+tessera_gateway_requests_total{method="POST",route="accounts.open",status="409"} 42769
+tessera_gateway_requests_total{method="POST",route="holds.capture",status="201"} 127
+tessera_gateway_requests_total{method="POST",route="holds.place",status="201"} 458
+tessera_gateway_requests_total{method="POST",route="holds.release",status="200"} 263
+tessera_gateway_requests_total{method="POST",route="transfers.create",status="200"} 42768
+tessera_gateway_requests_total{method="POST",route="transfers.create",status="201"} 8278
+tessera_gateway_requests_total{method="POST",route="transfers.reverse",status="201"} 6
