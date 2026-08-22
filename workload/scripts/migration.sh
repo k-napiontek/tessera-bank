@@ -41,9 +41,16 @@ RUN_SCALE=0.002
 COMPRESS=720
 WINDOW=branch-hours
 # How far into the compressed day the migration is applied. A branch-hours day at 720x is about 45
-# seconds of wall clock, so twenty seconds is the middle of it - past seeding, well before the
-# closing scrapes, with the arrival process at full rate.
-AFTER=20s
+# seconds of wall clock, so fifteen seconds is a third of the way in - past seeding, with the arrival
+# process at full rate, and with as much of the day as possible still to come.
+#
+# **Deliberately early, because a CREATE INDEX over 4.84 million rows may well outlast the day.** If
+# it does, the run's settle and drain windows are still ahead of it and the estate is still up, so
+# the closing scrapes are taken against a live gateway either way. The customer-side figures are
+# ratios of counter deltas, so an idle tail neither helps nor hurts them - what would ruin the
+# capture is the estate being torn down while the migration is still running, and this is the margin
+# against that.
+AFTER=15s
 
 # One pinned date per variant, both Fridays with the same 1.2 weekday multiplier the baseline used,
 # neither a payday and neither in a month's last two days. Pinned rather than derived at run time,

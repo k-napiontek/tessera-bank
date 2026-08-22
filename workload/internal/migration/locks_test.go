@@ -45,7 +45,7 @@ func TestTheSummaryKeepsThePeakAndEveryModeItSaw(t *testing.T) {
 		{At: "1", Waiting: 0, GrantedOnTable: "RowExclusiveLock", QueuedOnTable: ""},
 		{At: "2", Waiting: 40, GrantedOnTable: "ShareLock", QueuedOnTable: "RowExclusiveLock"},
 		{At: "3", Waiting: 2, GrantedOnTable: "RowExclusiveLock", QueuedOnTable: ""},
-	})
+	}, Blocking.OwnLockMode())
 	if summary.MaxWaiting != 40 {
 		t.Errorf("peak read as %d, and the average would have been 14", summary.MaxWaiting)
 	}
@@ -64,7 +64,7 @@ func TestTheSummaryKeepsThePeakAndEveryModeItSaw(t *testing.T) {
 // nobody will check, which is the same argument workload/baselines makes for committing the scrapes.
 func TestTheRenderedFileSaysWhatItsColumnsAre(t *testing.T) {
 	summary := summarise([]Sample{{At: "14:22:07.418", Waiting: 11,
-		GrantedOnTable: "ShareLock", QueuedOnTable: "RowExclusiveLock"}})
+		GrantedOnTable: "ShareLock", QueuedOnTable: "RowExclusiveLock"}}, Blocking.OwnLockMode())
 	rendered := summary.Render(Blocking, "posting")
 
 	if !strings.Contains(rendered, "# time | backends waiting on a lock") {
@@ -101,5 +101,61 @@ func TestTheSamplerReadsWhileTheMigrationRunsAndStopsWithIt(t *testing.T) {
 	}
 	if record.Locks.MaxWaiting != 11 {
 		t.Errorf("the reading did not reach the record: peak %d", record.Locks.MaxWaiting)
+	}
+}
+
+// The whole Flyway invocation and the lock it eventually takes are different durations, and the
+// difference is the client's own startup: `docker run` boots a container and a JVM before it sends a
+// statement, and on arm64 the published Flyway 9 image is amd64 and that startup is emulated. Timing
+// the migration by timing the command would charge the database for the client's boot.
+func TestTheLockWindowIsSeparatedFromTheWholeInvocation(t *testing.T) {
+	summary := summarise([]Sample{
+		{At: "14:22:00.000", Waiting: 0, GrantedOnTable: "RowExclusiveLock"},
+		{At: "14:22:00.250", Waiting: 1, GrantedOnTable: "RowExclusiveLock"},
+		{At: "14:22:00.500", Waiting: 12, GrantedOnTable: "RowExclusiveLock,ShareLock"},
+		{At: "14:22:00.750", Waiting: 31, GrantedOnTable: "ShareLock"},
+		{At: "14:22:01.000", Waiting: 0, GrantedOnTable: "RowExclusiveLock"},
+	}, Blocking.OwnLockMode())
+
+	if summary.SamplesHolding != 2 {
+		t.Errorf("the lock was held in %d samples, and ShareLock appears in exactly 2", summary.SamplesHolding)
+	}
+	if summary.HeldFrom != "14:22:00.500" || summary.HeldTo != "14:22:00.750" {
+		t.Errorf("the held window read as %s to %s", summary.HeldFrom, summary.HeldTo)
+	}
+	if summary.MaxWaiting != 31 {
+		t.Errorf("peak over the whole invocation read as %d", summary.MaxWaiting)
+	}
+	if summary.MaxWaitingWhileHeld != 31 {
+		t.Errorf("peak while the lock was held read as %d", summary.MaxWaitingWhileHeld)
+	}
+	if summary.HeldFor() != 2*sampleEvery {
+		t.Errorf("the held duration read as %s", summary.HeldFor())
+	}
+}
+
+// ShareUpdateExclusiveLock and ShareRowExclusiveLock both contain "ShareLock" as a substring in the
+// loose sense a careless matcher would use. A concurrent build reported as a blocking one would
+// invert the finding the whole exercise exists to produce.
+func TestAConcurrentBuildIsNotMistakenForABlockingOne(t *testing.T) {
+	samples := []Sample{
+		{At: "1", Waiting: 0, GrantedOnTable: "RowExclusiveLock,ShareUpdateExclusiveLock"},
+		{At: "2", Waiting: 0, GrantedOnTable: "RowExclusiveLock"},
+	}
+	if blocking := summarise(samples, Blocking.OwnLockMode()); blocking.SamplesHolding != 0 {
+		t.Errorf("a concurrent build was read as holding %s in %d samples",
+			Blocking.OwnLockMode(), blocking.SamplesHolding)
+	}
+	if concurrent := summarise(samples, Concurrent.OwnLockMode()); concurrent.SamplesHolding != 1 {
+		t.Errorf("the concurrent build's own lock was seen in %d samples", concurrent.SamplesHolding)
+	}
+}
+
+func TestEachVariantKnowsTheLockItTakes(t *testing.T) {
+	if Blocking.OwnLockMode() != "ShareLock" {
+		t.Errorf("a plain CREATE INDEX takes SHARE, not %s", Blocking.OwnLockMode())
+	}
+	if Concurrent.OwnLockMode() != "ShareUpdateExclusiveLock" {
+		t.Errorf("CREATE INDEX CONCURRENTLY takes SHARE UPDATE EXCLUSIVE, not %s", Concurrent.OwnLockMode())
 	}
 }

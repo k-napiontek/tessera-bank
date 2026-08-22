@@ -256,7 +256,7 @@ func (m *Migration) Apply(ctx context.Context) (Record, error) {
 	record.Took = m.settings.Now().Sub(began)
 	record.TookSeconds = record.Took.Seconds()
 	record.FlywayOutput = strings.TrimSpace(string(output))
-	record.Locks = summarise(stop())
+	record.Locks = summarise(stop(), m.settings.Variant.OwnLockMode())
 
 	if err != nil {
 		return record, fmt.Errorf("migration: running Flyway: %w\n%s", err, record.FlywayOutput)

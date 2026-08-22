@@ -241,10 +241,18 @@ func scrape(ctx context.Context, url string, timeout time.Duration) ([]byte, err
 // ADR 0012 exists to prevent.
 func report(opts options, record migration.Record) {
 	fmt.Printf("\n== What it did ==\n")
-	fmt.Printf("  applied in %s, %d lock samples\n", record.Took.Round(time.Millisecond), record.Locks.Samples)
+	// The two durations are printed together and labelled, because the difference between them is
+	// the Flyway container's own startup and reporting either one alone would be misleading.
+	fmt.Printf("  the whole Flyway invocation took   %s\n", record.Took.Round(time.Millisecond))
+	fmt.Printf("  %s was held for about        %s (%d of %d samples)\n",
+		record.Locks.OwnMode, record.Locks.HeldFor(), record.Locks.SamplesHolding, record.Locks.Samples)
+	if record.Locks.SamplesHolding > 0 {
+		fmt.Printf("    from %s to %s\n", record.Locks.HeldFrom, record.Locks.HeldTo)
+	}
 	fmt.Printf("  modes granted on %s   %v\n", record.Table, record.Locks.ModesGranted)
 	fmt.Printf("  modes queued for %s   %v\n", record.Table, record.Locks.ModesQueued)
-	fmt.Printf("  backends waiting on a lock, peak   %d\n", record.Locks.MaxWaiting)
+	fmt.Printf("  backends waiting, peak while held   %d\n", record.Locks.MaxWaitingWhileHeld)
+	fmt.Printf("  backends waiting, peak overall      %d\n", record.Locks.MaxWaiting)
 
 	readings, err := customerSide(opts)
 	if err != nil {
