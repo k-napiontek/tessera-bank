@@ -831,7 +831,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Done` | [#75](https://github.com/k-napiontek/tessera-bank/pull/75) | `0897d63` |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
 | [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `08e5fcd` |
-| [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Not started` | | |
+| [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `In progress` | | |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP volume against stratum 1 | 1 | 21, 10b | `Done` | [#80](https://github.com/k-napiontek/tessera-bank/pull/80) | `646ba46` |
 | [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `Not started` | | |
 
