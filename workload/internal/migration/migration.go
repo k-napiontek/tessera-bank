@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 	"time"
 )
@@ -325,8 +326,17 @@ func (m *Migration) Rollback(ctx context.Context) error {
 	return nil
 }
 
+// dayHasStarted reads the driver's own output.
+//
+// A run log that does not exist yet is a day that has not started, not a failure. The exercise is
+// launched before the estate is booted - it has to be, because it is what waits for the day - so for
+// the first half-minute or so of every run there is nothing to read. Treating that as an error would
+// make the exercise fail on every real invocation and succeed only when run by hand afterwards.
 func (m *Migration) dayHasStarted() (bool, error) {
 	text, err := readFile(m.settings.RunLog)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("migration: reading the run log: %w", err)
 	}

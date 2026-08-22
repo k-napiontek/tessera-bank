@@ -368,3 +368,31 @@ func TestWaitForMomentGivesUpRatherThanWaitingForever(t *testing.T) {
 		t.Fatal("waited for a day that never started without ever giving up")
 	}
 }
+
+// The exercise is started before the estate is booted, because it is the thing that waits for the
+// day. So for the first half-minute of every real run the driver's log does not exist yet, and
+// treating that as an error would make this work only when run by hand after the fact.
+func TestARunLogThatDoesNotExistYetIsADayThatHasNotStarted(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "run.log")
+
+	r := &recorder{}
+	s := settings(t, r)
+	s.RunLog = log
+	s.After = 0
+	polls := 0
+	s.Sleep = func(_ context.Context, _ time.Duration) error {
+		// The estate finishes booting on the third poll, and only then is there a file at all.
+		if polls++; polls == 3 {
+			return os.WriteFile(log, []byte("== Run ==\n"), 0o600)
+		}
+		return nil
+	}
+	m, err := New(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.WaitForMoment(context.Background()); err != nil {
+		t.Fatalf("a run log that had not been created yet was treated as a failure: %v", err)
+	}
+}
