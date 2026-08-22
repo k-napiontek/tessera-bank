@@ -317,6 +317,17 @@ bash "$ROOT/workload/scripts/movement-file-check.sh" \
     | tee "$OUT/constraint.txt"
 
 step "Done"
-cp "$ADAPTER_LOG" "$OUT/adapter.log" 2>/dev/null || true
-cp "$WORK/online.log" "$WORK/run-manifest.json" "$OUT/" 2>/dev/null || true
+# The evidence the report was derived from, and no more. The scrapes go in for the same reason every
+# other capture here carries them - the day can be read against the SLO catalogue months later.
+#
+# **The adapter's log deliberately does not.** It is the instrument the legs were timed from and it
+# is three lines per transfer: twelve megabytes for this run, against seventy-two kilobytes for the
+# largest file committed anywhere else under baselines/. hop.json carries every sample and the
+# per-slice summary derived from it, which is what a reader needs; the log itself stays in the work
+# directory and the path is printed below.
+for file in online.log run-manifest.json before.prom after.prom \
+            before-edge.prom after-edge.prom before-fraud.prom after-fraud.prom; do
+    cp "$WORK/$file" "$OUT/$file" 2>/dev/null || true
+done
 echo "  captures under $OUT"
+echo "  the adapter's log, not committed, is $ADAPTER_LOG"
