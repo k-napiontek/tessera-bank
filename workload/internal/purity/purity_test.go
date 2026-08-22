@@ -75,6 +75,10 @@ var driver = []string{
 	// anything in this module gets - and it is a fixture acting on a fixture, never on the estate's
 	// own configuration or code, which is the line WP-24's Constraint draws.
 	"internal/injector",
+	// WP-24b. It shells out to docker to run Flyway and reads pg_locks through psql, so it would
+	// fail the engine list on its imports alone - the second package in this module of which that is
+	// true, after internal/proxy.
+	"internal/migration",
 	"internal/metrics",
 	// WP-24a. It listens, dials and forwards, so it is a driver by purity as well as by role - the
 	// only new package in this module that would fail the engine list on its imports alone.

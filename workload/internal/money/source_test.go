@@ -64,6 +64,10 @@ var floatIsJustified = map[string]string{
 	// WP-23's measurement harness. A saturation point is a rate; the one amount it names is an
 	// int64 of minor units that nothing divides.
 	"cmd/workload-ceiling/main.go": "throughput per second, mean latency and lock wait per posting are rates and durations; the transfer amount is an int64 constant and no arithmetic touches it",
+
+	// WP-24b. The migration exercise measures how long a lock was held; nothing in it reads an
+	// amount, because a posting's value is not something the exercise looks at.
+	"internal/migration/migration.go": "how long the migration took, in seconds, which a JSON capture carries as a number; nothing here reads a posting, let alone its amount",
 }
 
 // The driver half of this module does two things the engine may not, and each is named per file
