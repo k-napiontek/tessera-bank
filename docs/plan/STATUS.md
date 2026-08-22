@@ -9,7 +9,8 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-25c is done**, and **the two cores have been held against each other under a day's
+> **WP-25c is done and merged** ([#82](https://github.com/k-napiontek/tessera-bank/pull/82), `b567bda`),
+> and **the two cores have been held against each other under a day's
 > load for the first time.** WP-16 built the reconciliation and proved it against a spine of three
 > accounts. This drove an online day against the live estate, cut it off at the `online-cut-off`
 > instant, applied the same day to the account master with the real COBOL cycle, and reconciled the
@@ -885,7 +886,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Done` | [#75](https://github.com/k-napiontek/tessera-bank/pull/75) | `0897d63` |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Done` | [#73](https://github.com/k-napiontek/tessera-bank/pull/73) | `7716b8b` |
 | [25a](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the movement file at volume and the batch window | 0 | 21, 05 | `Done` | [#78](https://github.com/k-napiontek/tessera-bank/pull/78) | `08e5fcd` |
-| [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `In progress` | | |
+| [25c](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the two phases of one day | 0/3 | 25a | `Done` | [#82](https://github.com/k-napiontek/tessera-bank/pull/82) | `b567bda` |
 | [25b](wp/WP-25-estate-drivers.md) | Estate-wide drivers - SOAP volume against stratum 1 | 1 | 21, 10b | `Done` | [#80](https://github.com/k-napiontek/tessera-bank/pull/80) | `646ba46` |
 | [25d](wp/WP-25-estate-drivers.md) | Estate-wide drivers - the four-era hop under load | 2 | 25b, 11b | `Not started` | | |
 
