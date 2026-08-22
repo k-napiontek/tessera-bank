@@ -59,11 +59,24 @@ Four readings that mean specific things:
   is a question for the caller, not an incident here.
 - **`outcome="failed"` rising** is the ledger failing - those are 5xx. It is separated from
   `rejected` precisely so the two cannot be averaged into one meaningless graph.
-- **`outcome="replayed"` rising** means clients are retrying, which means they timed out. Check
-  `ledger_posting_latency_seconds` before concluding the clients are at fault.
+- **`outcome="replayed"` rising** means the ledger is being offered keys it has seen before. It does
+  **not** on its own mean clients are retrying, and it does not mean they timed out - this page said
+  both until WP-24c measured otherwise. A run that re-offered a business day it had already posted
+  drove the counter to 9 080 replays out of 9 080 money movements with nothing having timed out at
+  all, because the keys are derived from the business date and were therefore identical. A client
+  that re-sends after a timeout, a queue that redelivers, a batch replayed after an operator restarts
+  it and a caller that simply repeated itself are indistinguishable in this counter. So the second
+  half of the old advice is the whole of it: **check `ledger_posting_latency_seconds` before
+  concluding anything about the callers.** Flat latency under rising replays means something upstream
+  re-sent work, not that this ledger was slow.
 - **`ledger_outbox_lag_seconds` rising** is the one to page on, rather than `ledger_outbox_pending`.
   A backlog of ten thousand draining steadily is a busy afternoon; a backlog of one that has not
-  moved in ten minutes is stuck. See [`outbox-backlog.md`](outbox-backlog.md).
+  moved in ten minutes is stuck. See [`outbox-backlog.md`](outbox-backlog.md). **Checked by WP-24c
+  and it holds** - with one thing this page did not say. It is a gauge, so it can only be read as a
+  series: `SCN-OUTBOX-STUCK` froze the broker for the window its scenario declares and the gauge read
+  0 before and 0 after, because the relay had drained by the time the closing sample was taken. An
+  alert built from two points cannot see an outbox that stuck and recovered between them, which is
+  the whole class of incident this signal exists for.
 
 And three about the database signals:
 

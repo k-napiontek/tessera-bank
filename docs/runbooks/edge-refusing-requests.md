@@ -57,12 +57,32 @@ sum by (kind) (rate(tessera_gateway_upstream_failures_total[5m]))
 **`timeout`** - a 504. The ledger has the request and did not answer within
 `TB_GATEWAY_DOWNSTREAM_TIMEOUT`. **The request may well have been applied**, which is why the caller
 is told 504 and not 502, and it is why the gateway does not retry a timeout: a second copy multiplies
-the load on a ledger that is already struggling. Go and look at the ledger - `ledger.posting.latency`
-and the Hikari pool are the two places to start - rather than raising the timeout here.
+the load on a ledger that is already struggling.
 
-**`unusable`** - a 502. No connection. The ledger is down, restarting, or unreachable. The gateway
-retries this one, because a connection error means nothing downstream happened - but only for a safe
-method or a request carrying an `Idempotency-Key`.
+This page used to send you to `ledger.posting.latency` and the Hikari pool, and **WP-24c measured
+both of them staying flat through the incident they are supposed to describe.** With the ledger's
+connection pool drained from the inside - writers blocked on a lock, each holding a pooled connection
+- `SLO-LEDGER-POSTING-LATENCY` came out at 0.99398 against a 0.99 target, met, and
+`hikaricp_connections_pending` read 0 both before and after. What moved was the gateway's own
+latency, missed at 0.94141 and 5.86x its error budget. The reason is that the ledger times the
+posting it performed, not the wait for a connection to perform it in, and three quarters of the day's
+requests are reads that queue behind the same exhausted pool without ever posting anything. **So
+start from the edge's own latency and work inwards.** The ledger's two signals are still worth
+reading - a figure that has moved is real - but neither moving is not evidence that the ledger is
+fine. See [`../architecture/estate-under-load.md`](../architecture/estate-under-load.md).
+
+**`unusable`** - a 502. No connection: nothing is listening on the ledger's port. The gateway retries
+this one, because a connection error means nothing downstream happened - but only for a safe method
+or a request carrying an `Idempotency-Key`.
+
+**This page used to say a 502 meant "the ledger is down", and the converse does not hold.** WP-24c
+suspended the ledger process for the window `SCN-LEDGER-OUTAGE` declares and produced **no 502s at
+all**: gateway availability stayed at 1.00000 over 34 322 requests. A suspended or wedged process
+still holds its listening socket and the kernel goes on accepting into its backlog, so every request
+was answered late rather than refused. **An absence of `unusable` is not evidence the ledger is
+running.** A ledger that is gone in every sense that matters to a customer shows up here as latency,
+and its own success rate looks perfect throughout, because a ratio computed from a component's
+counters cannot fall while the component is not counting.
 
 Check readiness on the administrative port: `curl -s localhost:9090/readyz`. It dials the ledger's
 port and reports `DOWN` when nothing is listening. It says nothing about whether the ledger is

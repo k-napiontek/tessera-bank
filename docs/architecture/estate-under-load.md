@@ -1,12 +1,15 @@
 # The estate under load - what it actually does
 
 **Produced by [WP-23](../plan/wp/WP-23-slo-baseline.md), extended by
-[WP-24a](../plan/wp/WP-24-failure-injection.md)** | Companion to
+[WP-24a and WP-24c](../plan/wp/WP-24-failure-injection.md)** | Companion to
 [`query-plans-at-volume.md`](query-plans-at-volume.md)
 
-Two measurements and what they mean. The first answers **F-27**, open since WP-09: how much money
+Three measurements and what they mean. The first answers **F-27**, open since WP-09: how much money
 this ledger can move, and what stops it. The second is the estate's **recorded normal** - a bank day
 driven against a production-shaped database, kept so that a later run is a diff rather than a memory.
+The third is what the estate looks like when it is degraded on purpose: seven conditions, each
+declaring in advance what it would move and what it would not, and each judged against that
+declaration rather than described afterwards.
 
 Every figure here comes from an artefact committed in [`workload/baselines/`](../../workload/baselines/),
 and every artefact names the conditions it was taken under.
@@ -237,7 +240,104 @@ is what defines the component here.
 
 ---
 
-## 5. What changed because of these numbers
+## 5. The seven signatures
+
+Seven conditions were injected against the recorded normal above, one run each, under
+[`contracts/workload/tessera-scenarios-v1.json`](../../contracts/workload/tessera-scenarios-v1.json)
+1.1.0. Every capture is committed under
+[`workload/baselines/signatures/`](../../workload/baselines/signatures/) with the scrapes it was
+judged from, and every one of them declares in advance which objectives it expects to move and which
+must stay flat - the flat list being the half a hand-written write-up always omits.
+
+| Condition | Objective it moved | Where it ended | Budget | What stayed flat |
+|---|---|---|---|---|
+| `SCN-SLOW-DEPENDENCY` | `SLO-GATEWAY-LATENCY` | 0.88993 against 0.99 | 11.01x | availability, movement success, posting latency |
+| `SCN-POOL-EXHAUSTION` | `SLO-GATEWAY-LATENCY` | 0.94292 against 0.99 | 5.71x | movement success, posting latency |
+| `SCN-LEDGER-OUTAGE` | `SLO-GATEWAY-LATENCY` | 0.95230 against 0.99 | 4.77x | availability, movement success, posting latency |
+| `SCN-OUTBOX-STUCK` | none observable | lag 0 at both ends | - | availability, movement success, posting latency |
+| `SCN-CONSUMER-LAG` | declared to move nothing | - | - | both fraud objectives, movement success |
+| `SCN-LIMITER-STORM` | declared to move nothing | - | - | availability, latency, movement success |
+| `SCN-CLOCK-SKEW` | not injectable | - | - | the two batch objectives |
+
+Not one verdict reads `CONTRADICTED`. Every line is `as declared` or `inconclusive`, and the four
+inconclusive ones are named below rather than counted as successes.
+
+### Every condition arrives at the edge as latency and never as failure
+
+**`SLO-GATEWAY-AVAILABILITY` is 1.00000 in all seven runs.** Not one request failed, in any
+condition - including the one that suspends the ledger process outright. Three separate conditions
+moved an objective and all three moved **the same one**, the gateway's latency, from met to missed.
+
+That is the most useful thing this sweep produced, and it is not what the estate's own documentation
+predicted. A suspended process is not a refused connection: it holds its listening socket, the kernel
+goes on accepting into the backlog, and every request in the window is answered late rather than not
+at all. So a ledger that is gone in every sense a customer would recognise produces **no 502s, no
+5xx and a perfect availability figure**, while its own success rate is perfect for a second reason -
+a ratio computed from a component's counters cannot fall while the component is not counting.
+[`edge-refusing-requests.md`](../runbooks/edge-refusing-requests.md) said a 502 means the ledger is
+down; the converse does not hold, and it now says so.
+
+### The two signals the runbook sent you to are the two that stayed flat
+
+`SCN-POOL-EXHAUSTION` drains the ledger's connection pool from the inside - writers block on a lock,
+each holding a pooled connection - and both of the ledger's own signals for it read normal:
+
+- `SLO-LEDGER-POSTING-LATENCY` came out at **0.99398 against a 0.99 target**. Met. Real degradation,
+  0.60x of its error budget, and inside the line.
+- `hikaricp_connections_pending` read **0 before and 0 after**.
+- `SLO-GATEWAY-LATENCY` **missed at 0.94292, 5.71x its budget.**
+
+The ledger times the posting it performed, not the wait for a connection to perform it in, and three
+quarters of the day's requests are reads that queue behind the same exhausted pool without posting
+anything. The edge sees all of it and the ledger sees none of it. This is **F-83** seen twice, in two
+independent sweeps that agree to three decimal places, and it is why the declaration was revised to
+name the objective that actually moves.
+
+### Four verdicts are `inconclusive`, and that is a property of the fixture
+
+- `SLO-LEDGER-OUTBOX-FRESHNESS` and `SLO-LEDGER-POOL-HEADROOM` are **gauges**. A run brackets itself
+  with two scrapes, so a condition applied and reverted between them leaves both readings identical -
+  `SCN-OUTBOX-STUCK` froze the broker for its whole declared window and the lag gauge read 0 at both
+  ends, because the relay had drained by the closing sample. The report used to call that
+  `CONTRADICTED`, which asserted that a run unable to answer a question had proved the answer wrong.
+  It now reads `inconclusive`, and closing it properly means sampling those gauges during the run -
+  **F-82**.
+- `SLO-RECON-CONTROL-RUNS` and `SLO-REPORTING-RUN-DURATION` belong to batch jobs that do not execute
+  inside a compressed nine-hour window - **F-77**'s remaining half.
+
+### The compressed hold is long enough, which settles F-81
+
+A scenario states its window in business minutes and the injector divides by the compression, so
+`SCN-LEDGER-OUTAGE`'s declared thirty minutes is **2.5 seconds** of wall clock, while the delay a
+slow dependency adds is deliberately not compressed. That asymmetry looked like a defect and the
+measurement says it is not: 2.5 compressed seconds of a stopped ledger cost 4.77x an error budget,
+and 2.5 of a locked table cost 5.71x. **The hold stays business time.** It is the property that lets
+one scenario be compared across two dial settings, and what limited these signatures was the scrape
+bracket rather than the length of the window.
+
+### What was not injected
+
+`SCN-CLOCK-SKEW` reports itself uninjected with its reason rather than pretending. PostgreSQL stamps
+the value date from its own `now()`, and moving a container's clock needs `SYS_TIME` on a shared
+kernel or a faketime shim in the image - both changes to the estate rather than to the fixture, which
+WP-24's Constraint refuses. **F-85**, recorded as a finding about testability.
+
+### F-86: the scorer was never broken
+
+WP-24a left seven captures uncommitted because `edge/fraud-scoring` reported
+`tessera_fraud_scoring_seconds_count 0.0` in every one of them while the same fixture driven on its
+own consumed correctly. It was a correct reading of a run in which nothing happened. `signatures.sh`
+pins its seven business dates and `TB_KEEP_DATA=1` keeps `idempotency_record`, so the **second** sweep
+against a ledger replayed every request instead of posting it: the ledger's own counter recorded
+9 080 replays and 0 postings, no journal entry was written, no outbox row followed, nothing reached
+the broker and the scorer scored nothing. The surviving evidence came from that second sweep.
+
+Nothing was wrong with the consumer, the broker or the injector. What was wrong is that **a sweep is
+single-use against a given ledger and did not say so.** `workload-run --require-postings` now refuses
+to finish a run the ledger answered entirely out of its idempotency store, and `signatures.sh` passes
+it. The scorer scored 8 411 events in six of the seven runs here and 8 409 in the seventh.
+
+## 6. What changed because of these numbers
 
 - **F-69 is closed.** `workload-plan` warned above 2 000 requests a second, a round number named in
   its own comment as standing in for a figure nobody had. It is now **800**, which is where the two
@@ -260,6 +360,8 @@ bash workload/scripts/baseline.sh --out-name spine-only \
 
 bash workload/scripts/baseline.sh --out-name with-broker \
   --customers 150000 --from 2025-09-01 --to 2026-08-21 --date 2026-08-21
+
+bash workload/scripts/signatures.sh --baseline with-broker
 ```
 
 All three need Docker, a JDK 17 and Go; the last also needs uv, for the scorer. `--date` is pinned
@@ -267,3 +369,8 @@ because it has to be: left to the fixture it is today, and today has a weekday m
 is 1.2 and a Saturday 0.45, so the same command run at the weekend produces a third of the demand and
 a diff nobody should read as a regression. The `with-broker` capture takes about twelve minutes, most
 of it the load.
+
+`signatures.sh` runs against the database `baseline.sh` leaves behind, and it is **single-use against
+it**: its seven business dates are pinned, so a second sweep over the same ledger replays instead of
+posting and measures the replay path. Load the ledger again between sweeps. The driver refuses such a
+run rather than reporting it, which is what section 5 is about.

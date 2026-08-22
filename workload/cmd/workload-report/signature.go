@@ -38,7 +38,9 @@ func standing(reading slo.Reading) string {
 	}
 	// A series objective yields two points rather than a ratio - the refusal F-78 records. Its own
 	// threshold is the only line the catalogue draws for it, so the closing point against that line
-	// is the most that can honestly be said, and it is enough to tell moved from flat.
+	// is the most that can honestly be said. It is *not* enough to tell moved from flat, which this
+	// comment used to claim: `judge` treats an unchanged reading here as inconclusive, because a
+	// condition applied and reverted inside the run leaves both points identical. F-82.
 	threshold := reading.Objective.SLI.Threshold
 	if threshold == nil || math.IsNaN(reading.ObservedAfter) {
 		return "unknown"
@@ -47,6 +49,12 @@ func standing(reading slo.Reading) string {
 		return "within threshold"
 	}
 	return "outside threshold"
+}
+
+// unanswerable reports whether a standing is one of the two `standing` falls back to when the
+// objective is stated over a window that two scrapes cannot supply.
+func unanswerable(standing string) bool {
+	return standing == "within threshold" || standing == "outside threshold"
 }
 
 func within(value float64, comparison string, threshold float64) bool {
@@ -82,6 +90,16 @@ const (
 // judge compares where an objective stood in the baseline with where it stood in this run.
 func judge(declared, baseline, run string) string {
 	if baseline == "unknown" || run == "unknown" {
+		return inconclusive
+	}
+	// Two closing points that agree say nothing about what happened between them. `standing` falls
+	// back to the closing point for an objective no snapshot pair can answer, and its comment used
+	// to claim that point was enough to tell moved from flat. WP-24c's sweep falsified it:
+	// SCN-OUTBOX-STUCK paused the broker for its declared window and ledger_outbox_lag_seconds read
+	// 0 before and 0 after, because the relay had drained by the closing scrape. So an unchanged
+	// reading on such an objective is this run failing to answer rather than the prediction failing
+	// - a reading over the line is still evidence, and is judged as one. F-82.
+	if unanswerable(baseline) && baseline == run {
 		return inconclusive
 	}
 	moved := baseline != run
