@@ -35,7 +35,7 @@ Check before writing a line. The pinned stack differs per directory and mixing t
 |---|---|---|---|
 | `mainframe/` | 0 | ~1995 | COBOL-85 (GnuCOBOL), JCL, fixed-width records, COMP-3 packed decimal |
 | `legacy/` | 1 | ~2011 | Java 8, Servlet 3.0 / JSP, JAX-WS, Maven 3, WAR on Tomcat 8.5, Oracle dialect |
-| `integration/` | 2 | ~2019 | Java 8, Spring Boot 2.7.18, Spring Integration, JMS, XSLT |
+| `integration/` | 2 | ~2019 | Java 8, Spring Boot 2.7.18, Spring Kafka, JAX-WS SOAP client, XSLT |
 | `services/` | 3 | ~2023 | Java 17, Spring Boot 3.2, PostgreSQL, Flyway, Kafka, Gradle |
 | `edge/` | 4 | ~2025 | Go 1.22+, Python 3.12 (uv), TypeScript + React + Vite |
 | `batch/` | - | mixed | Python 3.12 for reporting; reconciliation spans strata 0 and 3 |
