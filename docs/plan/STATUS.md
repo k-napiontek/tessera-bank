@@ -9,6 +9,39 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
+> **WP-18 is detailed and is the only actionable package left**, as **18a and 18b**. It was
+> the last package carrying frame only, and detailing it is what showed it could not be one: the
+> frame reads as an exercise plus a documentation pass, and what is actually there is an incident
+> exercise, **ten** stub documents, a DORA control map, a link checker that does not exist, and
+> **eight** unresolved requirements. **WP-18a is next.**
+>
+> **The exercise cannot follow a procedure that does not exist, so 18a writes one first.**
+> `ways-of-working/incident-management.md` is a stub - a severity model in outline, no triage path,
+> no RCA template - and this package's Constraint says the incident must be worked *as documented*.
+> An exercise against a stub is an improvisation with a report attached, and it would tick this
+> package's own Definition of Done while proving nothing. Writing it cold and then using it in anger
+> is also where the Constraint's real target shows up: *where the documented procedure turns out to
+> be wrong or unusable, that is the finding.*
+>
+> **The fault is F-106, because the estate already has it.** A transfer whose value date precedes its
+> account's `opened_date` is refused `ORA-02290` by stratum 1, reaches the adapter as a *generic*
+> SOAP fault, is classified transient, and is retried for ever at zero backoff - blocking the
+> partition, so every transfer behind it silently stops reaching the mainframe and nothing is
+> dead-lettered. Nothing fails and no error rate moves; the first sign is the next morning's
+> reconciliation. **It reverses without touching the queue**: correcting the account's `opened_date`
+> makes the next redelivery succeed, so the retry that blocked the partition becomes the retry that
+> drains it. It adds nothing to `TB-SCENARIOS-V1` - ADR 0018's shape, for F-91's reason.
+>
+> **18b absorbs four stubs and five requirements belonging to packages that are already `Done`.**
+> `psd2-notes` is WP-12's, `tech-radar` and `dependency-policy` are WP-02's, `test-strategy` is
+> WP-06's, and `REQ-GOV-001` to `005` are WP-01's. Every one of those packages merged without filling
+> what it declared, and this package's Definition of Done says no stub may remain - so they are
+> WP-18's whether or not they were WP-18's work. **F-17** again, and the strongest evidence of it
+> yet. 18b therefore builds the control as well as the correction: a checker under `quality/`, in
+> `make lint`, asserting that every internal link resolves and that **no `STUB` marker remains
+> anywhere** - which turns two boxes of this package's Definition of Done from assertions into
+> something a build fails on.
+
 > **WP-25d is done and merged** ([#84](https://github.com/k-napiontek/tessera-bank/pull/84), `92ee669`),
 > and **the whole estate has been driven at once for the first time.** Four containers and four
 > processes across two JDKs: PostgreSQL, Kafka, the ledger and the gateway, Oracle and Tomcat 8.5, and
@@ -945,7 +978,8 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `Done` | [#57](https://github.com/k-napiontek/tessera-bank/pull/57) | `2bf4826` |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `d4dceea` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `364f7b9` |
-| [18](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, RCA, final documentation pass | - | 16 | `Not started` | | |
+| [18a](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, worked as documented, and the RCA | - | 16, 25d | `Not started` | | |
+| [18b](wp/WP-18-incident-exercise.md) | Final documentation pass, the DORA map, and the checker that keeps it true | - | 18a | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `90c009a` |
 | [20](wp/WP-20-workload-model.md) | Workload model - the bank day as a contract | 4 | 02 | `Done` | [#59](https://github.com/k-napiontek/tessera-bank/pull/59) | `bf4d4cb` |
 | [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | `7de9ce2` |
@@ -962,7 +996,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 ## Critical path
 
 ```
-01 -> 02 -+-> 06 -> 07 -> 08 -> 09 -+-> 11a -> 11b -> 16 -> 18
+01 -> 02 -+-> 06 -> 07 -> 08 -> 09 -+-> 11a -> 11b -> 16 -> 18a -> 18b
           |                         |           ^
           +-> 03 -> 04 -> 05 -------+-----------+
           |                         |
@@ -999,7 +1033,7 @@ becomes its own change when picked up.
 | # | Raised in | Description | Status |
 |---|---|---|---|
 | F-01 | WP-01 | `git init` has not been run, so the branch-protection hook is inert. | **Closed** - repository initialised on `main` with a baseline commit, 2026-08-17 |
-| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, both of which have since been executed, and **WP-20 to WP-25** in the workload strand, of which WP-20 to WP-24 have been executed - **WP-24 was detailed on 2026-08-21 as two halves and executed as three, 24a, 24b and 24c**, and **WP-25 was detailed on 2026-08-22 as two halves, 25a and 25b, and executed as four**. **WP-18 alone still carries frame only.** A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
+| F-02 | WP-01 | Work packages carry frame only until detailed. Detailed so far: **WP-02 to WP-11**, the last two of those - WP-10 and WP-11 - as two halves each, **WP-15** and **WP-16**, both of which have since been executed, and **WP-20 to WP-25** in the workload strand, of which WP-20 to WP-24 have been executed - **WP-24 was detailed on 2026-08-21 as two halves and executed as three, 24a, 24b and 24c**, and **WP-25 was detailed on 2026-08-22 as two halves, 25a and 25b, and executed as four**. **WP-18 was detailed on 2026-08-23 as two halves, 18a and 18b, which leaves no package carrying frame only for the first time since WP-01.** Detailing it is what showed it could not be one package: the frame reads as an exercise plus a documentation pass, and what is there is an incident exercise, ten stub documents, a DORA control map, a link checker that does not exist and eight unresolved requirements - five of them belonging to WP-01, which closed without them. A session picking one up fills in its task list and has it reviewed before writing code; the `/work-package` skill halts on any package that has not been. | Open |
 | F-03 | WP-01 | `quality/` holds no linter rule files yet. Each is added by the work package that first needs it, so the rules land with code to check. | Open |
 | F-04 | WP-01 | `.github/CODEOWNERS` uses placeholder team handles (`@tessera-bank/...`). The file has no effect until they are replaced with real GitHub teams or usernames. The ownership structure is deliberate and should be kept. | Open |
 | F-05 | WP-01 | 14 governance documents are outlines only, each carrying a stub banner and naming its owning work package. WP-18 verifies none remain. | Open |
@@ -1242,6 +1276,7 @@ Decisions taken outside an ADR that later sessions need to know about.
 | 2026-08-21 | **WP-23 is taken before WP-18, by explicit instruction of the repository owner.** The third occurrence of the 2026-08-20 decision and for the same two reasons, which have still not moved: WP-18 carries frame only, and its Definition of Done requires that no stub remain under `docs/` and that the traceability matrix resolve every requirement, while **F-57** records two governance stubs - `environments.md` naming PREPROD as where performance testing happens, and `test-strategy.md` listing six test levels with performance among none of them - that contradict each other and cannot be reconciled truthfully until WP-23 exists. WP-23's own dependencies, WP-21, WP-22, WP-13 and WP-17, are all `Done`. |
 | 2026-08-21 | **WP-23's task list is detailed before execution, and four decisions are settled in the detailing rather than left for the executing session to improvise.** The machine-readable catalogue is a **contract** at `contracts/slo/` with a checker wired into `validate.sh`, not a second document under `docs/`: ADR 0012 names an objective nobody can check as the dangerous half of the split it draws, and a catalogue with no check is exactly that. The run-report generator is **Go under `workload/cmd/`**, because `internal/manifest` and `internal/reconcile` already read a run manifest and a Prometheus exposition and a Python generator would need a second copy of both - the duplication **F-61**, **F-64** and **F-66** each record rotting. **F-71 is fixed inside this package** rather than left open, so that the replay rate the baseline records is one somebody can use. And **F-27's number is taken from a harness driving the ledgers directly**, never through the gateway: the question is about an advisory lock on the write path, and an edge in front of it adds a rate limiter and a token check to a figure that is supposed to be about the database. |
 | 2026-08-21 | **F-71 is fixed by making the ledger state a replay rather than by making the status code carry it.** The follow-up proposed giving `releaseHold` a `201` so that the existing 201-against-200 inference would work again. That would have made the contract say a resource was created when none was: releasing a hold creates nothing, and the other four money-moving operations answer `201` precisely because they do create something. The inference was the defect rather than the operation. `IdempotencyFilter` is the only thing in the estate that knows whether an answer came from its store, so it now says so - `Idempotency-Replayed: true`, documented on all five operations - and the ledger's metric filter and the workload driver both read it. The header is additive and the status list is unchanged. |
+| 2026-08-23 | **WP-18 is split in the plan into 18a and 18b, on the dependency rather than on the subject.** The sixth package to reach the size where this log's answer is to split the package rather than the pull request, after WP-09, WP-10, WP-11, WP-24 and WP-25. The line is not arbitrary: 18a is the exercise and everything it needs to be one - including `incident-management.md`, which is a stub and which the Constraint requires the incident to be worked against - while 18b is the documentation pass, which needs the exercise to have happened so the procedure can carry a worked RCA rather than a template. Splitting anywhere else puts the procedure on one side and the exercise that tests it on the other. |
 | 2026-08-21 | **WP-24 is taken before WP-18, by explicit instruction of the repository owner.** The fourth occurrence of the 2026-08-20 decision. One of its two original reasons is now spent - **F-57**'s two governance stubs can be written truthfully, because WP-23 exists - and the other has not moved and cannot until this strand finishes: WP-18's Definition of Done requires that the traceability matrix resolve **every** requirement, and `REQ-PERF-007` and `REQ-PERF-008` are owned by WP-24 and WP-25, neither of which is built. Running the final documentation pass now means writing a matrix that resolves two requirements to packages that do not exist, or running the pass twice. WP-24's own dependency, WP-23, is `Done`. |
 | 2026-08-21 | **WP-24 is split into 24a and 24b in the plan, and detailed before execution.** Detailed out it spans a contract, a checker, an extended fixture, a re-taken baseline at full volume, seven injected conditions, a schema migration under live traffic and a soak run. `STATUS.md` already records after WP-09 that *"if a package is this size again, the better answer is to split the package in the plan rather than the pull request"*, and this is that size. The halves are not equal work split in two: 24a makes a degradation **observable and comparable**, and 24b spends what 24a built on the two exercises that take hours rather than minutes. The file stays a single document with two task lists, as `WP-10-customer-master.md` and `WP-11-esb-adapter.md` already do. |
 | 2026-08-21 | **A failure scenario is its own contract pair, not a field on the day model.** WP-24's Constraint says a condition must be a scenario in the workload contract rather than a branch in the driver, and the cheapest reading of that is a `scenarios` array bolted onto `workload-model.schema.json`. It is the wrong one. The day model states **demand**; a scenario states **degradation**, and adding one to the other bumps `tessera-day-v1.json`'s version for a reason unrelated to demand - while every WP-21, WP-22 and WP-23 manifest records the model digest precisely so that two runs can be compared. A baseline whose model changed because somebody added a fault is a baseline nothing can be diffed against. `contracts/workload/scenario.schema.json` and `tessera-scenarios-v1.json` instead, with a checker in `validate.sh`, which is the shape `contracts/slo/` already has. |
