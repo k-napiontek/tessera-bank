@@ -67,6 +67,11 @@ var engine = []string{
 // then be written against the other half.
 var driver = []string{
 	"internal/client",
+	// WP-25d. It shells out to docker to run the broker's own kafka-consumer-groups, so it fails
+	// the engine list on its imports the way internal/injector and internal/migration do. It reads
+	// and never writes: a fixture that could reset a consumer's offset could quietly repair the
+	// thing it is measuring.
+	"internal/consumer",
 	"internal/identity",
 	// WP-24a. It reads the machine - operating system, architecture, core count - which is exactly
 	// what the engine promises not to do, and what a committed measurement has to state.
