@@ -97,6 +97,33 @@ class DatasetLoaderTest {
                 .allSatisfy(posting -> assertThat(posting.direction()).isEqualTo("DEBIT"));
     }
 
+    /**
+     * <strong>F-98.</strong> Every account is opened with the figure the stream carries, and this
+     * module computes nothing.
+     *
+     * <p>It used to scale a cohort median by a constant of its own, so a loaded ledger and a driven
+     * one disagreed about every balance in the bank and {@code batch/recon} would have reported the
+     * disagreement as drift. The emitter now puts {@code seeding.Opening}'s answer on the wire and
+     * both sides read it. One figure, one bank.
+     *
+     * <p>Flat across cohorts by construction: it is twenty times the largest transfer <em>any</em>
+     * cohort can draw, so a retail account and a corporate one open with the same balance.
+     */
+    @Test
+    void everyAccountIsOpenedWithTheFigureTheStreamCarries() throws IOException {
+        Loaded loaded = load();
+        long opening = loaded.summary().header().openingBalanceMinor();
+
+        assertThat(opening).isEqualTo(10_000_000_000L);
+        assertThat(loaded.sink().postings)
+                .filteredOn(posting -> posting.direction().equals("CREDIT")
+                        && loaded.sink().entries.stream().anyMatch(entry ->
+                                entry.reference().equals(posting.entryRef())
+                                        && "OPENING BALANCE".equals(entry.referenceText())))
+                .hasSize(400)
+                .allSatisfy(posting -> assertThat(posting.amountMinor()).isEqualTo(opening));
+    }
+
     @Test
     void theTreasuryIsNotFundedByItself() throws IOException {
         Loaded loaded = load();

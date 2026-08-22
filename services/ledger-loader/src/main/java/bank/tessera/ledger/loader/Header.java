@@ -13,8 +13,13 @@ import java.util.Objects;
  * any of them would be a second opinion, and the two halves of the workload strand would be
  * describing different banks.
  *
- * @param cohortMedians the median transfer size per cohort, in minor units - what an opening balance
- *     is scaled against
+ * @param cohortMedians the median transfer size per cohort, in minor units - reported by the
+ *     manifest, and no longer what an opening balance is scaled against
+ * @param openingBalanceMinor what every customer account is opened with, in minor units of the base
+ *     currency. <strong>F-98.</strong> This module used to scale a cohort median by a constant of its
+ *     own, the driver funded twenty times the largest drawable transfer and the stratum-0 writer used
+ *     a third figure - so a reconciliation between any two of them broke on every account. The
+ *     emitter now puts {@code seeding.Opening}'s answer on the wire and every consumer reads it.
  */
 public record Header(
         String modelId,
@@ -30,6 +35,7 @@ public record Header(
         String customerAccountType,
         String treasuryAccountType,
         Map<String, Long> cohortMedians,
+        long openingBalanceMinor,
         String treasuryCustomerRef,
         String treasuryAccountRef) {
 
@@ -42,6 +48,14 @@ public record Header(
         cohortMedians = Map.copyOf(Objects.requireNonNull(cohortMedians, "cohortMedians"));
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("A dataset that ends on " + to + " and begins on " + from);
+        }
+        if (openingBalanceMinor <= 0) {
+            // Refused rather than defaulted. A stream from before F-98 carries no figure at all, and
+            // loading it against a guess is how the three answers got here in the first place.
+            throw new IllegalArgumentException(
+                    "The stream carries an opening balance of " + openingBalanceMinor
+                            + ". Every account is opened with it, so it has to be positive - regenerate the"
+                            + " stream with a workload-dataset that emits openingBalanceMinor.");
         }
     }
 

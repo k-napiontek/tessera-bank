@@ -35,17 +35,6 @@ import java.util.Objects;
  */
 public final class DatasetLoader implements DatasetVisitor {
 
-    /**
-     * How many times a cohort's median transfer an account is opened with.
-     *
-     * <p>A round number, and named as one. It has to be large enough that the year of transfers the
-     * model draws is not refused for want of funds - at 200, a 250-day load of the committed model
-     * refused 151 transfers out of 2 107 798, which is seven in a hundred thousand - and small enough
-     * that the opening balances are the size of money the cohort actually moves. It is not a claim
-     * about what a Polish retail customer holds.
-     */
-    static final long OPENING_MULTIPLE = 200;
-
     /** The audit actor. The same constant the API records, and for the same reason: F-29. */
     static final String ACTOR = "ledger-loader";
 
@@ -186,15 +175,13 @@ public final class DatasetLoader implements DatasetVisitor {
      * point of it: an opening balance is a transfer, debited from the bank's own account. The
      * treasury is an ASSET, so the debit increases it - the bank's claim grows as it funds its
      * customers - and it therefore never needs an overdraft.
+     *
+     * <p>The figure comes off the wire and is not computed here. <strong>F-98.</strong> It used to be
+     * a cohort median scaled by a constant this class owned, which made a loaded ledger disagree with
+     * a driven one about every balance in the bank.
      */
     private void fund(OpenAccount opened, Instant at) {
-        long median = header.cohortMedians().getOrDefault(opened.cohort(), 0L);
-        if (median <= 0) {
-            throw new IllegalStateException(
-                    "The header describes no median amount for cohort '" + opened.cohort()
-                            + "', so " + opened.account() + " could not be opened with a balance.");
-        }
-        Money amount = Money.of(median * OPENING_MULTIPLE, baseCurrency);
+        Money amount = Money.of(header.openingBalanceMinor(), baseCurrency);
         String reference = fundingReference();
 
         sink.entry(new EntryRow(reference, header.openingDate(), baseCurrency.code(), at, null, "OPENING BALANCE"));

@@ -55,6 +55,16 @@ type Bank struct {
 	BaseCurrency        string
 	CustomerAccountType string
 	TreasuryAccountType string
+
+	// OpeningBalanceMinor is what every customer account is opened with, in minor units of the base
+	// currency - seeding.Opening's answer, supplied for the same reason BaseCurrency is.
+	//
+	// **F-98.** Until this field existed the stream carried no opening balance and every consumer
+	// invented one: the driver twenty times the largest drawable transfer, services/ledger-loader two
+	// hundred times a cohort median, mainframe/data/generate.py a constant. A reconciliation between
+	// any two of them breaks on every account, which is a control reporting a fixture rather than
+	// the bank.
+	OpeningBalanceMinor int64
 }
 
 // HeaderCohort is what a loader needs about a cohort that the actions do not carry: the size of the
@@ -97,6 +107,10 @@ type Header struct {
 	BaseCurrency        string `json:"baseCurrency"`
 	CustomerAccountType string `json:"customerAccountType"`
 	TreasuryAccountType string `json:"treasuryAccountType"`
+
+	// OpeningBalanceMinor is what every customer account is opened with. See Bank for why it is
+	// supplied rather than computed, and F-98 for what its absence cost.
+	OpeningBalanceMinor int64 `json:"openingBalanceMinor"`
 
 	Cohorts []HeaderCohort `json:"cohorts"`
 
@@ -218,6 +232,7 @@ func (s Stream) Header(bank Bank) Header {
 		BaseCurrency:        bank.BaseCurrency,
 		CustomerAccountType: bank.CustomerAccountType,
 		TreasuryAccountType: bank.TreasuryAccountType,
+		OpeningBalanceMinor: bank.OpeningBalanceMinor,
 		Cohorts:             cohorts,
 		TreasuryCustomerRef: treasuryCustomer,
 		TreasuryAccountRef:  treasuryAccount,

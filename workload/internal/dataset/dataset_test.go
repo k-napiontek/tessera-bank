@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/k-napiontek/tessera-bank/workload/internal/bankday"
@@ -17,7 +18,17 @@ const committed = "../../../contracts/workload/tessera-day-v1.json"
 // What the driver half decides. Spelled out here rather than imported, because internal/seeding is
 // on the other side of the purity boundary and this package must not reach across it - the command
 // is where the two meet.
-var testBank = dataset.Bank{BaseCurrency: "PLN", CustomerAccountType: "LIABILITY", TreasuryAccountType: "ASSET"}
+//
+// OpeningBalanceMinor is seeding.Opening's answer for the committed model - twenty times the largest
+// transfer any cohort can draw, which is 5 000 000.00 in the corporate cohort. Written out rather
+// than computed for the same reason: this side must not hold a second copy of the arithmetic. The
+// fixture test at the bottom of this file is what holds the command to the same figure.
+var testBank = dataset.Bank{
+	BaseCurrency:        "PLN",
+	CustomerAccountType: "LIABILITY",
+	TreasuryAccountType: "ASSET",
+	OpeningBalanceMinor: 10_000_000_000,
+}
 
 // A small population and a small scale, so a test emits thousands of lines rather than millions.
 // The cohort shares divide 2 000 customers into whole people, which is the condition population.New
@@ -220,6 +231,47 @@ func TestTheHeaderIsTheFirstLineAndNamesTheTreasury(t *testing.T) {
 	if header.ModelDigest == "" {
 		t.Fatal("the header carries no model digest, so a load could not say which model it came from")
 	}
+}
+
+// **F-98.** The stream used to carry no opening balance, so every consumer invented one: the driver
+// funded twenty times the largest drawable transfer, the loader two hundred times a cohort median,
+// and the stratum-0 writer a constant. Three answers, and a reconciliation between any two of them
+// breaks on every account. The figure now travels with the day.
+//
+// Supplied by the command out of internal/seeding, never computed here - the same rule BaseCurrency
+// follows, and for the same reason: a second copy of a WP-21 decision is a second bank.
+func TestTheHeaderCarriesTheOpeningBalanceEveryConsumerFunds(t *testing.T) {
+	built := stream(t, spec(t, 42, "2026-03-02", "2026-03-02"))
+	rendered := render(t, built)
+
+	firstLine := rendered[:bytes.IndexByte(rendered, '\n')+1]
+	var header dataset.Header
+	if err := json.Unmarshal(firstLine, &header); err != nil {
+		t.Fatalf("the first line is not a header: %v", err)
+	}
+	if header.OpeningBalanceMinor != testBank.OpeningBalanceMinor {
+		t.Fatalf("the header carries an opening balance of %d, the bank was built with %d",
+			header.OpeningBalanceMinor, testBank.OpeningBalanceMinor)
+	}
+
+	// The wire name, not just the Go field. The loader parses this stream by property name and
+	// refuses one it does not know, so a rename here is a load that fails on the first line.
+	var wire map[string]any
+	if err := json.Unmarshal(firstLine, &wire); err != nil {
+		t.Fatalf("the header is not an object: %v", err)
+	}
+	if _, found := wire["openingBalanceMinor"]; !found {
+		t.Fatalf("the header has no openingBalanceMinor property; it carries %v", keysOf(wire))
+	}
+}
+
+func keysOf(object map[string]any) []string {
+	names := make([]string, 0, len(object))
+	for name := range object {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Money leaves the engine as int64 minor units and arrives as int64 minor units. A float on this

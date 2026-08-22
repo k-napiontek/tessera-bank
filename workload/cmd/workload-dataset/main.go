@@ -92,10 +92,19 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// The opening balance is the same kind of decision and travels the same way. F-98: without it on
+	// the wire, the driver funded one figure, services/ledger-loader loaded a second and
+	// mainframe/data/generate.py wrote a third, and a reconciliation between any two of them broke on
+	// every account.
+	opening, err := seeding.Opening(stream.People(), base)
+	if err != nil {
+		return err
+	}
 	bank := dataset.Bank{
 		BaseCurrency:        string(base),
 		CustomerAccountType: seeding.Liability,
 		TreasuryAccountType: seeding.Asset,
+		OpeningBalanceMinor: opening.Minor,
 	}
 
 	summarise(stream, loaded, scale, os.Stderr)

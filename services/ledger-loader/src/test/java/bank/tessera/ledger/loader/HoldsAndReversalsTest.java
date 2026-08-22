@@ -35,7 +35,7 @@ class HoldsAndReversalsTest {
         loader = new DatasetLoader(sink, 1_000_000);
         loader.population(new Header(
                 "TB-WORKLOAD-DAY-V1", "1.0.0", "digest", 42, 1.0, DAY, DAY, 2, 1,
-                "PLN", "LIABILITY", "ASSET", Map.of("retail", 100L), "CU0000000099", TREASURY));
+                "PLN", "LIABILITY", "ASSET", Map.of("retail", 100L), 20_000L, "CU0000000099", TREASURY));
         loader.open(new OpenAccount(
                 CustomerRef.of("CU0000000099"), AccountRef.of(TREASURY), AccountType.ASSET, "", true));
         loader.open(new OpenAccount(
