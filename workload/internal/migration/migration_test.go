@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -13,12 +14,23 @@ import (
 // recorder stands in for Docker, so this package's tests need no daemon - the property
 // internal/injector's tests already hold and that make test-workload depends on.
 type recorder struct {
+	mu          sync.Mutex
 	inContainer [][]string
 	images      []imageCall
-	psqlReplies []string
-	psqlErr     error
-	imageReply  string
-	imageErr    error
+
+	// Replies are dispatched on what was asked rather than popped off a queue. The lock sampler
+	// runs on its own goroutine for the length of the migration, so a queue would hand the
+	// verification whichever reply the scheduler happened to leave it.
+	locksReply string
+	indexReply string
+	psqlErr    error
+	imageReply string
+	imageErr   error
+
+	// sampled closes on the first lock reading, so a test can hold the migration open until the
+	// sampler has actually read something instead of racing it.
+	sampled  chan struct{}
+	onceRead sync.Once
 }
 
 type imageCall struct {
@@ -29,22 +41,38 @@ type imageCall struct {
 }
 
 func (r *recorder) RunInContainer(_ context.Context, container string, argv ...string) ([]byte, error) {
+	r.mu.Lock()
 	r.inContainer = append(r.inContainer, append([]string{container}, argv...))
+	r.mu.Unlock()
+
 	if r.psqlErr != nil {
 		return nil, r.psqlErr
 	}
-	if len(r.psqlReplies) == 0 {
-		return nil, nil
+	asked := strings.Join(argv, " ")
+	switch {
+	case strings.Contains(asked, "pg_locks"):
+		r.onceRead.Do(func() {
+			if r.sampled != nil {
+				close(r.sampled)
+			}
+		})
+		return []byte(r.locksReply), nil
+	case strings.Contains(asked, "pg_index"):
+		return []byte(r.indexReply), nil
 	}
-	reply := r.psqlReplies[0]
-	if len(r.psqlReplies) > 1 {
-		r.psqlReplies = r.psqlReplies[1:]
-	}
-	return []byte(reply), nil
+	return nil, nil
 }
 
 func (r *recorder) RunImage(_ context.Context, image, network, mount string, argv ...string) ([]byte, error) {
+	r.mu.Lock()
 	r.images = append(r.images, imageCall{image: image, network: network, mount: mount, argv: argv})
+	r.mu.Unlock()
+
+	// Stand in for a migration that takes time: wait until the sampler has read the locks at least
+	// once, so what the test asserts about the sampler is a fact rather than a race.
+	if r.sampled != nil {
+		<-r.sampled
+	}
 	return []byte(r.imageReply), r.imageErr
 }
 
@@ -119,7 +147,7 @@ func TestNewRefusesAMigrationItCouldNotApply(t *testing.T) {
 // waits for every transaction that could see the table, and the migration never returns - silently,
 // with the bank still serving. Measured on PostgreSQL 16.15 with Flyway 9.22.3.
 func TestTheConcurrentVariantDisablesFlywaysTransactionalLock(t *testing.T) {
-	r := &recorder{imageReply: appliedOutput, psqlReplies: []string{"posting_exercise_ix|t"}}
+	r := &recorder{imageReply: appliedOutput, indexReply: "posting_exercise_ix|t"}
 	s := settings(t, r)
 	s.Variant = Concurrent
 	s.HistoryTable = "workload_exercise_concurrent_history"
@@ -141,7 +169,7 @@ func TestTheConcurrentVariantDisablesFlywaysTransactionalLock(t *testing.T) {
 }
 
 func TestTheBlockingVariantLeavesFlywaysTransactionalLockAlone(t *testing.T) {
-	r := &recorder{imageReply: appliedOutput, psqlReplies: []string{"posting_exercise_ix|t"}}
+	r := &recorder{imageReply: appliedOutput, indexReply: "posting_exercise_ix|t"}
 	m, err := New(settings(t, r))
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +186,7 @@ func TestTheBlockingVariantLeavesFlywaysTransactionalLockAlone(t *testing.T) {
 // its own history table, so without a baseline Flyway refuses outright: "Found non-empty schema(s)
 // but no schema history table". Measured, and the reason this flag is not optional.
 func TestEveryRunBaselinesItsOwnHistoryTable(t *testing.T) {
-	r := &recorder{imageReply: appliedOutput, psqlReplies: []string{"posting_exercise_ix|t"}}
+	r := &recorder{imageReply: appliedOutput, indexReply: "posting_exercise_ix|t"}
 	m, err := New(settings(t, r))
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +230,7 @@ func TestARunThatAppliedNothingIsRefusedRatherThanReported(t *testing.T) {
 // Flyway saying it applied a migration and the index existing are two different claims, and the
 // second is the one the exercise rests on.
 func TestTheIndexIsVerifiedInTheDatabaseRatherThanTakenFromFlyway(t *testing.T) {
-	r := &recorder{imageReply: appliedOutput, psqlReplies: []string{""}}
+	r := &recorder{imageReply: appliedOutput, indexReply: ""}
 	m, err := New(settings(t, r))
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +243,7 @@ func TestTheIndexIsVerifiedInTheDatabaseRatherThanTakenFromFlyway(t *testing.T) 
 // An index built by CREATE INDEX CONCURRENTLY can be left behind invalid when the build fails, and
 // an invalid index is not the migration the exercise claims to have applied.
 func TestAnInvalidIndexIsRefused(t *testing.T) {
-	r := &recorder{imageReply: appliedOutput, psqlReplies: []string{"posting_exercise_ix|f"}}
+	r := &recorder{imageReply: appliedOutput, indexReply: "posting_exercise_ix|f"}
 	s := settings(t, r)
 	s.Variant = Concurrent
 	s.HistoryTable = "workload_exercise_concurrent_history"
@@ -229,7 +257,7 @@ func TestAnInvalidIndexIsRefused(t *testing.T) {
 }
 
 func TestApplyRecordsHowLongTheMigrationTook(t *testing.T) {
-	r := &recorder{imageReply: appliedOutput, psqlReplies: []string{"posting_exercise_ix|t"}}
+	r := &recorder{imageReply: appliedOutput, indexReply: "posting_exercise_ix|t"}
 	s := settings(t, r)
 	at := time.Unix(0, 0)
 	s.Now = func() time.Time {

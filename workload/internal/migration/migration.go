@@ -102,6 +102,7 @@ type Record struct {
 	Took         time.Duration `json:"-"`
 	TookSeconds  float64       `json:"tookSeconds"`
 	FlywayOutput string        `json:"flywayOutput"`
+	Locks        LockSummary   `json:"locks"`
 }
 
 // Migration applies one.
@@ -247,12 +248,14 @@ func (m *Migration) Apply(ctx context.Context) (Record, error) {
 		Image:        Image,
 	}
 
+	stop := m.sample(ctx)
 	began := m.settings.Now()
 	output, err := m.settings.Fixture.RunImage(ctx, Image,
 		m.settings.DatabaseContainer, m.settings.MigrationsDir, m.flywayArgv()...)
 	record.Took = m.settings.Now().Sub(began)
 	record.TookSeconds = record.Took.Seconds()
 	record.FlywayOutput = strings.TrimSpace(string(output))
+	record.Locks = summarise(stop())
 
 	if err != nil {
 		return record, fmt.Errorf("migration: running Flyway: %w\n%s", err, record.FlywayOutput)
