@@ -9,7 +9,7 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-24a is done and merged** ([#71](https://github.com/k-napiontek/tessera-bank/pull/71), `PENDING`),
+> **WP-24a is done and merged** ([#71](https://github.com/k-napiontek/tessera-bank/pull/71), `f131a19`),
 > and **the estate can now be degraded on purpose.** Every measurement before this one was taken on a
 > healthy estate: WP-21 put it under load, WP-22 gave it a production-shaped database, WP-23 declared
 > what good looks like - and none of them broke anything. `contracts/workload/` now declares seven
@@ -573,7 +573,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | `7de9ce2` |
 | [22](wp/WP-22-ledger-data-volume.md) | Ledger data volume - a production-shaped database | 3 | 20, 09 | `Done` | [#65](https://github.com/k-napiontek/tessera-bank/pull/65) | `3aa0fe4` |
 | [23](wp/WP-23-slo-baseline.md) | SLO catalogue, baseline and the run report | - | 21, 22, 13, 17 | `Done` | [#68](https://github.com/k-napiontek/tessera-bank/pull/68) | `a09cd7c` |
-| [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `PENDING` |
+| [24a](wp/WP-24-failure-injection.md) | Failure injection - scenario contract, fixture, injector and the recorded normal | - | 23 | `Done` | [#71](https://github.com/k-napiontek/tessera-bank/pull/71) | `f131a19` |
 | [24b](wp/WP-24-failure-injection.md) | Failure injection - the migration under traffic and the soak run | - | 24a | `Not started` | | |
 | [24c](wp/WP-24-failure-injection.md) | Failure injection - the seven recorded signatures | - | 24a | `Not started` | | |
 | [25](wp/WP-25-estate-drivers.md) | Estate-wide drivers - batch, SOAP and JMS volume | 0/1/2 | 21, 05, 10b, 11b | `Not started` | | |
