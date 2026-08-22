@@ -103,7 +103,15 @@ cleanup() {
   done
   # The broker goes whatever TB_KEEP_DATA says: it holds no state anybody wants to keep, and a
   # paused container left behind by an interrupted injection is the next run's mystery.
-  docker rm -f "$KAFKA_CONTAINER" >/dev/null 2>&1 || true
+  #
+  # TB_KEEP_BROKER=1 is the one exception, and WP-25d is why it exists. A consumer slower than the
+  # day it is fed drains *after* the driver has stopped, so a fixture measuring that drain needs the
+  # broker to outlive the run - exactly as TB_KEEP_DATA lets a reconciliation read the ledger the
+  # day was driven against. Whoever sets it owns the removal; four-era-day.sh does it in its own
+  # teardown.
+  if [ "${TB_KEEP_BROKER:-0}" != "1" ]; then
+    docker rm -f "$KAFKA_CONTAINER" >/dev/null 2>&1 || true
+  fi
   if [ "${TB_KEEP_DATA:-0}" != "1" ]; then
     docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
   fi
