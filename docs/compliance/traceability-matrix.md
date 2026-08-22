@@ -3,8 +3,13 @@
 > **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
 > owning work package. The per-package sections exist only for packages that have been executed:
 > WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-11b, WP-12, WP-13, WP-14, WP-15, WP-16, WP-17, WP-19,
-> WP-20, WP-21, WP-22, WP-23, WP-24a and WP-24c. Every work package adds its own as
-> part of the Definition of Done, and WP-18 verifies that none is missing.
+> WP-20, WP-21, WP-22, WP-23, WP-24a, WP-24b, WP-24c, WP-25a, WP-25b, WP-25c and WP-25d. Every work
+> package adds its own as part of the Definition of Done, and WP-18 verifies that none is missing.
+>
+> This list had gone stale by four packages before WP-25d, which is **F-87** for the second time: it
+> is maintained by hand and nothing checks it, so it is wrong exactly when somebody trusts it. It is
+> corrected here rather than added to, because adding one section while leaving four unlisted would
+> be knowingly writing a false line into the document the correction belongs in.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
 
@@ -973,3 +978,34 @@ catalogue already records rather than adding one; stratum 2 is WP-25d.
 | **REQ-MF-006** The end-of-day cycle is runnable and reproducible | WP-05 | Run for the first time as a **phase of a day rather than as a job on its own**, in the window `contracts/workload/tessera-day-v1.json` puts it in - minute 1 230 of the business date through 300 of the next - against a master and a movement file the online phase produced rather than against a committed fixture. All four steps `RC=0`, `ACCTPOST` and `EODREPT` both BALANCED, 21 754 movements applied and none rejected | Met at this tier |
 | **REQ-MF-002** Money on the mainframe is packed decimal, not binary or text | WP-03 | The width of that packed field is now known to **cap the estate the fixture can describe**, which nothing had noticed. The treasury carries one leg of every funding, so its balance is the account count times the opening figure, and `ACCT-BOOKED-BAL` is `PIC S9(13)V99 COMP-3` - fifteen digits. At the figure `seeding.Opening` implies the master tops out at **99 999 accounts**, and no per-account figure derived from the largest drawable transfer fits 2.4 million accounts at all (**F-101**). `generate.py` refuses past the ceiling naming the arithmetic, rather than letting `encode_comp3` raise with a bare integer eight frames down | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | Unchanged and re-confirmed across both phases: the population, the opening balances and every reference come from the WP-20 model, and the fixture writes no name, identifier or address at any stratum it touches | Met at this tier |
+
+---
+
+## WP-25d - estate-wide drivers: the four-era hop under load
+
+**`REQ-PERF-008` is met.** The requirement is *every* stratum exercised at volume, and the catalogue
+now resolves all three: stratum 0 by WP-25a's movement file and batch window, stratum 1 by WP-25b's
+SOAP ladder, and stratum 2 here - event volume through `integration/esb-adapter` with every stratum
+it touches running at once. **A requirement resolved to two of the three tiers it names would be a
+control that looks satisfied and is not**, which is what WP-25a said when it opened this row; the
+same standard closes it.
+
+**No pinned version in strata 0, 1 or 2 moved, and no component changed.** The fixture composes
+`legacy-up.sh` and `estate-up.sh` and starts the adapter's own jar with configuration from the
+environment - the line between extending a fixture and modifying the estate. Nothing under
+`integration/`, `legacy/`, `mainframe/` or `services/` is touched by this half.
+
+### Owned by WP-25d
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-PERF-008** Every stratum is exercised at volume, not only the one that is easy to drive | Stratum 2, and the only exercise here that needs every stratum up together. `workload/scripts/four-era-day.sh` composes the modern spine and stratum 1 and runs `esb-adapter` between them, so a Kafka event the ledger's own outbox relay published becomes canonical XML by XSLT, a SOAP call to Tomcat 8.5 and a COMP-3 record for the overnight cycle - the path `FourEraTransferIT` walks once, walked **24 023 times**. Measured entirely from outside, because the adapter exposes no metrics at all: `internal/consumer` reads the broker's own consumer-group listing and `internal/hop` times the legs from the two INFO lines per transfer WP-11b wrote for operators. **The report says which leg is a measurement** - only the file leg is bracketed by two logged instants; the inbound leg is a difference containing the transform and the SOAP call, so it is not SOAP latency. **The backlog forms at the adapter and nowhere else**: peak consumer lag **7 983** against `fraud-scoring`'s 59 on the same topic as the control, with one partition, listener concurrency 1 and a synchronous SOAP call making the whole hop a single thread. **The movement-file append is 13.6x dearer at the end of the day than at the start** - 1.1 ms to 15.0 ms, throughput 169.5/s to 56.8/s - because the writer scans every record already in the file, which is what makes the file its own unique constraint under ADR 0014 | The capture committed under `workload/baselines/four-era/`: 155 samples, the three legs, the per-slice drift, the six scrapes and the manifest. The arithmetic closes to the record against the ledger's own counters - 24 706 money movements, of which 683 are hold placements and releases that publish no event, leaving **24 023 published, 24 023 crossed, 48 046 records written and 24 023 held by the system of record**. `internal/consumer`'s tests pin the distinction the package exists for: a group with no active member is *unassigned* rather than caught up, and a dash is `Unknown` rather than zero. `internal/hop`'s tests pin that a report with no samples refuses to state a lag at all | **Met** |
+
+### Contributed by WP-25d, verified by the owning package
+
+| Requirement | Owner | What WP-25d contributes | Status |
+|---|---|---|---|
+| **REQ-INT-003** Modern events reach the mainframe in its own format | WP-11 | The first evidence at volume rather than for one transfer. 24 023 events published by the ledger's own outbox relay became **48 046 COMP-3 movement records** through the real adapter, with no transformation failure at any stage. WP-11b's constraint - *nothing is written to the movement file unless the SOAP call succeeded* - is enforced structurally by statement order in `TransferBridge` and pinned by three unit tests; `workload/scripts/movement-file-check.sh` now holds it against a whole day, reading every distinct transfer reference out of `MOVEMENT.DAT` and comparing it with Oracle's `applied_transfer`: **24 023 distinct transfers in the file, 24 023 in the system of record, zero in the file the master never accepted**. The check is asymmetric on purpose - a transfer accepted but not yet written recovers, because the writer asks the file rather than the answer (ADR 0014), while a record with no transfer behind it is 1995 believing a payment that never happened. It also priced the guarantee: that scan makes the append **13.6x dearer** by the end of a day | Met at this tier |
+| **REQ-INT-005** Undeliverable messages are captured, not lost | WP-11 | Exercised in anger for the first time, and it found a class the control does not cover. The dead-letter path works for what it was built for - a permanent refusal carrying the WSDL's declared `ServiceFault` is recorded and acknowledged, and `TransferBridgeIT` pins it. **F-106**: when the *database* raises the data error rather than the application, the refusal arrives as a generic SOAP server fault, which `CustomerMasterClient` classifies transient by design; the message is then never acknowledged, retried with Spring Kafka's default zero backoff, the partition blocks behind it, and **nothing is ever dead-lettered**. Both components behave exactly as documented and the message is still lost to an operator, because the one signal they would look for stays silent. Recorded rather than fixed here: it is a change to `legacy/` or `integration/` and belongs to their packages | **Not met for this class** - F-106; met for a declared business fault |
+| **REQ-INT-002** Each era's contract is idiomatic to that era | WP-02 | The four-era path exercised end to end at volume for the first time. Every one of 24 023 events crossed `contracts/asyncapi/ledger-events.yaml`, the XSLT and `canonical-v1.xsd`, `contracts/wsdl/customer-master-v1.wsdl` and `contracts/copybook/MOVEREC.CPY` without a transformation failure. It also found where the contracts do *not* meet: a check constraint in the 2011 schema and a date convention in the 2023 driver constrain each other and nothing declares it (**F-105**) | Met at this tier |
+| **REQ-DP-001** All test data is synthetic | WP-03 | Unchanged and re-confirmed with every stratum running at once. The population, the opening balances and every reference come from the WP-20 model; `workload-legacy-seed` fills stratum 1's mandatory identity columns with a marker rather than a manufactured person, so there is nothing to anonymise because there was never an identity (F-99). The instrument this package measures from is the adapter's own log, which carries account and transfer references only | Met at this tier |
