@@ -11,6 +11,12 @@
 #   bash workload/scripts/estate-up.sh
 #   bash workload/scripts/estate-up.sh --scale 0.0005 --compress 360 --window branch-hours
 #
+# To degrade it while the day is running, name a condition from the committed catalogue:
+#
+#   TB_SCENARIO=contracts/workload/tessera-scenarios-v1.json \
+#   TB_SCENARIO_ID=SCN-OUTBOX-STUCK \
+#     bash workload/scripts/estate-up.sh --scale 0.002 --compress 720 --window branch-hours
+#
 # Every argument is passed straight through to workload-run, so its --help is this script's help
 # for everything except the four variables below.
 #
@@ -61,6 +67,11 @@ KAFKA_CONTAINER=${TB_KAFKA_CONTAINER:-tessera-workload-kafka}
 # The scorer is behind a relay and a broker, so the closing scrape has to be taken after both have
 # had somewhere to deliver. Stated rather than guessed, and passed through to the driver.
 SETTLE=${TB_SETTLE:-15s}
+# One <role>.pgid per process this script starts, so that an injected condition can suspend the
+# ledger or the scorer. The **group** rather than the process: `go run`, `gradlew` and `uv run` each
+# exec a child, and signalling the parent alone stops a wrapper and leaves the thing that matters
+# running. F-73 records the same trap costing a whole run when it was teardown rather than injection.
+RUN_DIR=${TB_RUN_DIR:-${TMPDIR:-/tmp}/tessera-workload-run}
 PIDS=()
 
 # shellcheck disable=SC2329  # reached through the trap below, never called directly
@@ -89,6 +100,9 @@ cleanup() {
   done
 }
 trap cleanup EXIT INT TERM
+
+rm -rf "$RUN_DIR"
+mkdir -p "$RUN_DIR"
 
 step() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 
@@ -216,6 +230,7 @@ LEDGER_DB_PASSWORD=tessera \
 LEDGER_KAFKA_BOOTSTRAP="localhost:$KAFKA_PORT" \
   "$ROOT/gradlew" -p "$ROOT" :services:ledger-api:bootRun >"${TMPDIR:-/tmp}/tessera-workload-ledger.log" 2>&1 &
 PIDS+=("$!")
+echo "$!" >"$RUN_DIR/ledger.pgid"
 wait_for "the ledger" "http://localhost:$LEDGER_PORT/actuator/health/readiness" 240
 
 # A run's idempotency keys are derived from the business date and the event's ordinal, which is what
@@ -240,6 +255,7 @@ TB_FRAUD_METRICS_PORT="$FRAUD_METRICS_PORT" \
   uv run --project "$ROOT/edge/fraud-scoring" fraud-scoring \
   >"${TMPDIR:-/tmp}/tessera-workload-fraud.log" 2>&1 &
 PIDS+=("$!")
+echo "$!" >"$RUN_DIR/fraud-scoring.pgid"
 wait_for "the scorer" "http://localhost:$FRAUD_METRICS_PORT/metrics" 120
 
 step "Driver"
@@ -258,6 +274,11 @@ go -C "$ROOT/workload" run ./cmd/workload-run \
   --fraud-metrics "http://localhost:$FRAUD_METRICS_PORT/metrics" \
   --proxy-listen ":$LEDGER_PROXY_PORT" \
   --proxy-upstream "http://localhost:$LEDGER_PORT" \
+  --run-dir "$RUN_DIR" \
+  --broker-container "$KAFKA_CONTAINER" \
+  --db-container "$DB_CONTAINER" \
+  ${TB_SCENARIO:+--scenario "$TB_SCENARIO"} \
+  ${TB_SCENARIO_ID:+--scenario-id "$TB_SCENARIO_ID"} \
   --settle "$SETTLE" \
   --keys "$KEYS" \
   --metrics ":$METRICS_PORT" \

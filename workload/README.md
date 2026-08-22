@@ -106,6 +106,34 @@ it. `TB_SETTLE` defaults to **15s**: the scorer sits behind a relay and a broker
 scrape bracket the instant the last request is answered would report a scorer that fell behind when
 what actually happened is that nobody waited.
 
+## Degrading it on purpose
+
+The same command, told which condition to inject:
+
+```bash
+TB_SCENARIO=contracts/workload/tessera-scenarios-v1.json \
+TB_SCENARIO_ID=SCN-OUTBOX-STUCK \
+  bash workload/scripts/estate-up.sh --scale 0.002 --compress 720 --window branch-hours
+```
+
+The seven conditions are declared in
+[`contracts/workload/tessera-scenarios-v1.json`](../contracts/workload/tessera-scenarios-v1.json),
+not here, and [ADR 0017](../docs/governance/adr/0017-a-scenario-is-its-own-contract.md) says why a
+scenario is a contract rather than a flag: a flag is not reproducible, cannot be diffed against a
+baseline, and would have to be written twice when WP-25 drives the older strata.
+
+The condition runs **beside** the day rather than instead of it. It is applied at the minute the
+scenario names, compressed exactly as the schedule is, held for its declared window and then
+reverted - because a condition applied between two runs measures a maintenance window, which is the
+thing the exercise exists not to be. The revert runs on a context of its own, so a run stopped with
+Ctrl-C does not leave a paused broker behind for tomorrow to boot against.
+
+`internal/injector` acts only on containers this fixture booted and process groups this fixture
+started, never on the estate's own configuration or code. Where a condition cannot be produced
+inside that line it is reported as **NOT INJECTED** with the reason and the run carries on, because
+that is a finding about the component's testability rather than a failure of the fixture -
+`SCN-CLOCK-SKEW` is the one that comes out that way, and its entry in the catalogue says so.
+
 ## Reporting a run afterwards
 
 `workload-run` prints its outcome as it finishes, and that report dies with the terminal.

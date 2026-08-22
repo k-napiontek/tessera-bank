@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/k-napiontek/tessera-bank/workload/internal/bankday"
 	"github.com/k-napiontek/tessera-bank/workload/internal/client"
 	"github.com/k-napiontek/tessera-bank/workload/internal/identity"
+	"github.com/k-napiontek/tessera-bank/workload/internal/injector"
 	"github.com/k-napiontek/tessera-bank/workload/internal/manifest"
 	"github.com/k-napiontek/tessera-bank/workload/internal/metrics"
 	"github.com/k-napiontek/tessera-bank/workload/internal/model"
@@ -70,12 +72,18 @@ type options struct {
 	fraudMetrics  string
 	proxyListen   string
 	proxyUpstream string
-	issuer        string
-	audience      string
-	keysPath      string
-	metricsListen string
-	manifestPath  string
-	scrapeDir     string
+
+	scenarioPath    string
+	scenarioID      string
+	runDir          string
+	brokerContainer string
+	dbContainer     string
+	issuer          string
+	audience        string
+	keysPath        string
+	metricsListen   string
+	manifestPath    string
+	scrapeDir       string
 
 	timeout      time.Duration
 	attempts     int
@@ -116,6 +124,15 @@ func run() error {
 	// for it as soon as this process writes its public key. In path for every run including the
 	// baseline: a signature taken through one hop and diffed against a normal taken through none
 	// differs by more than the condition.
+	condition, injecting, err := loadScenario(opts)
+	if err != nil {
+		return err
+	}
+	if injecting {
+		fmt.Printf("== Scenario ==\n  %s - %s\n  %s\n\n",
+			condition.ScenarioID, condition.Title, condition.Mechanism)
+	}
+
 	hop, err := startProxy(opts)
 	if err != nil {
 		return err
@@ -230,11 +247,36 @@ func run() error {
 
 	fmt.Printf("== Run ==\n  %s of business time at %dx, so about %s of wall clock\n",
 		businessSpan(from, to), opts.compress, record.RealDuration.Round(time.Second))
+
+	// The condition runs beside the day rather than instead of it. A condition applied between two
+	// runs measures a maintenance window, which is the thing this exercise exists not to be.
+	var injection injector.Record
+	var applying sync.WaitGroup
+	var injectErr error
+	if injecting {
+		engine, err := newInjector(opts, hop, newStorm(sender, people, date, held))
+		if err != nil {
+			return err
+		}
+		applying.Add(1)
+		go func() {
+			defer applying.Done()
+			injection, injectErr = engine.Run(ctx, condition, from)
+		}()
+	}
+
 	summary, runErr := runner.Execute(ctx, runner.Settings{
 		People: people, Process: process, Date: date, Seed: opts.seed,
 		Compression: opts.compress, From: from, To: to, Held: held,
 		Sender: sender, Observer: registry, Expected: opts.expected,
 	})
+	applying.Wait()
+	if injectErr != nil && runErr == nil {
+		runErr = injectErr
+	}
+	if injecting {
+		printInjection(injection, condition)
+	}
 
 	// The scorer sits behind the outbox relay and the broker, so at the instant the last request is
 	// answered it has consumed less than the run produced. Closing the bracket immediately would
@@ -299,6 +341,16 @@ func parse() options {
 		"host a controllable hop on this address; the gateway is pointed at it instead of the ledger")
 	flag.StringVar(&opts.proxyUpstream, "proxy-upstream", "",
 		"what that hop forwards to - the ledger's own base address")
+	flag.StringVar(&opts.scenarioPath, "scenario", "",
+		"the failure-scenario catalogue to inject a condition from")
+	flag.StringVar(&opts.scenarioID, "scenario-id", "",
+		"which condition in that catalogue to inject during this run")
+	flag.StringVar(&opts.runDir, "run-dir", "",
+		"where the fixture wrote one <role>.pgid per process it started, so a condition can signal one")
+	flag.StringVar(&opts.brokerContainer, "broker-container", "tessera-workload-kafka",
+		"the broker container a condition may pause")
+	flag.StringVar(&opts.dbContainer, "db-container", "tessera-workload-db",
+		"the database container a condition may take a lock in")
 	flag.DurationVar(&opts.settle, "settle", 0,
 		"wait this long after the run before the closing scrapes, so that what the run handed to a "+
 			"relay and a consumer has somewhere to arrive")
