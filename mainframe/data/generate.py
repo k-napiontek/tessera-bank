@@ -106,7 +106,16 @@ def moverec(transfer, leg, account, direction, currency, amount, value_date, pos
 
 
 def build_master(rng: random.Random, count: int) -> list:
-    """The account master, sorted ascending by account reference as the match-merge requires.
+    """The account master, sorted ascending by account reference as the match-merge requires."""
+    return [acctrec(**account) for account in draw_accounts(rng, count)]
+
+
+def draw_accounts(rng: random.Random, count: int) -> list:
+    """The accounts as data, before they become bytes.
+
+    Kept separate from the encoding because build_movements has to see what currency and status an
+    account carries. A movement drawn without regard to either rejects, correctly, and a file of such
+    movements measures the reject path rather than the posting path - F-18, open since WP-05.
 
     The awkward balances are deliberate and fixed rather than random. A generator that only emits
     comfortable numbers tests nothing, and these are the cases that break encoders:
@@ -115,12 +124,25 @@ def build_master(rng: random.Random, count: int) -> list:
       * the maximum representable value, every nibble a 9;
       * a negative balance, on an account whose overdraft policy permits it.
     """
-    records = []
+    accounts = []
+
+    def account(ref, customer, acct_type, currency, status, booked, available, opened, last_move):
+        return {
+            "ref": ref,
+            "customer": customer,
+            "acct_type": acct_type,
+            "currency": currency,
+            "status": status,
+            "booked": booked,
+            "available": available,
+            "opened": opened,
+            "last_move": last_move,
+        }
 
     # The bank's own cash account: an ASSET, and the counterparty to every customer movement.
-    records.append(("TB00000000000001", acctrec(
+    accounts.append(account(
         "TB00000000000001", "CU0000000001", "ASSET", "PLN", "OPEN",
-        50_000_000_00, 50_000_000_00, 20100101, int(BUSINESS_DATE))))
+        50_000_000_00, 50_000_000_00, 20100101, int(BUSINESS_DATE)))
 
     fixtures = [
         # (ref number, booked minor units, note)
@@ -131,14 +153,14 @@ def build_master(rng: random.Random, count: int) -> list:
         (6, 1),                    # one minor unit positive
     ]
     for n, booked in fixtures:
-        records.append((account_ref(n), acctrec(
+        accounts.append(account(
             account_ref(n), customer_ref(n), "LIABILITY", "PLN", "OPEN",
-            booked, booked, 20180301 + n, int(BUSINESS_DATE))))
+            booked, booked, 20180301 + n, int(BUSINESS_DATE)))
 
     for n in range(7, count + 1):
         booked = rng.randrange(0, 500_000_00)
         held = rng.randrange(0, 25_000_00) if rng.random() < 0.25 else 0
-        records.append((account_ref(n), acctrec(
+        accounts.append(account(
             account_ref(n),
             customer_ref(n),
             rng.choice(ACCOUNT_TYPES),
@@ -147,10 +169,10 @@ def build_master(rng: random.Random, count: int) -> list:
             booked,
             booked - held,
             20150101 + rng.randrange(0, 90000),
-            int(BUSINESS_DATE))))
+            int(BUSINESS_DATE)))
 
-    records.sort(key=lambda pair: pair[0])
-    return [record for _, record in records]
+    accounts.sort(key=lambda one: one["ref"])
+    return accounts
 
 
 def build_movements(rng: random.Random, transfers: int, accounts: int) -> list:
