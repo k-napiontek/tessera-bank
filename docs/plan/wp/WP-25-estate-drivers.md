@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1025-estate-drivers` |
 | **Stratum** | spans 0, 1 and 2 |
 | **Depends on** | WP-21, WP-05, WP-10b, WP-11 |
-| **Status** | `Not started` - no longer blocked; WP-10b and WP-11b landed 2026-08-20 |
+| **Status** | `Not started` - detailed 2026-08-22 as two halves, 25a and 25b; no longer blocked, WP-10b and WP-11b landed 2026-08-20 |
 
 ## Objective
 
@@ -62,24 +62,178 @@ movement file that arrives late and pushes reconciliation past the start of busi
 
 ## Tasks
 
-To be detailed before execution.
+Detailed 2026-08-22, in its own change rather than inside the branch that executes it - the same
+reason the decision log records for WP-21 and WP-23. The package lands as **two halves on one
+ticket**, WP-25a and WP-25b, each its own branch and pull request, tracked as two rows in
+`STATUS.md`. Detailed out, this package spans a generator fix, a stratum-0 file at volume, a batch
+window timed at three record counts, a two-phase day, a SOAP driver against Tomcat 8.5, an event
+driver through the Boot 2.7 adapter, and a fixture that has to boot Oracle and Tomcat for the first
+time. The decision log's answer at this size, since WP-09, is to split the package in the plan rather
+than the pull request.
+
+The split runs where the running code already cuts. **25a is driven by files and nothing else** - a
+generator, a movement file, `run-eod.sh`, `batch/recon`. **25b is driven by sockets** - a SOAP
+endpoint on Tomcat 8.5 and an event consumer on Boot 2.7, both of which need containers the workload
+fixture has never booted. Splitting anywhere else puts half of one transport in each pull request.
+
+Four decisions are taken here rather than left for the executing session to improvise, and each one
+changes what gets built.
+
+- **F-18 is 25a's first task, not a precondition somebody else owns.** This package's own Constraints
+  say the stratum-0 measurement is a measurement of the reject path until it is closed: `build_movements`
+  hard-codes `PLN` on both legs while `build_master` draws from five currencies, so 162 of 302
+  movements reject on a full run and multi-currency posting is never exercised at all. F-18 is filed
+  against WP-05 and names `mainframe/data/generate.py` as WP-03's file, so **no package owns the
+  fix** and it has stayed open through nineteen of them. Driving that generator at volume without
+  closing it first would produce a plausible-looking run in which the majority of the work is
+  rejection handling - this repository's recurring failure mode, and the reason the Constraint is
+  worded the way it is.
+- **The overnight window is two business dates, and `--window` goes on refusing to guess.** F-70
+  records that `workload-plan --window overnight-batch` refuses a window wrapping midnight - 20:30 to
+  05:00 is two spans of one business day - and points at `--from` and `--to`. That refusal is
+  **correct and stays**: teaching one flag to mean two days is how a tool starts answering a question
+  nobody asked it. 25a's two-phase run therefore spans **two business dates** explicitly, and its
+  report names both, because the movement file the cycle consumes was produced by the previous day's
+  online phase and that is a fact about the run rather than a formatting choice. F-70 closes as a
+  decision rather than as a code change.
+- **The transport into `esb-adapter` is Kafka, and this package will not invent a JMS one.** The
+  In scope above says *"JMS volume through `integration/esb-adapter`"*, and there is no JMS anywhere
+  in this estate: WP-11 built a `@KafkaListener`, the pom carries `spring-kafka` and neither
+  `spring-integration` nor any JMS client, and `contracts/asyncapi/esb-adapter-events.yaml` is the
+  interface. `integration/README.md` and `CLAUDE.md`'s stratum table both still say *"Spring
+  Integration, JMS"*, which describes a component that was never built. Adding a broker to stratum 2
+  to satisfy the wording would be **changing the estate to make it measurable**, which is exactly what
+  WP-24's Constraint refused and F-85 recorded rather than worked around. 25b drives the transport
+  the estate actually runs and the discrepancy is logged as **F-95** - a finding about the plan's own
+  description, for the repository owner to settle, not for a work package to settle about itself.
+- **WP-25 adds no scenario to `TB-SCENARIOS-V1`, so F-91 is not a precondition.** The catalogue-wide
+  digest would invalidate all seven WP-24c captures if an eighth condition were added, and
+  [ADR 0018](../../governance/adr/0018-the-migration-exercise-is-not-a-condition.md) already
+  established the alternative: an exercise of its own, outside the catalogue. A batch window that
+  overruns is worth declaring as a condition **after** F-91 is fixed, and it is logged as such rather
+  than smuggled in here.
+
+### WP-25a - the movement file at volume and the two-phase day
+
+Branch `feat/TB-1025-batch-volume`. Six tasks, stratum 0 and the batch tier only.
+
+1. Set 25a `In progress` and branch from up-to-date `main`.
+
+2. **Close F-18.** A movement takes the currency of the account it lands on, and a transfer's two
+   legs are drawn on accounts that share one - a cross-currency transfer is a different product and
+   stratum 0 has no record for it. Movements are drawn against accounts whose status is `OPEN`. The
+   **two deliberate reject fixtures stay exactly as they are**: the JPY unsupported-scale record and
+   the unknown-account record are what WP-04 proves the mainframe's own validation with, and a
+   generator with no rejects at all exercises the reject path less than the current one does. The
+   test is the shape of the assertion: a full run's reject count equals the fixture count and nothing
+   else, and every currency in `MASTER_CURRENCIES` appears among the posted movements. Test first,
+   then the generator.
+
+3. **The movement file at volume, from the WP-20 population.** `workload-dataset` already emits a
+   drawn day as NDJSON over a pipe and `services/ledger-loader` already consumes it - WP-22's
+   decision, so that neither side draws the bank's day twice. The stratum-0 writer consumes the
+   **same** stream and writes `ACCTMAST.DAT` and `MOVEMENT.DAT`. It extends
+   `mainframe/data/generate.py` rather than adding a writer under `workload/`: the COMP-3 encoder
+   exists three times in this repository already (here, `esb-adapter`, `backoffice`) and a fourth in
+   Go would be a fourth thing to keep in step with the copybooks, which are contracts. `ORGANIZATION
+   IS SEQUENTIAL` and COMP-3 amounts, per the Constraints - a high-volume generator that writes line
+   sequential corrupts every packed field and the file still opens and reads.
+
+4. **The cycle timed at three volumes, per step.** `run-eod.sh` already takes `--master`,
+   `--movements`, `--work` and `--business-date`, so this task drives it and records rather than
+   changing it. Per-step wall clock, not one total: STEP010 and STEP030 are sorts and STEP020 is the
+   match-merge, and they do not scale the same way. The match-merge is the step the tier exists to
+   demonstrate - it streams because the master does not fit in memory - so a total that hides it
+   answers the wrong question. Three record counts, the scaling stated as what was measured rather
+   than as a fitted curve, and the conditions named on the page beside every figure.
+
+5. **The online day and the overnight batch as two phases of one run.** Drive branch hours, stop at
+   the `online-cut-off` instant the day contract already declares at minute 1200, hand the movement
+   file to the cycle in `overnight-batch`, and run `batch/recon` in `morning-reconciliation`. All
+   three windows and the instant are already in `contracts/workload/tessera-day-v1.json`; this task
+   sequences them and adds nothing to the contract. The run spans two business dates per the second
+   decision above, and the report says which date each phase belongs to. The cycle refuses the same
+   movement file twice, so a repeated run uses a new file or `--rerun`, deliberately.
+
+6. **The write-up, the matrix and the Verification below.** What the batch window costs at each
+   volume, how it scales, and what closing F-18 changed about what the cycle actually exercises.
+
+### WP-25b - SOAP and event volume against the older strata
+
+Branch `feat/TB-1025-service-volume`. Five tasks, strata 1 and 2.
+
+1. Set 25b `In progress` and branch from up-to-date `main`.
+
+2. **Extend the fixture to boot stratum 1 and stratum 2.** `workload/scripts/estate-up.sh` boots
+   PostgreSQL, Kafka, the ledger, `fraud-scoring` and the gateway. 25b adds Oracle, Tomcat 8.5 with
+   the `customer-master` WAR, and `esb-adapter` as a Boot 2.7 process against the Kafka already
+   there. Every one of those already starts inside a test suite in this repository - `oracle-free`
+   and Cargo in `test-customer-master`, the adapter in `test-integration` - so this is assembling a
+   fixture from parts that exist, not new infrastructure. **No component is changed and no pinned
+   version moves**; anything that cannot be booted without changing one is recorded as a finding, the
+   way F-85 recorded `SCN-CLOCK-SKEW`.
+
+3. **SOAP volume against `customer-master`.** The three operations the WSDL declares - `GetAccount`,
+   `GetAccountsByCustomer`, `NotifyTransferPosted` - driven from the same WP-20 population, at a rate
+   the model produces rather than one invented here. What is recorded is what the Objective names:
+   the connector's thread pool, the Oracle connection pool, and where the ceiling actually sits.
+   WP-23's separation of the two lock timers is the shape to copy - one averaged "wait" that moves
+   for two unrelated reasons answers neither question.
+
+4. **Event volume through `esb-adapter`.** Kafka in, canonical XML by XSLT, SOAP to Tomcat, COMP-3
+   movement record out - the whole four-era hop under sustained load, which `FourEraTransferIT`
+   exercises exactly once. What is recorded is where the backlog forms and what the adapter does when
+   the tier below it is slower than the tier above: consumer lag, the SOAP call's own latency, and
+   whether anything reaches the dead-letter path. The Constraint that **nothing is written to the
+   movement file unless the SOAP call succeeded** is WP-11b's, it is what makes the file trustworthy,
+   and a load run is the first thing that will test it in anger.
+
+5. **The write-up, the matrix, `REQ-PERF-008`, and the Verification below.**
 
 ## Definition of Done
 
-- [ ] One workload model produces both the online day and the overnight movement file.
+The half that satisfies each box is named, because two pull requests cannot both tick all five.
+
+- [ ] One workload model produces both the online day and the overnight movement file. *(25a)*
 - [ ] The end-of-day cycle runs at realistic volume and its duration is recorded against the record
-      count.
-- [ ] SOAP and JMS volume is driven, and each tier's behaviour under it is recorded.
-- [ ] The stratum-0 run posts the majority of what it is given, rather than rejecting it.
-- [ ] No pinned version in strata 0, 1 or 2 was changed.
+      count. *(25a)*
+- [ ] SOAP and event volume is driven, and each tier's behaviour under it is recorded. *(25b)*
+- [ ] The stratum-0 run posts the majority of what it is given, rather than rejecting it. *(25a,
+      by closing F-18 first)*
+- [ ] No pinned version in strata 0, 1 or 2 was changed. *(both halves; 25b re-checks it, because it
+      is the half that boots Oracle and Tomcat)*
+
+> **The third box read "SOAP and JMS volume" until 2026-08-22.** There is no JMS in this estate and
+> there never was - WP-11 built a `@KafkaListener` against `contracts/asyncapi/esb-adapter-events.yaml`
+> - so the box as written could not be ticked by measuring the estate, only by adding a broker to
+> stratum 2. The wording is corrected to name the transport that exists and the discrepancy is
+> recorded as **F-95** rather than silently renamed, because `integration/README.md` and `CLAUDE.md`'s
+> stratum table still describe the same component the same wrong way. See the third decision under
+> Tasks.
 
 ## Verification
 
-Generate a day, run the online phase, cut off, run the cycle at volume, then reconcile. Record the
-cycle duration against the movement count at three volumes and state how it scales.
+```bash
+bash contracts/validate.sh                       # the day model and the copybook contracts
+make test-mainframe                              # the generator, the copybooks and the cycle  (25a)
+make test-batch                                  # reporting and recon                          (25a)
+make test-legacy                                 # customer-master and backoffice on real Tomcat (25b)
+make test-integration                            # esb-adapter, real Kafka, really-deployed WAR  (25b)
+make test                                        # every other tier still green
+```
+
+Then, and this is the half that cannot be automated: generate a day, run the online phase, cut off,
+run the cycle at volume, then reconcile. Record the cycle duration against the movement count at
+three volumes, **per step rather than as one total**, and state how it scales.
+
+25b's suites need Docker, and between them they pull a ~2 GB Oracle image, a Tomcat 8.5 image and a
+Kafka image. That is named here rather than discovered on the branch.
+
+Real output into the pull request, never expected output. Both halves state the conditions every
+figure was taken at - **a number without its conditions is a hunch wearing a decimal point.**
 
 ## Traceability
 
 | Requirement | Satisfied by |
 |---|---|
-| REQ-PERF-008 Every stratum is exercised at volume, not only the one that is easy to drive | the file, SOAP and JMS drivers, from one model |
+| REQ-PERF-008 Every stratum is exercised at volume, not only the one that is easy to drive | the movement-file driver (25a) and the SOAP and Kafka drivers (25b), all three from one model |
