@@ -273,15 +273,20 @@ The half that satisfies each box is named, because four pull requests cannot eac
       same WP-20 stream feeds `services/ledger-loader` and `generate.py --from-stream`)*
 - [x] The end-of-day cycle runs at realistic volume and its duration is recorded against the record
       count. *(25a - three volumes to 2 429 346 movements, per step)*
-- [ ] SOAP and event volume is driven, and each tier's behaviour under it is recorded. *(25b
-      drove SOAP against stratum 1; the event half is 25d)*
+- [x] SOAP and event volume is driven, and each tier's behaviour under it is recorded. *(25b drove
+      SOAP against stratum 1; 25d drove 24 023 events through the whole four-era hop - peak consumer
+      lag 7 983 against the scorer's 59 on the same topic, the movement-file append 13.6x dearer by
+      the end of the day, nothing dead-lettered)*
 - [x] The online day, the cut-off, the batch and the morning reconciliation run in sequence. *(25c -
       `two-phase-day.sh`, 80 001 accounts, 80 001 matched, zero drift; F-98 closed and F-101 to F-104
       raised)*
 - [x] The stratum-0 run posts the majority of what it is given, rather than rejecting it. *(25a -
       300 of 302 on the fixture, 2 429 346 of 2 429 346 at volume; F-18 closed)*
-- [ ] No pinned version in strata 0, 1 or 2 was changed. *(all four halves; 25a and 25c hold - 25c
-      touched `mainframe/data/generate.py` and no COBOL, no copybook and no dependency anywhere)*
+- [x] No pinned version in strata 0, 1 or 2 was changed. *(all four halves. 25a and 25c touched
+      `mainframe/data/generate.py` and no COBOL, no copybook and no dependency anywhere; 25b changed
+      nothing in `legacy/`; 25d changed nothing in `integration/`, `legacy/`, `mainframe/` or
+      `services/` at all - it starts the adapter's own jar with configuration from the environment,
+      which is the line between extending a fixture and modifying the estate)*
 
 > **The third box read "SOAP and JMS volume" until 2026-08-22.** There is no JMS in this estate and
 > there never was - WP-11 built a `@KafkaListener` against `contracts/asyncapi/esb-adapter-events.yaml`
