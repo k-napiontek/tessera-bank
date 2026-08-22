@@ -39,7 +39,77 @@ func testRun(t *testing.T) manifest.Run {
 		From:         0,
 		To:           bankday.MinutesPerDay,
 		GitSHA:       "5f6c7fe",
+		Hardware:     "Darwin arm64, 10 cores, go1.25.6",
 	}
+}
+
+// The two fields WP-24a added, and the refusals that keep them meaning something. A manifest that
+// let either be blank would produce a committed measurement whose conditions nobody could read, and
+// two measurements that do not state their conditions cannot be compared.
+func TestARunHasToSayWhatItRanOnAndWhatItRanUnder(t *testing.T) {
+	blank := testRun(t)
+	blank.Hardware = ""
+	if _, err := manifest.New(blank); err == nil {
+		t.Error("described a run that does not say what it ran on")
+	} else if !strings.Contains(err.Error(), "unrecorded") {
+		t.Errorf("the error %q does not say what to pass instead", err)
+	}
+
+	half := testRun(t)
+	half.ScenarioID = "SCN-OUTBOX-STUCK"
+	if _, err := manifest.New(half); err == nil {
+		t.Error("described a degraded run with no digest for the catalogue it came from")
+	}
+
+	other := testRun(t)
+	other.ScenarioDigest = "a1b2c3d4"
+	if _, err := manifest.New(other); err == nil {
+		t.Error("described a run carrying a catalogue digest and no condition")
+	}
+
+	// An undegraded run carries neither, and says so by their absence rather than by two blank
+	// strings implying a condition nobody injected.
+	plain, err := manifest.New(testRun(t))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	document, err := json.Marshal(plain)
+	if err != nil {
+		t.Fatalf("marshalling: %v", err)
+	}
+	if strings.Contains(string(document), "scenario") {
+		t.Errorf("an undegraded run's manifest names a scenario: %s", document)
+	}
+	if !strings.Contains(string(document), `"hardware"`) {
+		t.Errorf("the manifest does not carry the hardware: %s", document)
+	}
+
+	degraded := testRun(t)
+	degraded.ScenarioID = "SCN-OUTBOX-STUCK"
+	degraded.ScenarioDigest = "a1b2c3d4"
+	written, err := manifest.New(degraded)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	read, err := manifest.Read(mustJSON(t, written))
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if read.ScenarioID != degraded.ScenarioID || read.ScenarioDigest != degraded.ScenarioDigest {
+		t.Errorf("the condition did not survive a round trip: %q %q", read.ScenarioID, read.ScenarioDigest)
+	}
+	if read.Hardware != degraded.Hardware {
+		t.Errorf("the hardware did not survive a round trip: %q", read.Hardware)
+	}
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	document, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshalling: %v", err)
+	}
+	return document
 }
 
 func TestTheManifestRecordsBothDials(t *testing.T) {

@@ -43,6 +43,18 @@ type Run struct {
 	// left blank: a field that is sometimes absent and sometimes a commit is a field a report has to
 	// guess about.
 	GitSHA string
+	// Hardware is what it ran on, or "unrecorded". Never left blank, for the same reason as GitSHA.
+	//
+	// Added by WP-24a, which has to commit a second baseline beside the first. Two measurements that
+	// do not state their conditions cannot be compared, and comparing them anyway is how a team
+	// concludes a regression exists - and until now the only conditions block in this repository was
+	// cmd/workload-ceiling's, so a run manifest could not say which laptop produced it.
+	Hardware string
+	// Scenario names the degradation this run was executed under, empty for an undegraded one. The
+	// digest is beside the identifier for the reason the model's is: a catalogue somebody edited
+	// between two runs is two catalogues, and only the digest says so.
+	ScenarioID     string
+	ScenarioDigest string
 }
 
 // Window is the part of the business day a run covers.
@@ -66,6 +78,12 @@ type Manifest struct {
 	ModelVersion string `json:"modelVersion"`
 	ModelDigest  string `json:"modelDigest"`
 	GitSHA       string `json:"gitSha"`
+	Hardware     string `json:"hardware"`
+
+	// ScenarioID and ScenarioDigest are absent from an undegraded run rather than empty, so that a
+	// baseline's manifest does not carry two blank fields implying a condition nobody injected.
+	ScenarioID     string `json:"scenarioId,omitempty"`
+	ScenarioDigest string `json:"scenarioDigest,omitempty"`
 
 	BusinessDate string `json:"businessDate"`
 	Weekday      string `json:"weekday"`
@@ -108,6 +126,15 @@ func New(run Run) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("%w: no commit recorded - pass \"unknown\" rather than nothing",
 			ErrRun)
 	}
+	if run.Hardware == "" {
+		return Manifest{}, fmt.Errorf("%w: no hardware recorded - pass \"unrecorded\" rather than "+
+			"nothing, because a figure whose conditions are unstated is worse than one that says it "+
+			"does not know them", ErrRun)
+	}
+	if (run.ScenarioID == "") != (run.ScenarioDigest == "") {
+		return Manifest{}, fmt.Errorf("%w: a scenario identifier and its digest go together, and "+
+			"only one of %q and %q is set", ErrRun, run.ScenarioID, run.ScenarioDigest)
+	}
 
 	clock, err := bankday.NewClock(run.Compression)
 	if err != nil {
@@ -141,6 +168,10 @@ func New(run Run) (Manifest, error) {
 		ModelVersion: run.Model.ModelVersion,
 		ModelDigest:  run.Model.Digest(),
 		GitSHA:       run.GitSHA,
+		Hardware:     run.Hardware,
+
+		ScenarioID:     run.ScenarioID,
+		ScenarioDigest: run.ScenarioDigest,
 
 		BusinessDate: run.BusinessDate.String(),
 		Weekday:      run.BusinessDate.Weekday().String(),

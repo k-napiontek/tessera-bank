@@ -19,27 +19,30 @@ import (
 // loadScenario reads the catalogue and picks the condition this run was asked for. Both flags or
 // neither: a catalogue with no identifier is a file nobody chose from, and an identifier with no
 // catalogue is a name nothing can resolve.
-func loadScenario(opts options) (scenario.Scenario, bool, error) {
+func loadScenario(opts options) (scenario.Scenario, string, bool, error) {
 	if opts.scenarioPath == "" && opts.scenarioID == "" {
-		return scenario.Scenario{}, false, nil
+		return scenario.Scenario{}, "", false, nil
 	}
 	if opts.scenarioPath == "" || opts.scenarioID == "" {
-		return scenario.Scenario{}, false,
+		return scenario.Scenario{}, "", false,
 			fmt.Errorf("--scenario and --scenario-id go together, and only one is set")
 	}
 	document, err := os.ReadFile(opts.scenarioPath)
 	if err != nil {
-		return scenario.Scenario{}, false, err
+		return scenario.Scenario{}, "", false, err
 	}
 	catalogue, err := scenario.Decode(document)
 	if err != nil {
-		return scenario.Scenario{}, false, err
+		return scenario.Scenario{}, "", false, err
 	}
 	chosen, err := catalogue.Find(opts.scenarioID)
 	if err != nil {
-		return scenario.Scenario{}, false, err
+		return scenario.Scenario{}, "", false, err
 	}
-	return chosen, true, nil
+	// The catalogue's digest rather than the scenario's own: what has to be reproducible is the
+	// document the condition was read out of, exactly as the model digest is the document the day
+	// was read out of.
+	return chosen, catalogue.Digest(), true, nil
 }
 
 // newInjector wires the injector to what this process holds: the hop it hosts, the storm it can

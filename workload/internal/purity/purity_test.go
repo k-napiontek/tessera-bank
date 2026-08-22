@@ -68,6 +68,9 @@ var engine = []string{
 var driver = []string{
 	"internal/client",
 	"internal/identity",
+	// WP-24a. It reads the machine - operating system, architecture, core count - which is exactly
+	// what the engine promises not to do, and what a committed measurement has to state.
+	"internal/hardware",
 	// WP-24a. It signals process groups and shells out to docker, so it is as far from the engine as
 	// anything in this module gets - and it is a fixture acting on a fixture, never on the estate's
 	// own configuration or code, which is the line WP-24's Constraint draws.

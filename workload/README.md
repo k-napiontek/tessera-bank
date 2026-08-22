@@ -173,6 +173,9 @@ prints the two points instead and says which objective needed the window.
 | `internal/metrics` | `tessera_workload_*`, hand-written because this module carries no dependencies. |
 | `internal/reconcile` | Reads the ledger's own counter and lines it up against the driver's. |
 | `internal/scenario` | Decodes the failure-scenario catalogue and refuses a condition the injector cannot run. |
+| `internal/injector` | Applies one declared condition to the running estate at its moment, holds it, reverts it. |
+| `internal/proxy` | The controllable hop in front of the ledger. Transparent until a condition sets a delay. |
+| `internal/hardware` | One sentence naming what a measurement was taken on, so two of them can be compared. |
 | `internal/purity` | The architectural controls. The engine reaches no `net`, `os` or database driver; the driver is named. |
 | `cmd/workload-plan` | Prints the model as a day. Touches one file and no network. |
 | `internal/slo` | Reads the committed SLO catalogue and works out what a run did against it. |

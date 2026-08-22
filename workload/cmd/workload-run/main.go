@@ -34,6 +34,7 @@ import (
 	"github.com/k-napiontek/tessera-bank/workload/internal/arrivals"
 	"github.com/k-napiontek/tessera-bank/workload/internal/bankday"
 	"github.com/k-napiontek/tessera-bank/workload/internal/client"
+	"github.com/k-napiontek/tessera-bank/workload/internal/hardware"
 	"github.com/k-napiontek/tessera-bank/workload/internal/identity"
 	"github.com/k-napiontek/tessera-bank/workload/internal/injector"
 	"github.com/k-napiontek/tessera-bank/workload/internal/manifest"
@@ -124,7 +125,7 @@ func run() error {
 	// for it as soon as this process writes its public key. In path for every run including the
 	// baseline: a signature taken through one hop and diffed against a normal taken through none
 	// differs by more than the condition.
-	condition, injecting, err := loadScenario(opts)
+	condition, scenarioDigest, injecting, err := loadScenario(opts)
 	if err != nil {
 		return err
 	}
@@ -158,6 +159,11 @@ func run() error {
 	record, err := manifest.New(manifest.Run{
 		Model: loaded, BusinessDate: date, Seed: opts.seed, Scale: opts.scale,
 		Compression: opts.compress, From: from, To: to, GitSHA: gitSHA(opts.modelPath),
+		Hardware: hardware.Describe(),
+		// Both or neither: manifest.New refuses one without the other, because a run that recorded a
+		// condition without saying which catalogue it came from could be diffed against a run of a
+		// scenario somebody had since edited.
+		ScenarioID: condition.ScenarioID, ScenarioDigest: scenarioDigest,
 	})
 	if err != nil {
 		return err

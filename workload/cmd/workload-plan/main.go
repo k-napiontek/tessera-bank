@@ -103,6 +103,9 @@ func run() error {
 		From:         from,
 		To:           to,
 		GitSHA:       gitSHA(opts.modelPath),
+		// This tool measures nothing - it prints what a model asks for. Naming the laptop it was
+		// printed on would put a condition on a figure that has none.
+		Hardware: "unrecorded",
 	})
 	if err != nil {
 		return err
