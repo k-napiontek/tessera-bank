@@ -1,6 +1,6 @@
 # integration - the bridge between eras
 
-**Stratum 2** | **Vintage ~2019** | **Java 8, Spring Boot 2.7.18, Spring Integration, JMS, XSLT** | **Built by WP-11**
+**Stratum 2** | **Vintage ~2019** | **Java 8, Spring Boot 2.7.18, Spring Kafka, JAX-WS SOAP client, XSLT** | **Built by WP-11**
 
 The layer that made modernisation possible without touching the core, and the layer nobody wants to own, because understanding it requires knowing all four eras at once. Without it the strangler fig has no trunk.
 
