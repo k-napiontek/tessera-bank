@@ -67,6 +67,15 @@ KAFKA_CONTAINER=${TB_KAFKA_CONTAINER:-tessera-workload-kafka}
 # The scorer is behind a relay and a broker, so the closing scrape has to be taken after both have
 # had somewhere to deliver. Stated rather than guessed, and passed through to the driver.
 SETTLE=${TB_SETTLE:-15s}
+# And then the relay is waited on rather than guessed at. Compression speeds the day up and the
+# relay's tick does not move with it - it ships at most one batch per interval, both the ledger's own
+# configuration - so a day at 720x hands it money movements far faster than a real day would. A run
+# whose closing scrape is taken before it has caught up records a backlog that is an artefact of the
+# dial. A run told to expect a backlog waits for nothing, because the backlog is the point.
+DRAIN=${TB_DRAIN:-180s}
+if [ "${TB_EXPECT_OUTBOX_BACKLOG:-0}" = "1" ]; then
+  DRAIN=0
+fi
 # One <role>.pgid per process this script starts, so that an injected condition can suspend the
 # ledger or the scorer. The **group** rather than the process: `go run`, `gradlew` and `uv run` each
 # exec a child, and signalling the parent alone stops a wrapper and leaves the thing that matters
@@ -280,6 +289,7 @@ go -C "$ROOT/workload" run ./cmd/workload-run \
   ${TB_SCENARIO:+--scenario "$TB_SCENARIO"} \
   ${TB_SCENARIO_ID:+--scenario-id "$TB_SCENARIO_ID"} \
   --settle "$SETTLE" \
+  --drain "$DRAIN" \
   --keys "$KEYS" \
   --metrics ":$METRICS_PORT" \
   --manifest "${TB_MANIFEST:-${TMPDIR:-/tmp}/tessera-workload-manifest.json}" \

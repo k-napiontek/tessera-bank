@@ -95,6 +95,7 @@ type options struct {
 	skipRun      bool
 	tokenMinutes int
 	settle       time.Duration
+	drain        time.Duration
 }
 
 func run() error {
@@ -296,6 +297,9 @@ func run() error {
 		case <-ctx.Done():
 		}
 	}
+	if opts.drain > 0 {
+		waitForOutbox(ctx, opts.ledgerMetrics, opts.drain)
+	}
 
 	after := scrapeLedger(opts.ledgerMetrics)
 	saveScrape(opts.scrapeDir, "after.prom", after.Body)
@@ -360,6 +364,9 @@ func parse() options {
 	flag.DurationVar(&opts.settle, "settle", 0,
 		"wait this long after the run before the closing scrapes, so that what the run handed to a "+
 			"relay and a consumer has somewhere to arrive")
+	flag.DurationVar(&opts.drain, "drain", 0,
+		"then wait up to this long for the outbox to reach zero, so the closing scrape records an "+
+			"estate that has caught up rather than one still working through the day")
 	flag.StringVar(&opts.scrapeDir, "scrapes", "",
 		"write the ledger scrapes that bracket the measured run into this directory")
 	flag.BoolVar(&opts.skipSeeding, "skip-seeding", false, "assume the accounts are already open and funded")
@@ -468,6 +475,53 @@ func startProxy(opts options) (*proxy.Proxy, error) {
 			opts.proxyListen+opts.proxyUpstream)
 	}
 	return proxy.Start(opts.proxyListen, opts.proxyUpstream)
+}
+
+// waitForOutbox waits for the relay to publish everything the run produced, up to a bound.
+//
+// A fixed settle is a guess, and this run measures why that matters. Compression speeds the day up
+// and the relay's tick does not move with it: the relay ships at most one batch per interval, both
+// of which are the ledger's own configuration, so a day replayed at 720x hands it money movements
+// far faster than a real day ever would. Closing the scrape bracket before it has caught up records
+// a backlog that is an artefact of the dial rather than a property of the estate.
+//
+// It is a wait rather than an assertion. estate-up.sh checks afterwards whether the relay actually
+// drained, and a run told to expect a backlog passes --drain 0 so that the backlog it exists to
+// produce is still there when the scrape is taken.
+func waitForOutbox(ctx context.Context, metricsURL string, bound time.Duration) {
+	const pendingMetric = "ledger_outbox_pending"
+	started := time.Now()
+	deadline := started.Add(bound)
+	first := -1.0
+
+	for {
+		pending := 0.0
+		samples := reconcile.Read(scrapeLedger(metricsURL).Body, pendingMetric)
+		if len(samples) == 0 {
+			fmt.Printf("  the ledger publishes no %s, so the relay is not waited on\n", pendingMetric)
+			return
+		}
+		for _, sample := range samples {
+			pending += sample.Value
+		}
+		if first < 0 {
+			first = pending
+		}
+		if pending == 0 {
+			fmt.Printf("  the relay published the run's last %.0f events in %s\n",
+				first, time.Since(started).Round(time.Second))
+			return
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			fmt.Printf("  %.0f events still unpublished after %s, from %.0f when the day ended\n",
+				pending, bound, first)
+			return
+		}
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+		}
+	}
 }
 
 // scrape is one reading of the ledger: the counter the reconciliation needs, and the whole

@@ -104,7 +104,16 @@ Two environment variables are worth knowing. `TB_FRAUD_METRICS_PORT` defaults to
 because the scorer's own default is 9100, which is the driver's, and two processes cannot both have
 it. `TB_SETTLE` defaults to **15s**: the scorer sits behind a relay and a broker, so closing the
 scrape bracket the instant the last request is answered would report a scorer that fell behind when
-what actually happened is that nobody waited.
+what actually happened is that nobody waited. `TB_DRAIN` defaults to **180s** and is a bound rather
+than a wait - the run then polls the ledger's own `ledger_outbox_pending` until it reaches zero.
+
+That second one exists because of a measurement this package produced. **Compression speeds the day
+up and the relay's tick does not move with it.** The relay ships at most `LEDGER_OUTBOX_BATCH` rows
+every `LEDGER_OUTBOX_INTERVAL_MS`, both the ledger's own configuration and both fixed in wall clock,
+so a day replayed at 720x hands it money movements far faster than a real day ever would. A closing
+scrape taken before it has caught up records a backlog that is an artefact of the dial rather than a
+property of the estate - and the run prints how long the catching-up took, which is the figure worth
+having.
 
 ## Degrading it on purpose
 
