@@ -13,7 +13,12 @@
 // WP-24's Constraint refused and F-85 recorded rather than worked around - so everything here is
 // observed the way WP-25b observed stratum 1. Three instruments, none of them inside the component:
 //
-//   - **the broker's own consumer-group listing**, for how far behind the adapter is;
+//   - **the broker's own consumer-group listing**, for how far behind the adapter is - asked on the
+//     broker's INTERNAL listener, because estate-up.sh advertises PLAINTEXT as the *host* port and a
+//     tool run inside the container is then told to connect to a port nothing there is listening on.
+//     That script's own comment warns about it; this command was written against 9092 anyway and lost
+//     its entire lag series on WP-25d's first run, silently, because every call failed and the report
+//     printed the zero value;
 //   - **the movement file's length**, which at 120 bytes a record is the hop's completed-work
 //     counter and needs nothing instrumented at all;
 //   - **the adapter's own INFO log**, which WP-11b wrote for operators and which happens to bracket
@@ -62,7 +67,7 @@ func main() {
 func run() error {
 	var (
 		brokerContainer = flag.String("broker-container", "tessera-workload-kafka", "the broker container the fixture booted")
-		bootstrap       = flag.String("bootstrap", "localhost:9092", "the broker address from inside that container, which is not the one the host publishes")
+		bootstrap       = flag.String("bootstrap", "localhost:9094", "the broker's INTERNAL listener, which is the address its own tools must use from inside the container")
 		group           = flag.String("group", "esb-adapter", "the adapter's consumer group")
 		scorerGroup     = flag.String("scorer-group", "fraud-scoring", "the scorer's consumer group, which is the control")
 		deadLetterTopic = flag.String("dead-letter-topic", "tessera.esb.transfer-posted.dlt.v1", "the adapter's dead-letter topic")

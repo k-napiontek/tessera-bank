@@ -202,3 +202,57 @@ func TestABrokerThatCannotBeReachedIsAnError(t *testing.T) {
 		t.Fatal("a broker that could not be reached was reported as a reading")
 	}
 }
+
+// A dead-letter topic nothing has ever been produced to does not exist, and the broker's own tool
+// answers "Could not match any topic-partitions with the specified filters" and exits non-zero.
+// That is the *expected* state - it means no transfer was ever refused permanently - and treating
+// it as a failed reading cost WP-25d its entire consumer-lag series on the first run: every sample
+// was discarded because of the one figure that was allowed to be absent.
+func TestAMissingDeadLetterTopicIsNotAFailedReading(t *testing.T) {
+	broker := &partialRecorder{describe: behind, offsetsErr: errors.New("Could not match any topic-partitions")}
+
+	reading, err := Read(context.Background(), broker, []string{"esb-adapter"}, "tessera.esb.transfer-posted.dlt.v1")
+	if err != nil {
+		t.Fatalf("a topic nothing has been produced to failed the whole reading: %v", err)
+	}
+	if len(reading.Groups) != 1 {
+		t.Fatalf("groups = %d, want 1 - the lag was discarded with the dead letters", len(reading.Groups))
+	}
+	if reading.DeadLetters != 0 {
+		t.Errorf("dead letters = %d, want 0", reading.DeadLetters)
+	}
+	if !reading.DeadLettersKnown {
+		// It is known to be zero: the topic having no partitions is the broker saying nothing was
+		// ever written there, which is a measurement rather than an absence of one.
+		t.Error("a topic that does not exist should read as zero dead letters, known")
+	}
+}
+
+// A group that cannot be described is still fatal, because that is the figure the run is about.
+func TestAGroupThatCannotBeDescribedIsStillFatal(t *testing.T) {
+	broker := &partialRecorder{describeErr: errors.New("no such container")}
+	if _, err := Read(context.Background(), broker, []string{"esb-adapter"}, "dlt"); err == nil {
+		t.Fatal("a broker that could not describe the group was reported as a reading")
+	}
+}
+
+type partialRecorder struct {
+	describe    string
+	describeErr error
+	offsets     string
+	offsetsErr  error
+}
+
+func (p *partialRecorder) Describe(context.Context, string) ([]byte, error) {
+	if p.describeErr != nil {
+		return nil, p.describeErr
+	}
+	return []byte(p.describe), nil
+}
+
+func (p *partialRecorder) EndOffsets(context.Context, string) ([]byte, error) {
+	if p.offsetsErr != nil {
+		return nil, p.offsetsErr
+	}
+	return []byte(p.offsets), nil
+}

@@ -66,6 +66,13 @@ DB_CONTAINER=tessera-fourera-db
 DB_PORT=5437
 KAFKA_CONTAINER=tessera-fourera-kafka
 KAFKA_PORT=9095
+# The broker's INTERNAL listener, which is the address its own tools must use from *inside* the
+# container. estate-up.sh advertises PLAINTEXT as the host port, so a tool run in the container is
+# handed back "node 1 is at localhost:9095" and nothing there is listening on it - that script's
+# comment calls it "what stops a non-default TB_KAFKA_PORT breaking the traffic it sends to itself".
+# kafka-topics and kafka-broker-api-versions survive it because they only need the bootstrap
+# connection; kafka-consumer-groups has to reach the group coordinator and does not.
+KAFKA_INTERNAL=localhost:9094
 TOMCAT_PORT=18080
 
 TOPIC=tessera.ledger.transfer-posted.v1
@@ -193,7 +200,7 @@ echo "OK    the WSDL answers on $TOMCAT_PORT"
 bring_up_stratum_2_and_watch() {
     for _ in $(seq 180); do
         if docker exec "$KAFKA_CONTAINER" \
-            kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1; then
+            kafka-broker-api-versions --bootstrap-server "$KAFKA_INTERNAL" >/dev/null 2>&1; then
             break
         fi
         sleep 1
@@ -203,7 +210,7 @@ bring_up_stratum_2_and_watch() {
     # about the scorer's topic: a producer creates a topic on first send, and DeadLetterRecorder
     # never awaits its send, so the first dead letter of a run could be lost to a topic that did not
     # exist yet and nothing would say so.
-    docker exec "$KAFKA_CONTAINER" kafka-topics --bootstrap-server localhost:9092 \
+    docker exec "$KAFKA_CONTAINER" kafka-topics --bootstrap-server "$KAFKA_INTERNAL" \
         --create --if-not-exists --topic "$DEAD_LETTER_TOPIC" \
         --partitions 1 --replication-factor 1 >/dev/null 2>&1 || true
 
@@ -222,17 +229,32 @@ bring_up_stratum_2_and_watch() {
     # Readiness asked of the broker rather than read off a log, the same rule legacy-up.sh applies
     # to Oracle: the group is up when something holds a partition of the topic, and a log line saying
     # "Started EsbAdapterApplication" is printed before that is true.
-    for _ in $(seq 120); do
+    #
+    # **It fails rather than falling through.** On WP-25d's second run this loop was asking on the
+    # wrong listener, so every attempt hung retrying for about seven seconds and 120 of them took
+    # thirteen and a half minutes - after which the loop simply ended and sampling started against a
+    # group nothing had confirmed was there. A readiness probe that gives up quietly is worse than no
+    # probe: it turns a broken fixture into a run that produces plausible-looking output.
+    subscribed=no
+    for _ in $(seq 60); do
         if docker exec "$KAFKA_CONTAINER" kafka-consumer-groups \
-            --bootstrap-server localhost:9092 --describe --group "$GROUP" 2>/dev/null \
+            --bootstrap-server "$KAFKA_INTERNAL" --describe --group "$GROUP" 2>/dev/null \
             | grep -q "$TOPIC"; then
+            subscribed=yes
             break
         fi
-        sleep 1
+        sleep 2
     done
+    if [ "$subscribed" != yes ]; then
+        echo "four-era-day: the adapter never joined group $GROUP on $TOPIC." >&2
+        echo "  The broker's own listing is what was asked, on $KAFKA_INTERNAL." >&2
+        echo "  See $ADAPTER_LOG." >&2
+        return 1
+    fi
+    echo "OK    the adapter holds a partition of $TOPIC"
 
     go -C "$ROOT/workload" run ./cmd/workload-hop \
-        --broker-container "$KAFKA_CONTAINER" \
+        --broker-container "$KAFKA_CONTAINER" --bootstrap "$KAFKA_INTERNAL" \
         --group "$GROUP" --dead-letter-topic "$DEAD_LETTER_TOPIC" \
         --movement-file "$MOVEMENT_FILE" --adapter-log "$ADAPTER_LOG" \
         --interval "$INTERVAL" --bound "$BOUND" \

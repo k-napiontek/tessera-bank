@@ -220,3 +220,42 @@ func TestTheRenderedReportCarriesItsConditions(t *testing.T) {
 		t.Errorf("the rendered report states no endpoint:\n%s", rendered)
 	}
 }
+
+// The defect WP-25d's own instrument shipped with, caught by its first real run.
+//
+// The sampler failed on every call - it asked the broker on the wrong listener - and returned no
+// samples at all. The report then printed "peak consumer lag 0" and "closing consumer lag 0",
+// because those are the zero values of the fields nothing had filled in. A reader would have taken
+// that for a hop that never fell behind, which is precisely the plausible wrong number this
+// repository keeps a trap list about: **a lag that was never measured must not be printed as zero.**
+func TestAReportWithNoSamplesRefusesToStateALag(t *testing.T) {
+	report := Summarise([]Crossing{{Ref: "TB000000000000000201"}}, Failures{}, nil, Conditions{})
+
+	if report.LagMeasured {
+		t.Fatal("a report with no samples claims to have measured a lag")
+	}
+	rendered := report.Render()
+	if strings.Contains(rendered, "peak consumer lag       0") {
+		t.Errorf("an unmeasured lag is printed as zero:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "not measured") {
+		t.Errorf("the report does not say the lag was not measured:\n%s", rendered)
+	}
+	if !strings.Contains(report.Verdict, "no sample") {
+		t.Errorf("the verdict does not say the sampler produced nothing: %q", report.Verdict)
+	}
+}
+
+func TestAReportWithSamplesStatesTheLag(t *testing.T) {
+	report := Summarise(nil, Failures{}, []Sample{
+		{ElapsedSeconds: 0, AdapterAssigned: true, AdapterLag: 4000, AdapterLagKnown: true},
+		{ElapsedSeconds: 60, AdapterAssigned: true, AdapterLag: 0, AdapterLagKnown: true},
+	}, Conditions{})
+
+	if !report.LagMeasured {
+		t.Fatal("a report with samples does not claim to have measured a lag")
+	}
+	if !strings.Contains(report.Render(), "peak consumer lag") {
+		t.Error("a measured lag is not printed")
+	}
+}

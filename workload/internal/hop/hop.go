@@ -144,16 +144,21 @@ type Report struct {
 	Drift       []Bucket   `json:"drift"`
 	// FileLegGrowth is the last bucket's mean file leg over the first's. Above 1 means appending got
 	// dearer as the file grew, which is what a linear scan per message produces.
-	FileLegGrowth float64  `json:"fileLegGrowth"`
-	PeakLag       int64    `json:"peakLag"`
-	PeakLagSeen   bool     `json:"peakLagSeen"`
-	ClosingLag    int64    `json:"closingLag"`
-	Drained       bool     `json:"drained"`
-	EverAssigned  bool     `json:"everAssigned"`
-	DeadLetters   int64    `json:"deadLetters"`
-	Elapsed       float64  `json:"elapsedSeconds"`
-	Samples       []Sample `json:"samples"`
-	Verdict       string   `json:"verdict"`
+	FileLegGrowth float64 `json:"fileLegGrowth"`
+	// LagMeasured is whether the sampler produced anything at all. Without it every lag field below
+	// is a zero value, and a zero value rendered as a figure is a hop that never fell behind - which
+	// is what this report printed on WP-25d's first run, when the sampler had been asking the broker
+	// on the wrong listener and every call failed.
+	LagMeasured  bool     `json:"lagMeasured"`
+	PeakLag      int64    `json:"peakLag"`
+	PeakLagSeen  bool     `json:"peakLagSeen"`
+	ClosingLag   int64    `json:"closingLag"`
+	Drained      bool     `json:"drained"`
+	EverAssigned bool     `json:"everAssigned"`
+	DeadLetters  int64    `json:"deadLetters"`
+	Elapsed      float64  `json:"elapsedSeconds"`
+	Samples      []Sample `json:"samples"`
+	Verdict      string   `json:"verdict"`
 }
 
 // ParseLog reads the adapter's own log into crossings and failures.
@@ -351,6 +356,7 @@ func readSamples(report *Report, samples []Sample) {
 	if len(samples) == 0 {
 		return
 	}
+	report.LagMeasured = true
 
 	last := samples[len(samples)-1]
 	report.ClosingLag = last.AdapterLag
@@ -376,7 +382,13 @@ func verdictOf(report Report) string {
 		return out.String()
 	}
 
-	if len(report.Samples) > 0 {
+	if !report.LagMeasured {
+		out.WriteString("  The sampler produced no sample, so nothing here describes a backlog. The\n")
+		out.WriteString("  legs below were timed from the adapter's own log and stand on their own;\n")
+		out.WriteString("  every consumer-lag figure is absent rather than zero.\n")
+	}
+
+	if report.LagMeasured {
 		if report.Drained {
 			out.WriteString(fmt.Sprintf(
 				"  A backlog of %d formed and drained. The hop kept up in the end; what it cost to\n"+
@@ -444,8 +456,12 @@ func (r Report) Render() string {
 	out.WriteString(fmt.Sprintf("  already in the file     %d\n", r.Redelivered))
 	out.WriteString(fmt.Sprintf("  redelivered (transient) %d\n", r.Failures.Transient))
 	out.WriteString(fmt.Sprintf("  dead-lettered           %d\n", r.Failures.DeadLettered))
-	out.WriteString(fmt.Sprintf("  peak consumer lag       %d\n", r.PeakLag))
-	out.WriteString(fmt.Sprintf("  closing consumer lag    %d\n", r.ClosingLag))
+	if r.LagMeasured {
+		out.WriteString(fmt.Sprintf("  peak consumer lag       %d\n", r.PeakLag))
+		out.WriteString(fmt.Sprintf("  closing consumer lag    %d\n", r.ClosingLag))
+	} else {
+		out.WriteString("  consumer lag            not measured - the sampler produced no sample\n")
+	}
 
 	out.WriteString("\n== The three legs ==\n\n")
 	out.WriteString(fmt.Sprintf("  %-9s %8s %10s %10s %10s\n", "leg", "count", "mean ms", "p95 ms", "max ms"))

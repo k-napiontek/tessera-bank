@@ -108,6 +108,9 @@ func (o Offsets) Total() int64 {
 type Reading struct {
 	Groups      []Group `json:"groups"`
 	DeadLetters int64   `json:"deadLetters"`
+	// DeadLettersKnown separates "nothing was ever refused permanently" from "the topic could not be
+	// read". Both give zero, and only one of them is a measurement.
+	DeadLettersKnown bool `json:"deadLettersKnown"`
 }
 
 // Group returns the named group's reading.
@@ -136,17 +139,22 @@ func Read(ctx context.Context, broker Broker, groups []string, deadLetterTopic s
 		reading.Groups = append(reading.Groups, group)
 	}
 
+	// A dead-letter topic nobody has ever produced to does not exist, and the broker's own tool says
+	// so by exiting non-zero. **That is the expected state** - it means no transfer was ever refused
+	// permanently - so neither the error nor an unparseable answer may fail the whole reading.
+	//
+	// Making it fatal cost WP-25d its entire consumer-lag series on the first run: every sample was
+	// discarded because of the one figure that was allowed to be absent, and the report then printed
+	// the lag's zero value as though it had been measured.
 	if deadLetterTopic != "" {
-		output, err := broker.EndOffsets(ctx, deadLetterTopic)
-		if err != nil {
-			return Reading{}, fmt.Errorf("consumer: the broker could not report offsets for %s: %w",
-				deadLetterTopic, err)
-		}
-		// A dead-letter topic nothing has ever produced to may not exist, and that is the expected
-		// state rather than a failure - it means no transfer was ever refused permanently.
-		offsets, err := ParseEndOffsets(string(output))
-		if err == nil {
-			reading.DeadLetters = offsets.Total()
+		if output, err := broker.EndOffsets(ctx, deadLetterTopic); err == nil {
+			if offsets, err := ParseEndOffsets(string(output)); err == nil {
+				reading.DeadLetters = offsets.Total()
+				reading.DeadLettersKnown = true
+			}
+		} else {
+			// The topic is absent, which is the broker reporting zero rather than declining to say.
+			reading.DeadLettersKnown = true
 		}
 	}
 
