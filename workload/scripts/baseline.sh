@@ -9,7 +9,12 @@
 #
 #   bash workload/scripts/baseline.sh --out-name spine-only
 #   bash workload/scripts/baseline.sh --out-name with-broker --customers 150000 \
-#     --from 2025-09-01 --to 2026-08-21
+#     --from 2025-09-01 --to 2026-08-21 --date 2026-08-21
+#
+# --date is the business date the day is driven for, and pinning it is what makes a capture
+# reproducible. Left to estate-up.sh it is today, and today has a weekday multiplier: the committed
+# spine-only capture is a Friday at 1.2 and the same command run on a Saturday would produce a day
+# at 0.45 - a third of the demand, diffed against the other and read as a regression.
 #
 # --out-name is required and names a directory under workload/baselines/. One directory per capture,
 # because a second baseline written over the first is not a second baseline: two measurements that
@@ -32,6 +37,7 @@ CUSTOMERS=20000
 FROM=2026-06-01
 TO=2026-06-30
 SEED=42
+DATE=""
 LOAD_SCALE=0.0017
 RUN_SCALE=0.002
 COMPRESS=720
@@ -48,7 +54,8 @@ while [ $# -gt 0 ]; do
     --compress) COMPRESS="$2"; shift 2 ;;
     --window) WINDOW="$2"; shift 2 ;;
     --out-name) OUT_NAME="$2"; shift 2 ;;
-    -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --date) DATE="$2"; shift 2 ;;
+    -h|--help) sed -n '2,28p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -85,6 +92,7 @@ TB_MANIFEST="$WORK/run-manifest.json" \
 TB_SCRAPE_DIR="$WORK" \
   bash "$ROOT/workload/scripts/estate-up.sh" \
     --scale "$RUN_SCALE" --compress "$COMPRESS" --window "$WINDOW" \
+    ${DATE:+--date "$DATE"} \
   | tee "$WORK/run.log"
 
 step "Generate the report"
