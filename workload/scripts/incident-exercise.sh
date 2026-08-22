@@ -168,7 +168,23 @@ for line in open(stream):
 if not transfers:
     sys.exit("incident-exercise: the window carries no transfer to trip the fault with")
 
-chosen = transfers[int(len(transfers) * trip_at)]
+# The victim has to be an account whose **first** touch in the window is the transfer we name, or
+# the partition would block earlier than the envelope claims and the exercise would be describing a
+# different day than the one it ran. Either leg refuses: pkg_posting.apply_transfer stamps
+# last_movement_date on both.
+seen = set()
+chosen = None
+target = int(len(transfers) * trip_at)
+for position, action in enumerate(transfers):
+    first_touch = action["accountRef"] not in seen and action["counterpartyRef"] not in seen
+    if position >= target and first_touch:
+        chosen = action
+        break
+    seen.add(action["accountRef"])
+    seen.add(action["counterpartyRef"])
+
+if chosen is None:
+    sys.exit("incident-exercise: no transfer past the trip point opens an account not already touched")
 json.dump({
     "accountRef": chosen["accountRef"],
     "transferRef": chosen["transferRef"],
@@ -212,11 +228,16 @@ echo "  sealed to $OUT/ENVELOPE.json"
 # the day would never get under way and the exercise would measure an empty file.
 # -------------------------------------------------------------------------------------------------
 inject_when_the_day_starts() {
-    for _ in $(seq 600); do
-        if grep -q "== Run ==" "$WORK/day-d.log" 2>/dev/null; then break; fi
+    # **The marker is the driver's, not the script's.** estate-up.sh prints its own bold "== Run =="
+    # step *before* launching the driver, and the driver prints "== Run ==" again after seeding has
+    # finished. Waiting on the first would inject during seeding - which refuses the victim account's
+    # own funding, dated D-1, and blocks the partition before the day is under way. This line is
+    # printed by the driver at the instant the measured day begins and by nothing else.
+    for _ in $(seq 900); do
+        if grep -q "of business time at" "$WORK/day-d.log" 2>/dev/null; then break; fi
         sleep 1
     done
-    sleep 3
+    sleep 1
     docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" >/dev/null 2>&1 <<SQL
 UPDATE account SET opened_date = DATE '$NEXT_DATE' WHERE account_ref = '$VICTIM';
 COMMIT;
