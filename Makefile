@@ -13,8 +13,8 @@
         test-contracts test-mainframe test-legacy test-integration test-services test-edge \
         test-gateway test-fraud test-web \
         test-batch test-reporting test-recon test-customer-master test-backoffice \
-        lint-contracts lint-edge lint-batch build-web lint-web \
-        build-workload test-workload lint-workload \
+        lint-contracts lint-edge lint-batch lint-docs build-web lint-web \
+        build-workload test-workload lint-workload test-quality \
         jdk8 jdk17 docker go uv node
 
 # ---------------------------------------------------------------------------------------------
@@ -184,12 +184,20 @@ build-batch: uv ## Build the batch tier - Python
 
 # --- test -------------------------------------------------------------------------------------
 
-test: test-contracts test-mainframe test-legacy test-integration test-services test-edge test-batch test-workload ## Run every tier's test suite
+test: test-contracts test-quality test-mainframe test-legacy test-integration test-services test-edge test-batch test-workload ## Run every tier's test suite
 	@echo
 	@echo "OK    every tier with tests passed"
 
 test-contracts: ## Validate the contracts against the canonical data model
 	@bash contracts/validate.sh
+
+# ---------------------------------------------------------------------------------------------
+# The documentation checker's own tests, on fixture trees rather than on this repository: a checker
+# proved only against a tree that happens to be clean says nothing about what it does when a link
+# breaks. `lint-docs` below is the same tool pointed at the real thing.
+# ---------------------------------------------------------------------------------------------
+test-quality: ## The documentation checker's own tests
+	@python3 quality/test-docs-check.py 2>&1 | tail -3
 
 test-mainframe: ## Copybooks, COMP-3, synthetic data, the match-merge, the report and the cycle
 	@sh mainframe/copybook/compile-check.sh
@@ -290,11 +298,18 @@ test-recon: uv docker ## recon, against real PostgreSQL and the real overnight c
 
 # --- lint -------------------------------------------------------------------------------------
 
-lint: lint-contracts lint-edge lint-batch lint-workload ## Run every tier's linters and quality gates
+lint: lint-contracts lint-docs lint-edge lint-batch lint-workload ## Run every tier's linters and quality gates
 	@echo "No linter configured for the mainframe or Java tiers yet - see quality/ and follow-up F-03."
 
 lint-contracts: ## OpenAPI, AsyncAPI and XML validators
 	@bash contracts/validate.sh
+
+# ---------------------------------------------------------------------------------------------
+# Documentation is checked by the build because four work packages closed over their own stubs and
+# nothing noticed - F-17. Standard library Python, so there is nothing to install.
+# ---------------------------------------------------------------------------------------------
+lint-docs: ## Internal links, surviving stub markers and invented requirement ids
+	@python3 quality/docs-check.py
 
 lint-edge: go uv node ## gofmt and go vet over Go, ruff over Python, eslint over TypeScript
 	@test -z "$$(gofmt -l edge/api-gateway)" \

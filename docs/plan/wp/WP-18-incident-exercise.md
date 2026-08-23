@@ -200,15 +200,15 @@ The half that satisfies each box is named, because two pull requests cannot each
 
 - [x] A fault was injected, detected through normal means, and worked through the documented process. *(18a)*
 - [x] An RCA exists describing what actually happened, including process failures. *(18a)*
-- [ ] Every gap found has been fixed or logged as a tracked follow-up. *(18a for what the exercise
+- [x] Every gap found has been fixed or logged as a tracked follow-up. *(18a for what the exercise
       exposed, 18b for what the documentation pass does)*
-- [ ] No stub documents remain in `docs/`. *(18a fills `incident-management.md` because the exercise
+- [x] No stub documents remain in `docs/`. *(18a fills `incident-management.md` because the exercise
       cannot follow a stub; 18b fills the other nine, and 18b's checker is what makes the box
       checkable rather than asserted)*
-- [ ] The traceability matrix resolves every requirement to code and a test. *(18b - all 68,
+- [x] The traceability matrix resolves every requirement to code and a test. *(18b - all 68,
       including the five `REQ-GOV-*` WP-01 left unresolved)*
-- [ ] The DORA control map resolves every entry to an artefact that exists. *(18b)*
-- [ ] Every internal markdown link resolves. *(18b, enforced by the checker rather than claimed)*
+- [x] The DORA control map resolves every entry to an artefact that exists. *(18b)*
+- [x] Every internal markdown link resolves. *(18b, enforced by the checker rather than claimed)*
 
 ## Verification
 
