@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1018-incident-exercise` |
 | **Stratum** | n/a - repository-wide |
 | **Depends on** | WP-16 |
-| **Status** | `Not started` - detailed 2026-08-23 as two halves, 18a and 18b |
+| **Status** | **18a `Done`** ([#87](https://github.com/k-napiontek/tessera-bank/pull/87), `776a8c0`) - **18b `Not started`** |
 
 ## Objective
 
@@ -198,8 +198,8 @@ carry what the exercise produced.
 
 The half that satisfies each box is named, because two pull requests cannot each tick all seven.
 
-- [ ] A fault was injected, detected through normal means, and worked through the documented process. *(18a)*
-- [ ] An RCA exists describing what actually happened, including process failures. *(18a)*
+- [x] A fault was injected, detected through normal means, and worked through the documented process. *(18a)*
+- [x] An RCA exists describing what actually happened, including process failures. *(18a)*
 - [ ] Every gap found has been fixed or logged as a tracked follow-up. *(18a for what the exercise
       exposed, 18b for what the documentation pass does)*
 - [ ] No stub documents remain in `docs/`. *(18a fills `incident-management.md` because the exercise

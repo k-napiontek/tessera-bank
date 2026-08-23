@@ -9,38 +9,47 @@ Updated by the executing session at the start and end of every work package, per
 
 ## Next actionable package
 
-> **WP-18 is detailed and is the only actionable package left**, as **18a and 18b**. It was
-> the last package carrying frame only, and detailing it is what showed it could not be one: the
-> frame reads as an exercise plus a documentation pass, and what is actually there is an incident
-> exercise, **ten** stub documents, a DORA control map, a link checker that does not exist, and
-> **eight** unresolved requirements. **WP-18a is next.**
+> **WP-18b is the only actionable package left, and it is the last one in the plan.** The final
+> documentation pass: five stubs this package owns, four orphaned by packages that are already
+> `Done`, the DORA control map, the traceability matrix completing all 68 requirements, and a checker
+> under `quality/` wired into `make lint` that fails the build on a broken internal link or a
+> surviving `STUB` marker. Its task list is detailed in
+> [WP-18](wp/WP-18-incident-exercise.md#wp-18b---the-documentation-pass-and-the-control-that-keeps-it-true).
 >
-> **The exercise cannot follow a procedure that does not exist, so 18a writes one first.**
-> `ways-of-working/incident-management.md` is a stub - a severity model in outline, no triage path,
-> no RCA template - and this package's Constraint says the incident must be worked *as documented*.
-> An exercise against a stub is an improvisation with a report attached, and it would tick this
-> package's own Definition of Done while proving nothing. Writing it cold and then using it in anger
-> is also where the Constraint's real target shows up: *where the documented procedure turns out to
-> be wrong or unusable, that is the finding.*
+> **WP-18a is done and merged** ([#87](https://github.com/k-napiontek/tessera-bank/pull/87),
+> `776a8c0`), **and the incident process has now been used rather than only written.** The procedure
+> was written cold, F-106 was injected into the whole estate across two business dates, the failure
+> was worked from `/backoffice/breaks` through triage, containment, resolution and verification of
+> recovery, and [INC-001](../incidents/INC-001-transfers-discarded-at-the-era-boundary.md) is the RCA.
+> The envelope was opened only after the account had been named from the evidence, and it matched.
 >
-> **The fault is F-106, because the estate already has it.** A transfer whose value date precedes its
-> account's `opened_date` is refused `ORA-02290` by stratum 1, reaches the adapter as a *generic*
-> SOAP fault, is classified transient, and is retried for ever at zero backoff - blocking the
-> partition, so every transfer behind it silently stops reaching the mainframe and nothing is
-> dead-lettered. Nothing fails and no error rate moves; the first sign is the next morning's
-> reconciliation. **It reverses without touching the queue**: correcting the account's `opened_date`
-> makes the next redelivery succeed, so the retry that blocked the partition becomes the retry that
-> drains it. It adds nothing to `TB-SCENARIOS-V1` - ADR 0018's shape, for F-91's reason.
+> **F-106 predicted a blocked partition and the estate does something worse.** `esb-adapter`
+> configures no error handler, so it inherits Spring Kafka's `FixedBackOff(interval=0,
+> maxAttempts=9)`: the refused record was retried **ten times in about 150 milliseconds**, the backoff
+> was exhausted, the record was dropped and the offset committed. `DeadLetterRecorder` never ran.
+> **Two transfers that are in the ledger's audit chain do not exist for the mainframe**, and consumer
+> lag, the dead-letter topic, `REJECTS.DAT` and the error rate all read healthy while it happened. A
+> blocked partition is loud and recoverable; this is silent and is not. **F-111.**
 >
-> **18b absorbs four stubs and five requirements belonging to packages that are already `Done`.**
-> `psd2-notes` is WP-12's, `tech-radar` and `dependency-policy` are WP-02's, `test-strategy` is
-> WP-06's, and `REQ-GOV-001` to `005` are WP-01's. Every one of those packages merged without filling
-> what it declared, and this package's Definition of Done says no stub may remain - so they are
-> WP-18's whether or not they were WP-18's work. **F-17** again, and the strongest evidence of it
-> yet. 18b therefore builds the control as well as the correction: a checker under `quality/`, in
-> `make lint`, asserting that every internal link resolves and that **no `STUB` marker remains
-> anywhere** - which turns two boxes of this package's Definition of Done from assertions into
-> something a build fails on.
+> **The reconciliation's false-positive population compounds.** 224 accounts in `VALUE_DRIFT` on D,
+> 271 on D+1 and 476 on D+2, with none of the growth after D+1 relating to the incident - F-104 dates
+> a hold capture by the machine clock and F-107 puts it in the movement file anyway. Three accounts of
+> real loss arrived inside forty-seven accounts of report, and nothing in the report, the screen or
+> the runbook separates them. **By `reconciliation-break.md`'s own escalation thresholds every morning
+> in this estate is already an incident**, which is how a control gets turned off. **F-113, F-114.**
+>
+> **The fault reverses; its cost does not.** After the reversal and a further driven business date,
+> **zero** affected accounts cleared. That is now written into `incident-management.md`: removing the
+> fault and recovering from it are two questions, and the first must never stand in for the second.
+>
+> **And the exercise had to be run twice, which is the part worth keeping.** The first attempt
+> announced a fault Oracle had refused - the injector's own `UPDATE` violated the same constraint and
+> `sqlplus` exits 0 on a SQL error unless told otherwise - and its harness ate 449 of the day's own
+> transfers by rotating the movement file while the adapter was a minute behind the ledger. So the
+> first report of this incident named 451 lost transfers when the fault had cost **two**. Both defects
+> were in the fixture rather than the bank, and both are recorded in `RESPONSE.md` rather than tidied
+> away. **A fixture that does not read back what it planted will report a fault it never injected**,
+> and every number downstream will look entirely plausible.
 
 > **WP-25d is done and merged** ([#84](https://github.com/k-napiontek/tessera-bank/pull/84), `6e38d58`),
 > and **the whole estate has been driven at once for the first time.** Four containers and four
@@ -978,7 +987,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [15](wp/WP-15-backoffice.md) | `backoffice` - JSP + jQuery | 1 | 10b, 16 | `Done` | [#57](https://github.com/k-napiontek/tessera-bank/pull/57) | `e99f06e` |
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `747803d` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
-| [18a](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, worked as documented, and the RCA | - | 16, 25d | `In progress` | | |
+| [18a](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, worked as documented, and the RCA | - | 16, 25d | `Done` | [#87](https://github.com/k-napiontek/tessera-bank/pull/87) | `776a8c0` |
 | [18b](wp/WP-18-incident-exercise.md) | Final documentation pass, the DORA map, and the checker that keeps it true | - | 18a | `Not started` | | |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `a9012ce` |
 | [20](wp/WP-20-workload-model.md) | Workload model - the bank day as a contract | 4 | 02 | `Done` | [#59](https://github.com/k-napiontek/tessera-bank/pull/59) | `b0f4c80` |
