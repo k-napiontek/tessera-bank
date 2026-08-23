@@ -110,6 +110,12 @@ fix it. Containment actions available here, cheapest first:
   is recoverable; a wrong balance replicated into a second core is not.
 - Hold the overnight cycle. It is the step that makes today's disagreement permanent in the master.
 
+**Some incidents cannot be contained, and saying so is part of the response.** Where the damage was
+already complete before anything could see it - a hop that discarded records and committed the
+offsets, a cycle that has already run - there is no action that makes the problem smaller, and
+performing one anyway to have something in this box is worse than recording that the box is empty.
+Write down what was checked and why containment had nothing to do. **INC-001** is the worked example.
+
 **Never contain by deleting.** No message is dropped, no offset is reset past an unprocessed record,
 no row is deleted to make a report clean. The estate's guarantees are built on records that survive -
 [ADR 0014](../governance/adr/0014-the-movement-file-is-its-own-unique-constraint.md) exists because a
@@ -133,6 +139,18 @@ control that found the problem and getting a clean result:
 - A rejected batch is cleared when the cycle is re-run and the rejects file is empty or explained.
 
 Stating recovery without re-running the control is stating an expectation.
+
+**Removing the fault and recovering from it are two questions, and the first one is much easier.**
+An estate can be provably free of the fault and still be missing everything the fault cost:
+**INC-001** reversed cleanly and cleared *zero* of the accounts it had broken, because a message the
+consumer has acknowledged is not replayable by anything here. Answer both, separately, and never let
+the first stand in for the second. Where the loss is unrecoverable, say so and say what would be
+needed to recover it - that sentence is what turns an RCA action into a tracked change.
+
+**And a control does not have to reach zero to have been re-run.** Where the estate has a known
+population of differences that predate the incident, the recovery is read against that floor and the
+floor is stated with its cause. A recovery measured against zero in an estate that never reaches zero
+is measuring the wrong findings.
 
 ## Who does what
 
@@ -254,6 +272,37 @@ deleted - the reasoning is the part worth keeping.
 
 ## What the first exercise changed
 
-> Filled by WP-18a, after the exercise. Until then this section is empty on purpose: writing it in
-> advance would make this document a description of an exercise rather than a procedure the exercise
-> could fail.
+[INC-001](../incidents/INC-001-transfers-discarded-at-the-era-boundary.md), 2026-08-23. A permanent
+data error in stratum 1 made `esb-adapter` discard two transfers and commit their offsets, and every
+signal this estate has said healthy while it did. Worked against this document as written; the
+response log is [`workload/baselines/incident/RESPONSE.md`](../../workload/baselines/incident/RESPONSE.md).
+
+**What held.** Detection through the reconciliation report read in `legacy/backoffice`, the severity
+model, the escalation override for a break that survives a cycle, and the rule that a recovery is
+verified by re-running the control rather than by the symptom going away - that last one is what
+established that the money was gone rather than late.
+
+**What did not, and what changed here because of it.**
+
+- **Containment had nothing to do.** Every action the Containment section offers assumes the estate is
+  still making the problem larger. The damage was complete within about 150 milliseconds of the
+  poisoned record being polled and roughly five minutes before the report that revealed it existed.
+  The procedure had no category for an incident that is over before it is visible; it does now, under
+  [Containment](#containment).
+- **A verified recovery is not a recovered estate.** The fault reversed cleanly and *zero* affected
+  accounts cleared, because a message the consumer has acknowledged is not replayable by anything
+  here. [Verification of recovery](#verification-of-recovery) now separates the two questions, because
+  answering the first and reporting it as the second is the most flattering mistake available.
+- **The estate could not say which breaks were new.** Three accounts of real loss arrived inside
+  forty-seven accounts of report, on a standing floor of two hundred and twenty-four that compounds
+  every cycle. Separating them took an ad-hoc SQL query against the ledger. Logged as **F-114**.
+
+**What the exercise found that was not about the process at all** is in the RCA: F-106 predicted a
+blocked partition and this estate silently discards instead, and the reconciliation's false-positive
+population grows without bound. F-111 to F-114.
+
+**And the exercise had to be run twice.** The first attempt announced a fault Oracle had refused, and
+its harness ate 449 of the day's own transfers - so the first report of this incident named 451 lost
+transfers when the fault had cost two. Both defects were in the fixture rather than the bank, and
+finding them is what the first attempt was worth. **A fixture that does not read back what it planted
+will report a fault it never injected**, and every number downstream will look entirely plausible.
