@@ -175,8 +175,39 @@ stop() {
 }
 trap stop EXIT INT TERM
 
+records() { if [ -f "$1" ]; then echo $(( $(wc -c <"$1") / 120 )); else echo 0; fi; }
+
+# -------------------------------------------------------------------------------------------------
+# **The cut-off is only a cut-off once the hop has stopped writing.** estate-up.sh returns when the
+# ledger's outbox is drained, which means every posting is on the topic - it says nothing about the
+# adapter, which is a whole era behind and writes the movement file at about 170 records a second.
+# Rotating the instant the driver stops therefore cuts the day in the middle of the hop.
+#
+# The first run of this exercise did exactly that and gave the cycle **330 of the day's 8 706
+# transfers**. Everything still classified correctly - the 9 580 accounts it left behind came back as
+# TIMING, which is what TIMING means - but the report was 9 580 lines of noise around the six lines
+# that mattered, and the next morning read as 8 748 accounts of VALUE_DRIFT at twice the day's value.
+#
+# **It waits for the file to go quiet rather than for the lag to reach zero**, because a partition
+# this fault has blocked never reaches zero and a fixture that waited for it would hang until its
+# timeout and then cut off anyway, having learnt nothing.
+# -------------------------------------------------------------------------------------------------
+wait_for_the_hop() {
+    local quiet=0 last=-1 now
+    for _ in $(seq 150); do
+        now=$(records "$MOVEMENT_FILE")
+        if [ "$now" -eq "$last" ]; then quiet=$(( quiet + 1 )); else quiet=0; fi
+        [ "$quiet" -ge 5 ] && break
+        last="$now"
+        sleep 2
+    done
+    echo "  the hop went quiet at $(records "$MOVEMENT_FILE") records"
+}
+
 run_cycle_and_reconcile() {
     local date_compact="$1" master="$2" label="$3"
+
+    wait_for_the_hop
 
     # The movement file is rotated at the cut-off, which is what makes it the cut-off: the cycle
     # consumes what the ESB wrote up to this instant and the adapter starts a fresh one. ADR 0015.
@@ -212,8 +243,6 @@ run_cycle_and_reconcile() {
 # refusal stops happening, and the retry that was blocking the partition becomes the retry that
 # drains it - which is the whole reason this fault was chosen over one that needs queue surgery.
 # -------------------------------------------------------------------------------------------------
-records() { if [ -f "$1" ]; then echo $(( $(wc -c <"$1") / 120 )); else echo 0; fi; }
-
 # GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG ... - the topic is $2 and the lag is $6.
 #
 # **It prints -1 rather than 0 when it could not read the group at all.** An awk that summed nothing
@@ -356,9 +385,12 @@ json.dump({
 PY
 
 VICTIM=$(python3 -c "import json;print(json.load(open('$WORK/victim.json'))['accountRef'])")
-TRIP_REF=$(python3 -c "import json;print(json.load(open('$WORK/victim.json'))['transferRef'])")
+# **Neither reference is printed, and that is the exercise's only control.** The first run of this
+# script echoed the account and the transfer it had chosen, which put both on the responder's screen
+# a quarter of an hour before the reconciliation they were supposed to be found from. A sealed
+# envelope beside a console that reads it out is not sealed.
 echo "  the day carries $(python3 -c "import json;print(json.load(open('$WORK/victim.json'))['transfersInWindow'])") transfers in $WINDOW"
-echo "  chosen: transfer $TRIP_REF on account $VICTIM"
+echo "  one of them is chosen; which one is in the envelope and nowhere else"
 
 ORIGINAL_OPENED=$(docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" <<SQL 2>/dev/null | tr -d ' \n'
 SET HEADING OFF PAGESIZE 0 FEEDBACK OFF
@@ -366,18 +398,24 @@ SELECT TO_CHAR(opened_date,'YYYY-MM-DD') FROM account WHERE account_ref = '$VICT
 EXIT
 SQL
 )
-echo "  its opened_date is $ORIGINAL_OPENED"
 
 # The envelope. Sealed, and nothing downstream reads it - the whole exercise is whether the break is
 # found without it.
-python3 - "$WORK/victim.json" "$ORIGINAL_OPENED" "$NEXT_DATE" >"$OUT/ENVELOPE.json" <<'PY'
+python3 - "$WORK/victim.json" "$ORIGINAL_OPENED" "$NEXT_DATE" "$BUSINESS_DATE" "$SEED" >"$OUT/ENVELOPE.json" <<'PY'
 import json, sys
 victim = json.load(open(sys.argv[1]))
 victim["originalOpenedDate"] = sys.argv[2]
 victim["injectedOpenedDate"] = sys.argv[3]
+# The conditions, so the capture describes the run that produced it rather than the script's
+# defaults - which is the rule every other directory under baselines/ already follows.
+victim["businessDate"] = sys.argv[4]
+victim["seed"] = int(sys.argv[5])
 victim["mechanism"] = (
     "account_movement_ck refuses a movement dated before opened_date; the refusal reaches the "
     "adapter as a generic SOAP fault, is classified transient, and blocks the partition for ever")
+victim["dataFix"] = (
+    "opened_date moved forward one day and last_movement_date cleared in the same UPDATE - the "
+    "watermark has to go or the same constraint refuses the correction itself")
 victim["reversal"] = "restore originalOpenedDate; the next redelivery then succeeds and the partition drains"
 json.dump(victim, sys.stdout, indent=2)
 PY
@@ -412,12 +450,38 @@ inject_when_the_day_starts() {
         echo "  rotated $(( $(wc -c <"$WORK/MOVEMENT-seeding.DAT") / 120 )) seeding records out of the day's file"
     fi
 
-    docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" >/dev/null 2>&1 <<SQL
-UPDATE account SET opened_date = DATE '$NEXT_DATE' WHERE account_ref = '$VICTIM';
+    # **last_movement_date is cleared in the same statement, and that is not tidying up.**
+    # ACCOUNT_MOVEMENT_CK is the constraint this whole fault turns on, and it guards the row as
+    # hard as it guards the posting: seeding has already stamped the account's funding date on it,
+    # so moving opened_date forward on its own is refused ORA-02290 - **the data fix is stopped by
+    # the same rule the transfers will be**. Clearing the watermark in the same UPDATE satisfies the
+    # constraint's own NULL branch and lets the row through, which is exactly how a real operator
+    # gets a bad correction past a check they were not thinking about.
+    #
+    # The first run of this exercise did not clear it, sent the UPDATE into >/dev/null, and sqlplus
+    # exits 0 on a SQL error unless it is told otherwise - so the fixture announced an injection
+    # that Oracle had refused and the run measured an estate with no fault in it. Everything
+    # downstream looked entirely plausible. Hence WHENEVER SQLERROR EXIT FAILURE and the read-back.
+    docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" \
+        >"$WORK/inject.log" 2>&1 <<SQL
+WHENEVER SQLERROR EXIT FAILURE
+UPDATE account SET opened_date = DATE '$NEXT_DATE', last_movement_date = NULL
+ WHERE account_ref = '$VICTIM';
 COMMIT;
 EXIT
 SQL
-    echo "injected at $(date -u +%H:%M:%S)Z" >"$WORK/injected.txt"
+    local planted
+    planted=$(docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" 2>/dev/null <<SQL | tr -d ' \n'
+SET HEADING OFF PAGESIZE 0 FEEDBACK OFF
+SELECT TO_CHAR(opened_date,'YYYY-MM-DD') FROM account WHERE account_ref = '$VICTIM';
+EXIT
+SQL
+)
+    if [ "$planted" != "$NEXT_DATE" ]; then
+        echo "the fault did not take - opened_date is $planted, not $NEXT_DATE" >"$WORK/injected.txt"
+        return 1
+    fi
+    echo "injected at $(date -u +%H:%M:%S)Z, confirmed by reading the row back" >"$WORK/injected.txt"
 }
 
 step "Stratum 2, the injector, and day D"
@@ -442,7 +506,7 @@ TB_KEEP_DATA=1 TB_KEEP_BROKER=1 TB_MANIFEST="$WORK/manifest-d.json" TB_SCRAPE_DI
 day_d=$?
 set -e
 wait "$ADAPTER_UP" || { echo "incident-exercise: stratum 2 never came up" >&2; cat "$WORK/adapter-up.log" >&2; exit 1; }
-wait "$INJECTOR" || true
+wait "$INJECTOR" || { echo "FAIL  the injector did not plant the fault - see $WORK/inject.log" >&2; cat "$WORK/injected.txt" >&2; exit 1; }
 cat "$WORK/adapter-up.log"
 [ "$day_d" -eq 0 ] || { echo "FAIL  day D exited $day_d - see $WORK/day-d.log" >&2; tail -20 "$WORK/day-d.log" >&2; exit 1; }
 grep -E "^  (opened|posted|scheduled)" "$WORK/day-d.log" || true
