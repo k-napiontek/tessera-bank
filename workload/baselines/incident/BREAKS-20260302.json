@@ -1,0 +1,1838 @@
+{
+  "formatId": "TB-RECON-BREAKS-V1",
+  "businessDate": "20260302",
+  "ledgerPosition": 40948,
+  "ledgerChainHash": "b49d3375544df41377d679330bdcbe5992555efdaebe08f299b279e4d92a6a8d",
+  "cutOff": {
+    "movementFile": "MOVEMENT.IN",
+    "transferRefCount": 8134
+  },
+  "masterFile": {
+    "name": "ACCTNEW.DAT",
+    "recordCount": 16001
+  },
+  "breaks": [
+    {
+      "accountRef": "TB00000000000017",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999943844,
+      "ledgerBookedMinor": 9999987093,
+      "differenceMinor": -43249
+    },
+    {
+      "accountRef": "TB0000000000004G",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000039446,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 39446
+    },
+    {
+      "accountRef": "TB0000000000006P",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000001629,
+      "ledgerBookedMinor": 9999993319,
+      "differenceMinor": 8310
+    },
+    {
+      "accountRef": "TB00000000000084",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999994440,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -5560
+    },
+    {
+      "accountRef": "TB000000000000IH",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000024905,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 24905
+    },
+    {
+      "accountRef": "TB000000000000J0",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000837399,
+      "ledgerBookedMinor": 10000357331,
+      "differenceMinor": 480068
+    },
+    {
+      "accountRef": "TB000000000000JF",
+      "classification": "TIMING",
+      "currency": "PLN",
+      "masterBookedMinor": 9999985794,
+      "ledgerBookedMinor": 9999992134,
+      "differenceMinor": -6340
+    },
+    {
+      "accountRef": "TB000000000000QN",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000048315,
+      "ledgerBookedMinor": 10000049625,
+      "differenceMinor": -1310
+    },
+    {
+      "accountRef": "TB000000000000TB",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000066154,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 66154
+    },
+    {
+      "accountRef": "TB000000000000VQ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10001623111,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 1623111
+    },
+    {
+      "accountRef": "TB000000000000W9",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999955446,
+      "ledgerBookedMinor": 9999965409,
+      "differenceMinor": -9963
+    },
+    {
+      "accountRef": "TB000000000000WT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000009284,
+      "ledgerBookedMinor": 10000003198,
+      "differenceMinor": 6086
+    },
+    {
+      "accountRef": "TB000000000000Y7",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999969656,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -30344
+    },
+    {
+      "accountRef": "TB000000000000YC",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999993914,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -6086
+    },
+    {
+      "accountRef": "TB000000000000ZP",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000013070,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 13070
+    },
+    {
+      "accountRef": "TB00000000000102",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999996371,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -3629
+    },
+    {
+      "accountRef": "TB0000000000012O",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000031064,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 31064
+    },
+    {
+      "accountRef": "TB0000000000013Q",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000043056,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 43056
+    },
+    {
+      "accountRef": "TB0000000000017L",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999994862,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -5138
+    },
+    {
+      "accountRef": "TB00000000000198",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000529063,
+      "ledgerBookedMinor": 10000528579,
+      "differenceMinor": 484
+    },
+    {
+      "accountRef": "TB000000000001BZ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000010903,
+      "ledgerBookedMinor": 10000015247,
+      "differenceMinor": -4344
+    },
+    {
+      "accountRef": "TB000000000001C4",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000064216,
+      "ledgerBookedMinor": 10000052691,
+      "differenceMinor": 11525
+    },
+    {
+      "accountRef": "TB000000000001CU",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10001069952,
+      "ledgerBookedMinor": 10001012710,
+      "differenceMinor": 57242
+    },
+    {
+      "accountRef": "TB000000000001EE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000075687,
+      "ledgerBookedMinor": 10000054165,
+      "differenceMinor": 21522
+    },
+    {
+      "accountRef": "TB000000000001J7",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000014437,
+      "ledgerBookedMinor": 10000005122,
+      "differenceMinor": 9315
+    },
+    {
+      "accountRef": "TB000000000001LB",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 9999969573,
+      "differenceMinor": 30427
+    },
+    {
+      "accountRef": "TB000000000001OC",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000044776,
+      "ledgerBookedMinor": 10000037364,
+      "differenceMinor": 7412
+    },
+    {
+      "accountRef": "TB000000000001RE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000013691,
+      "ledgerBookedMinor": 10000053137,
+      "differenceMinor": -39446
+    },
+    {
+      "accountRef": "TB000000000001S4",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000274184,
+      "ledgerBookedMinor": 10000657396,
+      "differenceMinor": -383212
+    },
+    {
+      "accountRef": "TB000000000001SL",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000016077,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 16077
+    },
+    {
+      "accountRef": "TB000000000001T7",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999996982,
+      "ledgerBookedMinor": 9999953733,
+      "differenceMinor": 43249
+    },
+    {
+      "accountRef": "TB000000000001X2",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000096018,
+      "ledgerBookedMinor": 9999978890,
+      "differenceMinor": 117128
+    },
+    {
+      "accountRef": "TB000000000001YN",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 10000030427,
+      "differenceMinor": -30427
+    },
+    {
+      "accountRef": "TB000000000001YR",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999996439,
+      "ledgerBookedMinor": 9999991301,
+      "differenceMinor": 5138
+    },
+    {
+      "accountRef": "TB000000000001ZA",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000015675,
+      "ledgerBookedMinor": 10000002255,
+      "differenceMinor": 13420
+    },
+    {
+      "accountRef": "TB0000000000025V",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000008653,
+      "ledgerBookedMinor": 10000010762,
+      "differenceMinor": -2109
+    },
+    {
+      "accountRef": "TB000000000002BN",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 9999991390,
+      "differenceMinor": 8610
+    },
+    {
+      "accountRef": "TB000000000002GV",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000020194,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 20194
+    },
+    {
+      "accountRef": "TB000000000002IO",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999955149,
+      "ledgerBookedMinor": 10000015182,
+      "differenceMinor": -60033
+    },
+    {
+      "accountRef": "TB000000000002KZ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999995949,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -4051
+    },
+    {
+      "accountRef": "TB000000000002N9",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000060033,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 60033
+    },
+    {
+      "accountRef": "TB000000000002P4",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999951627,
+      "ledgerBookedMinor": 9999878711,
+      "differenceMinor": 72916
+    },
+    {
+      "accountRef": "TB000000000002PI",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000037475,
+      "ledgerBookedMinor": 9999998007,
+      "differenceMinor": 39468
+    },
+    {
+      "accountRef": "TB000000000002QB",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000022075,
+      "ledgerBookedMinor": 9999991351,
+      "differenceMinor": 30724
+    },
+    {
+      "accountRef": "TB000000000002RT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000008496,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 8496
+    },
+    {
+      "accountRef": "TB000000000002UH",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000146556,
+      "ledgerBookedMinor": 9999995355,
+      "differenceMinor": 151201
+    },
+    {
+      "accountRef": "TB0000000000033P",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999967796,
+      "ledgerBookedMinor": 9999994432,
+      "differenceMinor": -26636
+    },
+    {
+      "accountRef": "TB0000000000034H",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000368412,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 368412
+    },
+    {
+      "accountRef": "TB0000000000039J",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000467069,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 467069
+    },
+    {
+      "accountRef": "TB000000000003AX",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000023893,
+      "ledgerBookedMinor": 10000015859,
+      "differenceMinor": 8034
+    },
+    {
+      "accountRef": "TB000000000003EM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000248204,
+      "ledgerBookedMinor": 10000016362,
+      "differenceMinor": 231842
+    },
+    {
+      "accountRef": "TB000000000003KF",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000025049,
+      "ledgerBookedMinor": 9999997256,
+      "differenceMinor": 27793
+    },
+    {
+      "accountRef": "TB000000000003LQ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999825150,
+      "ledgerBookedMinor": 9999817167,
+      "differenceMinor": 7983
+    },
+    {
+      "accountRef": "TB000000000003ML",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000017086,
+      "ledgerBookedMinor": 9999991719,
+      "differenceMinor": 25367
+    },
+    {
+      "accountRef": "TB000000000003Q3",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000101888,
+      "ledgerBookedMinor": 10000105692,
+      "differenceMinor": -3804
+    },
+    {
+      "accountRef": "TB000000000003QM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000049787,
+      "ledgerBookedMinor": 9999993350,
+      "differenceMinor": 56437
+    },
+    {
+      "accountRef": "TB000000000003R2",
+      "classification": "TIMING",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 10000020106,
+      "differenceMinor": -20106
+    },
+    {
+      "accountRef": "TB000000000003TR",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999993229,
+      "ledgerBookedMinor": 10000029628,
+      "differenceMinor": -36399
+    },
+    {
+      "accountRef": "TB000000000003XR",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000086701,
+      "ledgerBookedMinor": 10000091410,
+      "differenceMinor": -4709
+    },
+    {
+      "accountRef": "TB000000000003ZE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000125994,
+      "ledgerBookedMinor": 10000123885,
+      "differenceMinor": 2109
+    },
+    {
+      "accountRef": "TB00000000000427",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999979592,
+      "ledgerBookedMinor": 10000001114,
+      "differenceMinor": -21522
+    },
+    {
+      "accountRef": "TB00000000000428",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000017059,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 17059
+    },
+    {
+      "accountRef": "TB00000000000431",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999914946,
+      "ledgerBookedMinor": 9999940313,
+      "differenceMinor": -25367
+    },
+    {
+      "accountRef": "TB0000000000043P",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000038214,
+      "ledgerBookedMinor": 9999998180,
+      "differenceMinor": 40034
+    },
+    {
+      "accountRef": "TB0000000000044E",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000176473,
+      "ledgerBookedMinor": 10000029672,
+      "differenceMinor": 146801
+    },
+    {
+      "accountRef": "TB0000000000045C",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000010858,
+      "ledgerBookedMinor": 10000007982,
+      "differenceMinor": 2876
+    },
+    {
+      "accountRef": "TB0000000000046H",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000011382,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 11382
+    },
+    {
+      "accountRef": "TB0000000000046I",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999991223,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -8777
+    },
+    {
+      "accountRef": "TB00000000000482",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000034311,
+      "ledgerBookedMinor": 10000032253,
+      "differenceMinor": 2058
+    },
+    {
+      "accountRef": "TB0000000000049Z",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999925075,
+      "ledgerBookedMinor": 9999982317,
+      "differenceMinor": -57242
+    },
+    {
+      "accountRef": "TB000000000004H0",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000016182,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 16182
+    },
+    {
+      "accountRef": "TB000000000004IA",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000028237,
+      "ledgerBookedMinor": 10000004868,
+      "differenceMinor": 23369
+    },
+    {
+      "accountRef": "TB000000000004IJ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999980212,
+      "ledgerBookedMinor": 9999998742,
+      "differenceMinor": -18530
+    },
+    {
+      "accountRef": "TB000000000004JI",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999989709,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -10291
+    },
+    {
+      "accountRef": "TB000000000004KD",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999984768,
+      "ledgerBookedMinor": 9999990832,
+      "differenceMinor": -6064
+    },
+    {
+      "accountRef": "TB000000000004M3",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000012828,
+      "ledgerBookedMinor": 10000079398,
+      "differenceMinor": -66570
+    },
+    {
+      "accountRef": "TB000000000004NM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999988474,
+      "ledgerBookedMinor": 9999997484,
+      "differenceMinor": -9010
+    },
+    {
+      "accountRef": "TB000000000004NT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999998986,
+      "ledgerBookedMinor": 9999994277,
+      "differenceMinor": 4709
+    },
+    {
+      "accountRef": "TB000000000004P0",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10014384974,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 14384974
+    },
+    {
+      "accountRef": "TB000000000004VH",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000588800,
+      "ledgerBookedMinor": 10000039366,
+      "differenceMinor": 549434
+    },
+    {
+      "accountRef": "TB000000000004W9",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000020132,
+      "ledgerBookedMinor": 10000017013,
+      "differenceMinor": 3119
+    },
+    {
+      "accountRef": "TB000000000004WK",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999995074,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -4926
+    },
+    {
+      "accountRef": "TB0000000000051H",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000001310,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 1310
+    },
+    {
+      "accountRef": "TB00000000000529",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000058662,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 58662
+    },
+    {
+      "accountRef": "TB00000000000543",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999996337,
+      "ledgerBookedMinor": 9999996821,
+      "differenceMinor": -484
+    },
+    {
+      "accountRef": "TB0000000000056Z",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000366941,
+      "ledgerBookedMinor": 9999976756,
+      "differenceMinor": 390185
+    },
+    {
+      "accountRef": "TB0000000000059Q",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10001016827,
+      "ledgerBookedMinor": 10001025437,
+      "differenceMinor": -8610
+    },
+    {
+      "accountRef": "TB000000000005F2",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10003032072,
+      "ledgerBookedMinor": 10003071540,
+      "differenceMinor": -39468
+    },
+    {
+      "accountRef": "TB000000000005HC",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999959966,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -40034
+    },
+    {
+      "accountRef": "TB000000000005IX",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000038669,
+      "ledgerBookedMinor": 10000034865,
+      "differenceMinor": 3804
+    },
+    {
+      "accountRef": "TB000000000005LU",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000017891,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 17891
+    },
+    {
+      "accountRef": "TB000000000005NT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000004051,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 4051
+    },
+    {
+      "accountRef": "TB000000000005VV",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999983818,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -16182
+    },
+    {
+      "accountRef": "TB00000000000605",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999985058,
+      "ledgerBookedMinor": 9999993368,
+      "differenceMinor": -8310
+    },
+    {
+      "accountRef": "TB00000000000622",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999985852,
+      "ledgerBookedMinor": 9999994348,
+      "differenceMinor": -8496
+    },
+    {
+      "accountRef": "TB00000000000654",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999988963,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -11037
+    },
+    {
+      "accountRef": "TB000000000006BX",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999986580,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -13420
+    },
+    {
+      "accountRef": "TB000000000006DK",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999991355,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -8645
+    },
+    {
+      "accountRef": "TB000000000006KK",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999997124,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -2876
+    },
+    {
+      "accountRef": "TB000000000006MM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999954653,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -45347
+    },
+    {
+      "accountRef": "TB000000000006PZ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999986774,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -13226
+    },
+    {
+      "accountRef": "TB000000000006Q7",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 9999995656,
+      "differenceMinor": 4344
+    },
+    {
+      "accountRef": "TB000000000006QU",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999950335,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -49665
+    },
+    {
+      "accountRef": "TB000000000006UC",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999943945,
+      "ledgerBookedMinor": 9999939019,
+      "differenceMinor": 4926
+    },
+    {
+      "accountRef": "TB00000000000721",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000009010,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 9010
+    },
+    {
+      "accountRef": "TB0000000000072P",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999984326,
+      "ledgerBookedMinor": 9999981161,
+      "differenceMinor": 3165
+    },
+    {
+      "accountRef": "TB0000000000078Q",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000106484,
+      "ledgerBookedMinor": 10000070085,
+      "differenceMinor": 36399
+    },
+    {
+      "accountRef": "TB0000000000079B",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10004007235,
+      "ledgerBookedMinor": 10000295951,
+      "differenceMinor": 3711284
+    },
+    {
+      "accountRef": "TB000000000007A2",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000036058,
+      "ledgerBookedMinor": 10000047440,
+      "differenceMinor": -11382
+    },
+    {
+      "accountRef": "TB000000000007ER",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000176435,
+      "ledgerBookedMinor": 10000008644,
+      "differenceMinor": 167791
+    },
+    {
+      "accountRef": "TB000000000007FB",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999964491,
+      "ledgerBookedMinor": 9999989641,
+      "differenceMinor": -25150
+    },
+    {
+      "accountRef": "TB000000000007FU",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999996881,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -3119
+    },
+    {
+      "accountRef": "TB000000000007HO",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000178345,
+      "ledgerBookedMinor": 9999990586,
+      "differenceMinor": 187759
+    },
+    {
+      "accountRef": "TB000000000007I6",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000013982,
+      "ledgerBookedMinor": 10000012277,
+      "differenceMinor": 1705
+    },
+    {
+      "accountRef": "TB000000000007L0",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000139530,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 139530
+    },
+    {
+      "accountRef": "TB000000000007LE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 10000118034,
+      "differenceMinor": -118034
+    },
+    {
+      "accountRef": "TB000000000007TZ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10001318064,
+      "ledgerBookedMinor": 10001027068,
+      "differenceMinor": 290996
+    },
+    {
+      "accountRef": "TB000000000007YO",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999895731,
+      "ledgerBookedMinor": 10000127573,
+      "differenceMinor": -231842
+    },
+    {
+      "accountRef": "TB0000000000080B",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000077364,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 77364
+    },
+    {
+      "accountRef": "TB0000000000081E",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999981970,
+      "ledgerBookedMinor": 9999984028,
+      "differenceMinor": -2058
+    },
+    {
+      "accountRef": "TB0000000000081P",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999991529,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -8471
+    },
+    {
+      "accountRef": "TB00000000000848",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000062371,
+      "ledgerBookedMinor": 10000023497,
+      "differenceMinor": 38874
+    },
+    {
+      "accountRef": "TB0000000000085Y",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999972142,
+      "ledgerBookedMinor": 9999986927,
+      "differenceMinor": -14785
+    },
+    {
+      "accountRef": "TB00000000000864",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000118317,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 118317
+    },
+    {
+      "accountRef": "TB0000000000088C",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999977062,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -22938
+    },
+    {
+      "accountRef": "TB00000000000892",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999963110,
+      "ledgerBookedMinor": 9999986479,
+      "differenceMinor": -23369
+    },
+    {
+      "accountRef": "TB0000000000089L",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000033639,
+      "ledgerBookedMinor": 9999988292,
+      "differenceMinor": 45347
+    },
+    {
+      "accountRef": "TB0000000000089T",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999986808,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -13192
+    },
+    {
+      "accountRef": "TB000000000008CY",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000019624,
+      "ledgerBookedMinor": 9999997768,
+      "differenceMinor": 21856
+    },
+    {
+      "accountRef": "TB000000000008D2",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000548941,
+      "ledgerBookedMinor": 10000003593,
+      "differenceMinor": 545348
+    },
+    {
+      "accountRef": "TB000000000008DM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000026636,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 26636
+    },
+    {
+      "accountRef": "TB000000000008P0",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999993842,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -6158
+    },
+    {
+      "accountRef": "TB000000000008RW",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000011037,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 11037
+    },
+    {
+      "accountRef": "TB000000000008S1",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000028100,
+      "ledgerBookedMinor": 10000044335,
+      "differenceMinor": -16235
+    },
+    {
+      "accountRef": "TB000000000008SM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000045917,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 45917
+    },
+    {
+      "accountRef": "TB000000000008UE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999978164,
+      "ledgerBookedMinor": 9999996055,
+      "differenceMinor": -17891
+    },
+    {
+      "accountRef": "TB000000000008VC",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000008471,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 8471
+    },
+    {
+      "accountRef": "TB000000000008W2",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000044664,
+      "ledgerBookedMinor": 10000045717,
+      "differenceMinor": -1053
+    },
+    {
+      "accountRef": "TB0000000000091L",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000063884,
+      "ledgerBookedMinor": 10000038734,
+      "differenceMinor": 25150
+    },
+    {
+      "accountRef": "TB0000000000093K",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999905662,
+      "ledgerBookedMinor": 9999933455,
+      "differenceMinor": -27793
+    },
+    {
+      "accountRef": "TB00000000000981",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000108187,
+      "ledgerBookedMinor": 10000102144,
+      "differenceMinor": 6043
+    },
+    {
+      "accountRef": "TB0000000000098N",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000030344,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 30344
+    },
+    {
+      "accountRef": "TB000000000009G4",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000009963,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 9963
+    },
+    {
+      "accountRef": "TB000000000009GF",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999991966,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -8034
+    },
+    {
+      "accountRef": "TB000000000009GM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000938410,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 938410
+    },
+    {
+      "accountRef": "TB000000000009JD",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999932849,
+      "ledgerBookedMinor": 9999938892,
+      "differenceMinor": -6043
+    },
+    {
+      "accountRef": "TB000000000009JX",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000014785,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 14785
+    },
+    {
+      "accountRef": "TB000000000009LV",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10001524628,
+      "ledgerBookedMinor": 10000017480,
+      "differenceMinor": 1507148
+    },
+    {
+      "accountRef": "TB000000000009OS",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000217578,
+      "ledgerBookedMinor": 10000092064,
+      "differenceMinor": 125514
+    },
+    {
+      "accountRef": "TB000000000009Q0",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10004088091,
+      "ledgerBookedMinor": 9999988313,
+      "differenceMinor": 4099778
+    },
+    {
+      "accountRef": "TB000000000009UE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000011344,
+      "ledgerBookedMinor": 9999997727,
+      "differenceMinor": 13617
+    },
+    {
+      "accountRef": "TB000000000009VP",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000022938,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 22938
+    },
+    {
+      "accountRef": "TB000000000009W2",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999854741,
+      "ledgerBookedMinor": 9999856446,
+      "differenceMinor": -1705
+    },
+    {
+      "accountRef": "TB000000000009ZW",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999790288,
+      "ledgerBookedMinor": 10000404647,
+      "differenceMinor": -614359
+    },
+    {
+      "accountRef": "TB00000000000A00",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000120509,
+      "ledgerBookedMinor": 9999789038,
+      "differenceMinor": 331471
+    },
+    {
+      "accountRef": "TB00000000000A28",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999982767,
+      "ledgerBookedMinor": 10000002961,
+      "differenceMinor": -20194
+    },
+    {
+      "accountRef": "TB00000000000A6B",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999542377,
+      "ledgerBookedMinor": 9999910789,
+      "differenceMinor": -368412
+    },
+    {
+      "accountRef": "TB00000000000A6J",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999968936,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -31064
+    },
+    {
+      "accountRef": "TB00000000000A89",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999654692,
+      "ledgerBookedMinor": 9999662104,
+      "differenceMinor": -7412
+    },
+    {
+      "accountRef": "TB00000000000AAZ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999718665,
+      "ledgerBookedMinor": 9999726648,
+      "differenceMinor": -7983
+    },
+    {
+      "accountRef": "TB00000000000AC5",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999945458,
+      "ledgerBookedMinor": 9999954773,
+      "differenceMinor": -9315
+    },
+    {
+      "accountRef": "TB00000000000AD9",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999996202,
+      "ledgerBookedMinor": 10000013261,
+      "differenceMinor": -17059
+    },
+    {
+      "accountRef": "TB00000000000AH1",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000269676,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 269676
+    },
+    {
+      "accountRef": "TB00000000000AI4",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999913495,
+      "ledgerBookedMinor": 9999986411,
+      "differenceMinor": -72916
+    },
+    {
+      "accountRef": "TB00000000000AI5",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999991436,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -8564
+    },
+    {
+      "accountRef": "TB00000000000AIM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999943563,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -56437
+    },
+    {
+      "accountRef": "TB00000000000AIR",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999753319,
+      "ledgerBookedMinor": 9999871636,
+      "differenceMinor": -118317
+    },
+    {
+      "accountRef": "TB00000000000AJO",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999969276,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -30724
+    },
+    {
+      "accountRef": "TB00000000000AL3",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999848799,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -151201
+    },
+    {
+      "accountRef": "TB00000000000ALK",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000006064,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 6064
+    },
+    {
+      "accountRef": "TB00000000000AQY",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000046674,
+      "ledgerBookedMinor": 10000038110,
+      "differenceMinor": 8564
+    },
+    {
+      "accountRef": "TB00000000000ARN",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999807809,
+      "ledgerBookedMinor": 9999885173,
+      "differenceMinor": -77364
+    },
+    {
+      "accountRef": "TB00000000000AUZ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999938362,
+      "ledgerBookedMinor": 9999954439,
+      "differenceMinor": -16077
+    },
+    {
+      "accountRef": "TB00000000000AVH",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000492649,
+      "ledgerBookedMinor": 10000487089,
+      "differenceMinor": 5560
+    },
+    {
+      "accountRef": "TB00000000000AVO",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999963399,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -36601
+    },
+    {
+      "accountRef": "TB00000000000AX3",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999603013,
+      "ledgerBookedMinor": 9999616630,
+      "differenceMinor": -13617
+    },
+    {
+      "accountRef": "TB00000000000AZN",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999941654,
+      "ledgerBookedMinor": 9999980528,
+      "differenceMinor": -38874
+    },
+    {
+      "accountRef": "TB00000000000B1U",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000349020,
+      "ledgerBookedMinor": 10000347967,
+      "differenceMinor": 1053
+    },
+    {
+      "accountRef": "TB00000000000B2I",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999958211,
+      "ledgerBookedMinor": 9999891641,
+      "differenceMinor": 66570
+    },
+    {
+      "accountRef": "TB00000000000B2K",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000837378,
+      "ledgerBookedMinor": 10000037434,
+      "differenceMinor": 799944
+    },
+    {
+      "accountRef": "TB00000000000B2Y",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999657903,
+      "ledgerBookedMinor": 9999806894,
+      "differenceMinor": -148991
+    },
+    {
+      "accountRef": "TB00000000000B35",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000076829,
+      "ledgerBookedMinor": 10000063637,
+      "differenceMinor": 13192
+    },
+    {
+      "accountRef": "TB00000000000B5W",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999908066,
+      "ledgerBookedMinor": 9999929922,
+      "differenceMinor": -21856
+    },
+    {
+      "accountRef": "TB00000000000B73",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999482197,
+      "ledgerBookedMinor": 9999949266,
+      "differenceMinor": -467069
+    },
+    {
+      "accountRef": "TB00000000000B9S",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999861452,
+      "ledgerBookedMinor": 9999907369,
+      "differenceMinor": -45917
+    },
+    {
+      "accountRef": "TB00000000000BB0",
+      "classification": "TIMING",
+      "currency": "PLN",
+      "masterBookedMinor": 10000000000,
+      "ledgerBookedMinor": 9999973554,
+      "differenceMinor": 26446
+    },
+    {
+      "accountRef": "TB00000000000BCE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000049665,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": 49665
+    },
+    {
+      "accountRef": "TB00000000000BCM",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999969554,
+      "ledgerBookedMinor": 9999994459,
+      "differenceMinor": -24905
+    },
+    {
+      "accountRef": "TB00000000000BCO",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999941338,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -58662
+    },
+    {
+      "accountRef": "TB00000000000BFQ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999933846,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -66154
+    },
+    {
+      "accountRef": "TB00000000000BGD",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000176676,
+      "ledgerBookedMinor": 10000027685,
+      "differenceMinor": 148991
+    },
+    {
+      "accountRef": "TB00000000000BME",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998863165,
+      "ledgerBookedMinor": 9998852874,
+      "differenceMinor": 10291
+    },
+    {
+      "accountRef": "TB00000000000BMQ",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999955572,
+      "ledgerBookedMinor": 9999937042,
+      "differenceMinor": 18530
+    },
+    {
+      "accountRef": "TB00000000000BNT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999956944,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -43056
+    },
+    {
+      "accountRef": "TB00000000000BOT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998984183,
+      "ledgerBookedMinor": 9999151974,
+      "differenceMinor": -167791
+    },
+    {
+      "accountRef": "TB00000000000BQD",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998391237,
+      "ledgerBookedMinor": 9998940671,
+      "differenceMinor": -549434
+    },
+    {
+      "accountRef": "TB00000000000BQN",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999056945,
+      "ledgerBookedMinor": 9999856889,
+      "differenceMinor": -799944
+    },
+    {
+      "accountRef": "TB00000000000BRI",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999853199,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -146801
+    },
+    {
+      "accountRef": "TB00000000000BRY",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999977065,
+      "ledgerBookedMinor": 9999988590,
+      "differenceMinor": -11525
+    },
+    {
+      "accountRef": "TB00000000000BUP",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10018602739,
+      "ledgerBookedMinor": 9999811061,
+      "differenceMinor": 18791678
+    },
+    {
+      "accountRef": "TB00000000000BWU",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999543738,
+      "ledgerBookedMinor": 9999731497,
+      "differenceMinor": -187759
+    },
+    {
+      "accountRef": "TB00000000000BWY",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999991086,
+      "ledgerBookedMinor": 10001380200,
+      "differenceMinor": -1389114
+    },
+    {
+      "accountRef": "TB00000000000BXE",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999736482,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -263518
+    },
+    {
+      "accountRef": "TB00000000000BXG",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999860470,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -139530
+    },
+    {
+      "accountRef": "TB00000000000BY4",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999709004,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -290996
+    },
+    {
+      "accountRef": "TB00000000000C01",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999396259,
+      "ledgerBookedMinor": 9999786444,
+      "differenceMinor": -390185
+    },
+    {
+      "accountRef": "TB00000000000C0K",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998691158,
+      "ledgerBookedMinor": 9999629568,
+      "differenceMinor": -938410
+    },
+    {
+      "accountRef": "TB00000000000C0W",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998788189,
+      "ledgerBookedMinor": 9998779412,
+      "differenceMinor": 8777
+    },
+    {
+      "accountRef": "TB00000000000C1J",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10001079271,
+      "ledgerBookedMinor": 9999926878,
+      "differenceMinor": 1152393
+    },
+    {
+      "accountRef": "TB00000000000C2V",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998902951,
+      "ledgerBookedMinor": 9998889725,
+      "differenceMinor": 13226
+    },
+    {
+      "accountRef": "TB00000000000C35",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999874486,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -125514
+    },
+    {
+      "accountRef": "TB00000000000C3S",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999508232,
+      "ledgerBookedMinor": 10000053580,
+      "differenceMinor": -545348
+    },
+    {
+      "accountRef": "TB00000000000C3X",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9996275055,
+      "ledgerBookedMinor": 9996266410,
+      "differenceMinor": 8645
+    },
+    {
+      "accountRef": "TB00000000000C4M",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9999218622,
+      "ledgerBookedMinor": 9999550093,
+      "differenceMinor": -331471
+    },
+    {
+      "accountRef": "TB00000000000C50",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998724232,
+      "ledgerBookedMinor": 9999876625,
+      "differenceMinor": -1152393
+    },
+    {
+      "accountRef": "TB00000000000C52",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998775318,
+      "ledgerBookedMinor": 9998892446,
+      "differenceMinor": -117128
+    },
+    {
+      "accountRef": "TB00000000000C5O",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10002604480,
+      "ledgerBookedMinor": 9999786140,
+      "differenceMinor": 2818340
+    },
+    {
+      "accountRef": "TB00000000000C5X",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9971344716,
+      "ledgerBookedMinor": 9985729690,
+      "differenceMinor": -14384974
+    },
+    {
+      "accountRef": "TB00000000000C6G",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9993039916,
+      "ledgerBookedMinor": 9996751200,
+      "differenceMinor": -3711284
+    },
+    {
+      "accountRef": "TB00000000000C6K",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9980982222,
+      "ledgerBookedMinor": 9999159541,
+      "differenceMinor": -18177319
+    },
+    {
+      "accountRef": "TB00000000000C7Z",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9998376889,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -1623111
+    },
+    {
+      "accountRef": "TB00000000000C87",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 10000016713,
+      "ledgerBookedMinor": 9999633501,
+      "differenceMinor": 383212
+    },
+    {
+      "accountRef": "TB00000000000C8X",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9997181660,
+      "ledgerBookedMinor": 10000000000,
+      "differenceMinor": -2818340
+    },
+    {
+      "accountRef": "TB00000000000C9Q",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9994483885,
+      "ledgerBookedMinor": 9998583663,
+      "differenceMinor": -4099778
+    },
+    {
+      "accountRef": "TB00000000000CA8",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9991363369,
+      "ledgerBookedMinor": 9991326768,
+      "differenceMinor": 36601
+    },
+    {
+      "accountRef": "TB00000000000CAT",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9997855077,
+      "ledgerBookedMinor": 9997851448,
+      "differenceMinor": 3629
+    },
+    {
+      "accountRef": "TB00000000000CBF",
+      "classification": "VALUE_DRIFT",
+      "currency": "PLN",
+      "masterBookedMinor": 9995115206,
+      "ledgerBookedMinor": 9995595274,
+      "differenceMinor": -480068
+    }
+  ],
+  "totals": {
+    "accountsCompared": 16001,
+    "accountsMatched": 15774,
+    "accountsBroken": 227,
+    "totalAbsoluteDriftMinor": 114390162
+  }
+}

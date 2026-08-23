@@ -1,0 +1,14 @@
+{
+  "accountRef": "TB000000000003R2",
+  "transferRef": "TB202603020000008403",
+  "atMillis": 36268999,
+  "positionInWindow": 803,
+  "transfersInWindow": 8022,
+  "originalOpenedDate": "2026-03-01",
+  "injectedOpenedDate": "2026-03-03",
+  "businessDate": "2026-03-02",
+  "seed": 4711,
+  "mechanism": "account_movement_ck refuses a movement dated before opened_date; the refusal reaches the adapter as a generic SOAP fault, is classified transient, and blocks the partition for ever",
+  "dataFix": "opened_date moved forward one day and last_movement_date cleared in the same UPDATE - the watermark has to go or the same constraint refuses the correction itself",
+  "reversal": "restore originalOpenedDate; the next redelivery then succeeds and the partition drains"
+}

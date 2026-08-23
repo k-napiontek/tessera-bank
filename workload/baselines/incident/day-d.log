@@ -1,0 +1,84 @@
+
+[1m== PostgreSQL ==[0m
+OK    PostgreSQL is ready on 5438
+
+[1m== Kafka ==[0m
+OK    Kafka is ready on 9096
+OK    the two topics exist before anything subscribes to them
+
+[1m== Ledger ==[0m
+OK    the ledger is up
+OK    the ledger process is 8749, on port 8080
+
+[1m== Fraud scoring ==[0m
+OK    the scorer is up
+OK    the fraud-scoring process is 8764, on port 9102
+
+[1m== Driver ==[0m
+  it writes the public key, then waits for the gateway - its output follows below
+OK    the driver wrote its public key
+
+[1m== Gateway ==[0m
+OK    the gateway is up
+
+[1m== Run ==[0m
+  seeding and then executing; this takes as long as the compressed day does
+  metrics: http://localhost:9100/metrics   and the gateway's own on :9091
+
+== Proxy ==
+  [::]:8079 in front of http://localhost:8080, adding nothing until a condition says so
+
+TB-WORKLOAD-DAY-V1  1.0.0  digest d887de999bad
+
+  Business date   2026-03-02 (Monday)
+  Window          09:00 to 18:00
+  Seed            4711          commit b6602ca
+  Scale           0.002          Compression 720x
+  Events          32663
+  Offered rate    725.8/s mean, 826.2/s peak     (what this run will produce)
+  Gateway         http://localhost:8081
+  Currency        PLN - every account is opened in it
+  Keys            public key written to /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-workload-keys.pem
+  Metrics         http://localhost:9100/metrics
+
+== Seeding ==
+  16001 accounts the population declares, opening balance 10000000000 PLN each, 8 at a time
+  opened 16001, already open 0, funded 16000, replayed 0, in 1m2.3s
+
+== Run ==
+  9h00m of business time at 720x, so about 45s of wall clock
+
+  settling for 15s so the relay and the scorer can catch up
+  the relay published the run's last 2836 events in 16s
+
+== Outcome ==
+  scheduled 32807, sent 32803, elapsed 45s
+  money movement   posted 8842
+  reads            posted 23961
+  unsent           4 (no-reference-yet)
+
+== Latency, from the intended send time ==
+  mean 3ms   p50 5ms   p95 10ms   p99 25ms   max 44ms
+
+== The driver itself ==
+  peak in flight 17 (expected never exceeded), schedule lag max 2ms
+  retries 0, currency substituted 666, refused 0
+
+== Reconciliation against the ledger's own count ==
+  outcome      driver   ledger   
+  posted         8842     8842   ok        
+  replayed          0        0   ok        
+  rejected          0        0   ok        
+  refused           0        0   ok        - the gateway refused these; they never reached the ledger
+  unknown           0        0   ok        - the ledger's failures are a lower bound: an answer may have been lost on the way back
+
+[1m== Outbox ==[0m
+OK    the relay drained everything this run produced; lag 0.0s
+
+  ledger log   /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-workload-ledger.log
+  gateway log  /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-workload-gateway.log
+  scorer log   /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-workload-fraud.log
+  manifest     /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-incident/manifest-d.json
+
+== stopping ==
+[4]+  Terminated: 15          TB_GATEWAY_LEDGER_URL="http://localhost:$LEDGER_PROXY_PORT/v1" TB_GATEWAY_JWT_ISSUER="https://issuer.tesserabank.example" TB_GATEWAY_JWT_AUDIENCE="tessera-bank-ledger" TB_GATEWAY_JWT_KEYS="$KEYS" TB_GATEWAY_LISTEN=":$GATEWAY_PORT" TB_GATEWAY_ADMIN_LISTEN=":$GATEWAY_ADMIN_PORT" TB_GATEWAY_RATE_PER_SECOND="${TB_GATEWAY_RATE_PER_SECOND:-20}" TB_GATEWAY_RATE_BURST="${TB_GATEWAY_RATE_BURST:-40}" go -C "$ROOT/edge/api-gateway" run ./cmd/gateway > "${TMPDIR:-/tmp}/tessera-workload-gateway.log" 2>&1

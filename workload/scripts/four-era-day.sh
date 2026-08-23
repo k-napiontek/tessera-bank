@@ -198,60 +198,15 @@ echo "OK    the WSDL answers on $TOMCAT_PORT"
 # does produce is initial lag, and the sampler records it rather than hiding it.
 # -------------------------------------------------------------------------------------------------
 bring_up_stratum_2_and_watch() {
-    for _ in $(seq 180); do
-        if docker exec "$KAFKA_CONTAINER" \
-            kafka-broker-api-versions --bootstrap-server "$KAFKA_INTERNAL" >/dev/null 2>&1; then
-            break
-        fi
-        sleep 1
-    done
-
-    # Created here rather than left to auto-creation, for the reason estate-up.sh already documents
-    # about the scorer's topic: a producer creates a topic on first send, and DeadLetterRecorder
-    # never awaits its send, so the first dead letter of a run could be lost to a topic that did not
-    # exist yet and nothing would say so.
-    docker exec "$KAFKA_CONTAINER" kafka-topics --bootstrap-server "$KAFKA_INTERNAL" \
-        --create --if-not-exists --topic "$DEAD_LETTER_TOPIC" \
-        --partitions 1 --replication-factor 1 >/dev/null 2>&1 || true
-
-    # Every value from the environment, which is the line between extending the fixture and
-    # modifying the estate. The contracts directory has to be absolute: the default is relative and
-    # the WSDL imports the canonical schema by a path beside it. The endpoint has to be given: the
-    # default is :8080, which under estate-up.sh is the *ledger's* port.
-    JAVA_HOME="$JAVA8" nohup "$JAVA8/bin/java" -jar "$ADAPTER_JAR" \
-        --spring.kafka.bootstrap-servers="localhost:$KAFKA_PORT" \
-        --tessera.esb.customer-master-endpoint="$ENDPOINT" \
-        --tessera.contracts.dir="$ROOT/contracts" \
-        --tessera.esb.movement-file="$MOVEMENT_FILE" \
-        >"$ADAPTER_LOG" 2>&1 &
-    echo $! >"$WORK/adapter.pid"
-
-    # Readiness asked of the broker rather than read off a log, the same rule legacy-up.sh applies
-    # to Oracle: the group is up when something holds a partition of the topic, and a log line saying
-    # "Started EsbAdapterApplication" is printed before that is true.
-    #
-    # **It fails rather than falling through.** On WP-25d's second run this loop was asking on the
-    # wrong listener, so every attempt hung retrying for about seven seconds and 120 of them took
-    # thirteen and a half minutes - after which the loop simply ended and sampling started against a
-    # group nothing had confirmed was there. A readiness probe that gives up quietly is worse than no
-    # probe: it turns a broken fixture into a run that produces plausible-looking output.
-    subscribed=no
-    for _ in $(seq 60); do
-        if docker exec "$KAFKA_CONTAINER" kafka-consumer-groups \
-            --bootstrap-server "$KAFKA_INTERNAL" --describe --group "$GROUP" 2>/dev/null \
-            | grep -q "$TOPIC"; then
-            subscribed=yes
-            break
-        fi
-        sleep 2
-    done
-    if [ "$subscribed" != yes ]; then
-        echo "four-era-day: the adapter never joined group $GROUP on $TOPIC." >&2
-        echo "  The broker's own listing is what was asked, on $KAFKA_INTERNAL." >&2
-        echo "  See $ADAPTER_LOG." >&2
-        return 1
-    fi
-    echo "OK    the adapter holds a partition of $TOPIC"
+    # Stratum 2 is brought up by adapter-up.sh, which both this and the incident exercise call -
+    # one place that knows how to start the adapter, wait for the dead-letter topic to exist and
+    # confirm the group is held.
+    bash "$ROOT/workload/scripts/adapter-up.sh" \
+        --broker-container "$KAFKA_CONTAINER" --bootstrap "$KAFKA_INTERNAL" \
+        --kafka-host "localhost:$KAFKA_PORT" \
+        --endpoint "$ENDPOINT" --movement-file "$MOVEMENT_FILE" \
+        --log "$ADAPTER_LOG" --pid-file "$WORK/adapter.pid" \
+        --group "$GROUP" --topic "$TOPIC" --dead-letter-topic "$DEAD_LETTER_TOPIC" || return 1
 
     go -C "$ROOT/workload" run ./cmd/workload-hop \
         --broker-container "$KAFKA_CONTAINER" --bootstrap "$KAFKA_INTERNAL" \

@@ -96,6 +96,10 @@ was applied differently on the two sides.
 4. If the amounts match but the sign is inverted, suspect the account type rather than the movement:
    an `ASSET` rises on the debit and a `LIABILITY` on the credit, and an account created with the
    wrong type drifts by exactly twice every movement.
+5. **A doubling has a second reading, and it is the more common one.** `ledger = opening + 2 x
+   (master - opening)` is also what one day of movements on the master against two days of postings
+   in the ledger looks like, which is what a break that surfaced a cycle late produces. Check the
+   value dates on both sides before reaching for step 4 - **INC-001** lost two minutes there.
 
 **Escalation:** Core Banking Operations first. Involve the Ledger team once you can name the
 movement that differs.
@@ -134,6 +138,23 @@ team an hour later.
   file.
 - The overnight cycle's control totals for the same date - `MOVE-APPLIED`, `MOVE-REJECTED`,
   `VALUE-MOVED` - from the EOD output. A reject the cycle reported is often the whole explanation.
+- **The previous morning's report, and the difference between the two.** Which accounts are new since
+  yesterday is the first question worth asking and this estate does not answer it: the report has no
+  notion of a baseline, so the only way to get it today is to read both `BREAKS-CCYYMMDD.json` files
+  and take the set difference. Logged as **F-114**.
+
+### The population that is in every report and is not yours to work
+
+`batch/recon` bounds the ledger side at `value_date <= business_date`. A hold capture and a reversal
+carry the ledger's own clock rather than a business date - **F-104**, because `CaptureRequest` and
+`ReversalRequest` declare no `valueDate` - so the ledger side cannot see them, while the ESB writes
+them into the movement file anyway - **F-107** - and the master applies them for good.
+
+The result is a `VALUE_DRIFT` population that has nothing to do with any incident and **compounds
+every cycle**: 224 accounts, then 271, then 476 over three consecutive business dates in INC-001.
+Both findings are open. Until they close, **the escalation thresholds below are permanently tripped
+by accounts nobody needs to work**, and the number to read is how many are *new*, not how many there
+are.
 
 ## Escalation thresholds
 

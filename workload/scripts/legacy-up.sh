@@ -12,6 +12,7 @@
 #   bash workload/scripts/legacy-up.sh                    # boot and wait, Ctrl-C to stop
 #   bash workload/scripts/legacy-up.sh --accounts 40000   # a larger master
 #   bash workload/scripts/legacy-up.sh --keep             # leave it running after this shell exits
+#   bash workload/scripts/legacy-up.sh --backoffice       # the operator screen beside the endpoint
 #
 # **Why the Tomcat is installed rather than containerised.** There is no Tomcat 8.5 image this
 # repository already uses, and adding one would be adding infrastructure rather than assembling it.
@@ -24,6 +25,14 @@
 # `jdbc/customerMaster` and the container binds it. That is what lets one artefact deploy to every
 # environment unchanged, and it is why the datasource below is written into `context.xml` rather than
 # into anything Maven built.
+#
+# **`--backoffice` deploys the operator screen beside the endpoint**, which is what a 2011 bank ran:
+# two WARs on one Tomcat, deliberately separate so that a change to a table layout does not redeploy
+# the service every transfer crosses on. `backoffice`'s own `web.xml` declares where the morning's
+# files are as context-params and BASIC auth over the container's realm, and says in as many words
+# that the operations team binds both to the environment. That binding is a
+# `conf/Catalina/localhost/` descriptor and a `tomcat-users.xml` written here - **nothing in
+# `legacy/` changes**, which is the same line every other fixture in this directory holds.
 #
 # Needs: Docker, a JDK 8, Go, and Maven having built the WAR (`make build-legacy`).
 
@@ -51,8 +60,12 @@ SCALE=0.0002
 CUSTOMERS=2000
 ACCOUNTS=0
 KEEP=no
+BACKOFFICE=no
+BREAKS_DIR=
+REJECTS_DIR=
+OPERATOR=operator
 
-usage() { sed -n '3,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -62,6 +75,9 @@ while [ $# -gt 0 ]; do
         --seed)      SEED="$2"; shift 2 ;;
         --scale)     SCALE="$2"; shift 2 ;;
         --keep)      KEEP=yes; shift ;;
+        --backoffice)  BACKOFFICE=yes; shift ;;
+        --breaks-dir)  BREAKS_DIR="$2"; BACKOFFICE=yes; shift 2 ;;
+        --rejects-dir) REJECTS_DIR="$2"; BACKOFFICE=yes; shift 2 ;;
         -h|--help)   usage; exit 0 ;;
         *) echo "legacy-up: unknown argument $1" >&2; exit 2 ;;
     esac
@@ -69,6 +85,11 @@ done
 
 WAR="$ROOT/legacy/customer-master/target/customer-master.war"
 [ -f "$WAR" ] || { echo "legacy-up: $WAR is not built - run make build-legacy" >&2; exit 1; }
+
+BACKOFFICE_WAR="$ROOT/legacy/backoffice/target/backoffice.war"
+if [ "$BACKOFFICE" = yes ]; then
+    [ -f "$BACKOFFICE_WAR" ] || { echo "legacy-up: $BACKOFFICE_WAR is not built - run make build-legacy" >&2; exit 1; }
+fi
 
 DRIVER_JAR="$(find "${HOME}/.m2/repository/com/oracle/database/jdbc/ojdbc8" -name 'ojdbc8-*.jar' 2>/dev/null | sort | tail -1)"
 [ -n "$DRIVER_JAR" ] || { echo "legacy-up: ojdbc8 is not in the local Maven repository - run make build-legacy" >&2; exit 1; }
@@ -216,6 +237,47 @@ XML
 
 cp "$WAR" "$TOMCAT_HOME/webapps/customer-master.war"
 
+# The operator screen, on the same Tomcat and as its own WAR - legacy/backoffice/README.md's first
+# heading, and the reason customer-master publishes a classes jar. Everything below is the binding
+# `web.xml` says the operations team owns.
+if [ "$BACKOFFICE" = yes ]; then
+    BREAKS_DIR="${BREAKS_DIR:-$WORK/recon}"
+    REJECTS_DIR="${REJECTS_DIR:-$WORK/eod}"
+    # Absent is a configuration error rather than an empty screen - BackofficeConfiguration refuses
+    # to deploy against a path that is not a directory, on the grounds that a break list rendering
+    # "no breaks" because it points at nothing is the most dangerous screen in this estate.
+    mkdir -p "$BREAKS_DIR" "$REJECTS_DIR"
+
+    # **override="false", and it is the whole point.** Tomcat's default is the opposite: a
+    # <context-param> in web.xml wins over a <Parameter> here unless override is refused. The WAR
+    # ships /var/tessera/recon and /var/tessera/eod, so the default would deploy the screen against
+    # two paths that do not exist on this machine and it would not start.
+    mkdir -p "$TOMCAT_HOME/conf/Catalina/localhost"
+    cat > "$TOMCAT_HOME/conf/Catalina/localhost/backoffice.xml" <<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<Context>
+  <Parameter name="tessera.breaks.dir"  value="$BREAKS_DIR"  override="false"/>
+  <Parameter name="tessera.rejects.dir" value="$REJECTS_DIR" override="false"/>
+</Context>
+XML
+
+    # The realm. backoffice declares BASIC over the container's realm and takes the acting operator
+    # from getRemoteUser(), so there has to be one for /breaks to answer at all. A bank binds this to
+    # its directory; a fixture binds it to one synthetic user with the one role WP-15 scopes.
+    cat > "$TOMCAT_HOME/conf/tomcat-users.xml" <<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<tomcat-users xmlns="http://tomcat.apache.org/xml"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://tomcat.apache.org/xml tomcat-users.xsd"
+              version="1.0">
+  <role rolename="operator"/>
+  <user username="$OPERATOR" password="$OPERATOR" roles="operator"/>
+</tomcat-users>
+XML
+
+    cp "$BACKOFFICE_WAR" "$TOMCAT_HOME/webapps/backoffice.war"
+fi
+
 echo "-- tomcat $TOMCAT_VERSION on $TOMCAT_PORT, JDK 8"
 JAVA_HOME="$JAVA8" CATALINA_PID="$WORK/tomcat.pid" \
     "$TOMCAT_HOME/bin/catalina.sh" start >/dev/null 2>&1
@@ -236,6 +298,22 @@ curl -sf -o /dev/null "$ENDPOINT?wsdl" || {
     exit 1
 }
 
+BREAKS_URL="http://localhost:$TOMCAT_PORT/backoffice/breaks"
+if [ "$BACKOFFICE" = yes ]; then
+    printf '   backoffice'
+    for _ in $(seq 1 30); do
+        if curl -sf -o /dev/null -u "$OPERATOR:$OPERATOR" "$BREAKS_URL"; then break; fi
+        printf '.'
+        sleep 2
+    done
+    curl -sf -o /dev/null -u "$OPERATOR:$OPERATOR" "$BREAKS_URL" || {
+        echo " the screen never answered" >&2
+        tail -40 "$TOMCAT_HOME/logs/catalina.out" >&2
+        exit 1
+    }
+    echo " deployed"
+fi
+
 echo
 echo "stratum 1 is up"
 echo "   endpoint    $ENDPOINT"
@@ -243,6 +321,9 @@ echo "   wsdl        $ENDPOINT?wsdl"
 echo "   oracle      localhost:$ORACLE_PORT/$ORACLE_SERVICE as $ORACLE_USER"
 echo "   references  $WORK/accounts.txt"
 echo "   catalina    $TOMCAT_HOME/logs/catalina.out"
+if [ "$BACKOFFICE" = yes ]; then
+    echo "   backoffice  $BREAKS_URL as $OPERATOR, breaks from $BREAKS_DIR, rejects from $REJECTS_DIR"
+fi
 
 if [ "$KEEP" = yes ]; then
     echo

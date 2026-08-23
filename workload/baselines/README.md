@@ -15,9 +15,11 @@ own directory and `baseline.sh` requires `--out-name` rather than defaulting to 
 | [`signatures/`](signatures/) | The same estate, degraded on purpose. One directory per condition in `TB-SCENARIOS-V1`, each diffed against `with-broker/`. Captured by WP-24c |
 | [`migration/`](migration/) | The same estate, with a schema migration applied **while the day was running**. One directory per variant, read against each other. Captured by WP-24b |
 | [`soak/`](soak/) | The same day over twelve business dates against one ledger, to measure what nothing prunes. Captured by WP-24b |
+| [`incident/`](incident/) | **Not a measurement - an exercise.** The whole estate with a deliberate fault in it, over three business dates, and the incident worked through the documented process. Captured by WP-18a |
 
-Every capture directory holds the same seven files. `migration/` adds four of its own and `soak/`
-keeps a subset, and each says below why:
+Every capture directory holds the same seven files. `migration/` adds four of its own, `soak/` keeps
+a subset, and `incident/` holds none of them - it is the one directory here that is not a run against
+the SLO catalogue. Each says below why:
 
 | File | What it is |
 |---|---|
@@ -260,6 +262,35 @@ noticed.
 was what separated the datasource pool from a saturated machine; here the control is inside the run -
 `fraud-scoring` consumes the same topic in its own group, and it peaked at 59 while the adapter
 peaked at 7 983.
+
+## What `incident/` is, and why it holds none of the seven files
+
+**It is the only directory here that is not a measurement.** WP-18a broke the estate on purpose and
+worked the failure through
+[`incident-management.md`](../../docs/ways-of-working/incident-management.md) as written; what it
+captures is an incident rather than a run, so there is no manifest, no scrape and nothing to read
+against the SLO catalogue.
+
+| File | What it is |
+|---|---|
+| `ENVELOPE.json` | What the injector planted, sealed before the day was driven |
+| `RESPONSE.md` | The response as it happened, with real timestamps, including the steps that went nowhere |
+| `BREAKS-2026030{2,3,4}.json` | The three mornings: the floor, the break, and after the reversal |
+| `recon-*.txt`, `cycle-*.txt` | What the reconciliation and the overnight cycle printed on each |
+| `day-d.log`, `day-d1.log` | The two driven days |
+| `adapter-head.txt` | The first forty warning and error lines from stratum 2 |
+| `first-attempt/` | The run the response was worked against, in figures - see its `SUMMARY.md` |
+
+**The envelope and the response are committed side by side on purpose.** The exercise is worth
+something only if the break was found from the reconciliation report and `legacy/backoffice` rather
+than by reading what the injector planted, and committing both is what makes the order they were
+written in checkable. `RESPONSE.md` records the instant the envelope was opened and what it
+confirmed - and the two claims in it that the run contradicted.
+
+Produced by [`../scripts/incident-exercise.sh`](../scripts/incident-exercise.sh), which runs in two
+invocations: `--keep` breaks the estate and holds it up for the response, `--recover` reverses the
+fault and re-runs the control. The root cause analysis is
+[`../../docs/incidents/INC-001-transfers-discarded-at-the-era-boundary.md`](../../docs/incidents/INC-001-transfers-discarded-at-the-era-boundary.md).
 
 ## What they show
 

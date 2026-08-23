@@ -1,0 +1,40 @@
+2026-08-23 11:16:48.302  WARN 8425 --- [ntainer#0-0-C-1] org.apache.kafka.clients.NetworkClient   : [Consumer clientId=consumer-esb-adapter-1, groupId=esb-adapter] Error while fetching metadata with correlation id 2 : {tessera.ledger.transfer-posted.v1=UNKNOWN_TOPIC_OR_PARTITION}
+2026-08-23 11:18:52.758  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000001 carried to the system of record
+2026-08-23 11:18:52.762  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000001 written to the movement file as 2 legs at offset 0
+2026-08-23 11:18:52.763  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000001 crossed to stratum 0
+2026-08-23 11:18:52.774  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000002 carried to the system of record
+2026-08-23 11:18:52.775  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000002 written to the movement file as 2 legs at offset 240
+2026-08-23 11:18:52.775  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000002 crossed to stratum 0
+2026-08-23 11:18:52.785  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000003 carried to the system of record
+2026-08-23 11:18:52.786  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000003 written to the movement file as 2 legs at offset 480
+2026-08-23 11:18:52.786  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000003 crossed to stratum 0
+2026-08-23 11:18:52.798  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000004 carried to the system of record
+2026-08-23 11:18:52.799  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000004 written to the movement file as 2 legs at offset 720
+2026-08-23 11:18:52.799  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000004 crossed to stratum 0
+2026-08-23 11:18:52.806  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000005 carried to the system of record
+2026-08-23 11:18:52.807  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000005 written to the movement file as 2 legs at offset 960
+2026-08-23 11:18:52.807  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000005 crossed to stratum 0
+2026-08-23 11:18:52.815  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000006 carried to the system of record
+2026-08-23 11:18:52.815  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000006 written to the movement file as 2 legs at offset 1200
+2026-08-23 11:18:52.815  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000006 crossed to stratum 0
+2026-08-23 11:18:52.822  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000007 carried to the system of record
+2026-08-23 11:18:52.823  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000007 written to the movement file as 2 legs at offset 1440
+2026-08-23 11:18:52.823  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000007 crossed to stratum 0
+2026-08-23 11:18:52.830  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000008 carried to the system of record
+2026-08-23 11:18:52.831  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000008 written to the movement file as 2 legs at offset 1680
+2026-08-23 11:18:52.831  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000008 crossed to stratum 0
+2026-08-23 11:18:52.838  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000009 carried to the system of record
+2026-08-23 11:18:52.839  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000009 written to the movement file as 2 legs at offset 1920
+2026-08-23 11:18:52.839  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000009 crossed to stratum 0
+2026-08-23 11:18:52.846  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000010 carried to the system of record
+2026-08-23 11:18:52.847  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000010 written to the movement file as 2 legs at offset 2160
+2026-08-23 11:18:52.847  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000010 crossed to stratum 0
+2026-08-23 11:18:52.853  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000011 carried to the system of record
+2026-08-23 11:18:52.854  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000011 written to the movement file as 2 legs at offset 2400
+2026-08-23 11:18:52.854  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000011 crossed to stratum 0
+2026-08-23 11:18:52.861  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000012 carried to the system of record
+2026-08-23 11:18:52.861  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000012 written to the movement file as 2 legs at offset 2640
+2026-08-23 11:18:52.861  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000012 crossed to stratum 0
+2026-08-23 11:18:52.868  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000013 carried to the system of record
+2026-08-23 11:18:52.868  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.MovementFileWriter      : transfer TB202608230000000013 written to the movement file as 2 legs at offset 2880
+2026-08-23 11:18:52.868  INFO 8425 --- [ntainer#0-0-C-1] bank.tessera.esb.TransferBridge          : transfer TB202608230000000013 crossed to stratum 0
