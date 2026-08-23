@@ -1,0 +1,33 @@
+EOD CYCLE  business date 20260302  run 20260302030000
+   master     /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-incident/files/ACCTMAST.DAT
+   movements  /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-incident/MOVEMENT-20260302.DAT
+   work       /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-incident/eod/20260302
+   compiled   ACCTPOST, EODREPT
+
+-- STEP010 SORT  movements into account-reference sequence
+SORTREC     16268 records  MOVEMENT.IN -> MOVEMENT.DAT
+   STEP010 RC=0  elapsed 0.073s
+
+-- STEP020 ACCTPOST  apply the day to the account master
+ACCTPOST CTL MASTER-READ         16,001
+ACCTPOST CTL MASTER-WRITTEN      16,001
+ACCTPOST CTL MOVE-READ           16,268
+ACCTPOST CTL MOVE-APPLIED        16,268
+ACCTPOST CTL MOVE-REJECTED            0
+ACCTPOST CTL VALUE-MOVED           46080357.42
+ACCTPOST CTL BALANCED
+   STEP020 RC=0  elapsed 0.508s
+
+-- STEP030 SORT  new master into currency then reference sequence
+SORTREC     16001 records  ACCTNEW.DAT -> ACCTRPT.DAT
+   STEP030 RC=0  elapsed 0.062s
+
+-- STEP040 EODREPT  the end-of-day account report
+EODREPT CTL ACCOUNTS         16,001
+EODREPT CTL CURRENCIES            1
+EODREPT CTL REJECTED              0
+EODREPT CTL PAGES               299
+EODREPT CTL BALANCED
+   STEP040 RC=0  elapsed 0.309s
+
+EOD CYCLE COMPLETE  report /var/folders/l5/zrnsrg0s0d56xhgg4g660hy00000gn/T//tessera-incident/eod/20260302/EODREPT.TXT
