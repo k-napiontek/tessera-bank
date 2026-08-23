@@ -6,7 +6,7 @@
 | **Branch** | `feat/TB-1018-incident-exercise` |
 | **Stratum** | n/a - repository-wide |
 | **Depends on** | WP-16 |
-| **Status** | **18a `Done`** ([#87](https://github.com/k-napiontek/tessera-bank/pull/87), `776a8c0`) - **18b `Not started`** |
+| **Status** | **18a `Done`** ([#87](https://github.com/k-napiontek/tessera-bank/pull/87), `776a8c0`) - **18b `Done`** ([#89](https://github.com/k-napiontek/tessera-bank/pull/89), `c5d469c`) |
 
 ## Objective
 
