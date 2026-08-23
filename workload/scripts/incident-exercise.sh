@@ -59,9 +59,16 @@
 #
 # **--recover is a separate invocation against the held estate**, run after the response, and it is
 # the Constraint's "the fault must be reversible and its removal verified". It restores the
-# opened_date, waits for the partition to drain **without touching an offset or deleting a message**,
-# gives the cycle what drained, and reconciles the next business date. Zero drift from the same
-# control that found the break is the only thing that counts as recovered.
+# opened_date, drives one more business date, and shows that the account the fault refused is posting
+# to the mainframe again - a row read back says what was written, and only a movement that crosses
+# says the estate accepts one.
+#
+# **It does not assert zero drift, and the reason is the finding.** The transfers the fault refused
+# were not held: the adapter exhausted a FixedBackOff(0, 9), discarded them and committed the offset,
+# so there is no backlog to drain and nothing to replay. The fault reverses; **its cost does not**.
+# The reconciliation is therefore read against day D's own floor - what this estate looks like with
+# no fault in it, which is not zero either, because F-104 and F-107 put a population of accounts in
+# VALUE_DRIFT every morning for reasons that predate this exercise.
 #
 # Needs: Docker, a JDK 8, a JDK 17, Go, uv and GnuCOBOL.
 
@@ -93,7 +100,7 @@ KAFKA_INTERNAL=localhost:9094
 TOMCAT_PORT=18080
 ORACLE_CONTAINER="${TB_ORACLE_CONTAINER:-tessera-legacy-oracle}"
 
-usage() { sed -n '3,66p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,73p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -192,6 +199,39 @@ records() { if [ -f "$1" ]; then echo $(( $(wc -c <"$1") / 120 )); else echo 0; 
 # this fault has blocked never reaches zero and a fixture that waited for it would hang until its
 # timeout and then cut off anyway, having learnt nothing.
 # -------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
+# Seeding's movements out, the day's in - by MOV-VALUE-DATE, which is the only thing that actually
+# distinguishes them. Funding is dated the day before the run (`Header.openingDate`, F-103's rule);
+# every record the cycle should see is dated D or later.
+#
+# **The first version of this rotated the whole file when the day began, and it silently ate 449 of
+# the day's own transfers.** The adapter runs about a minute behind the ledger, so at the instant the
+# day starts the file still holds seeding records the adapter has only just written - and the day's
+# first records land in it before anything notices. Moving the file takes both. The exercise it
+# produced reported 451 transfers that never reached the mainframe when the injected fault had cost
+# **two**, and the responder spent the middle of the incident proving that 449 of them were the
+# harness rather than the bank.
+#
+# Filtering by value date has no race in it at all: a record is seeding's or it is the day's, and
+# when it was written makes no difference to which.
+# -------------------------------------------------------------------------------------------------
+take_the_days_records() {
+    local source="$1" kept="$2" from="$3"
+    python3 - "$source" "$kept" "$WORK/MOVEMENT-seeding.DAT" "$from" <<'SPLIT'
+import sys
+source, kept, seeding, from_date = sys.argv[1:]
+data = open(source, "rb").read()
+mine, theirs = bytearray(), bytearray()
+for i in range(0, len(data), 120):
+    record = data[i:i + 120]
+    (mine if record[50:58].decode() >= from_date else theirs).extend(record)
+open(kept, "wb").write(mine)
+open(seeding, "ab").write(theirs)
+print(f"  {len(mine)//120} of the day's records to the cycle, "
+      f"{len(theirs)//120} of seeding's held back")
+SPLIT
+}
+
 wait_for_the_hop() {
     local quiet=0 last=-1 now
     for _ in $(seq 150); do
@@ -211,9 +251,9 @@ run_cycle_and_reconcile() {
 
     # The movement file is rotated at the cut-off, which is what makes it the cut-off: the cycle
     # consumes what the ESB wrote up to this instant and the adapter starts a fresh one. ADR 0015.
-    local movements="$WORK/MOVEMENT-$date_compact.DAT"
-    if [ -f "$MOVEMENT_FILE" ]; then mv "$MOVEMENT_FILE" "$movements"; else : >"$movements"; fi
-    echo "  the cycle is given $(( $(wc -c <"$movements") / 120 )) movement records"
+    local movements="$WORK/MOVEMENT-$date_compact.DAT" cut="$WORK/CUT-$date_compact.DAT"
+    if [ -f "$MOVEMENT_FILE" ]; then mv "$MOVEMENT_FILE" "$cut"; else : >"$cut"; fi
+    take_the_days_records "$cut" "$movements" "$D_COMPACT"
 
     bash "$ROOT/mainframe/jcl/run-eod.sh" --business-date "$date_compact" \
         --master "$master" --movements "$movements" --work "$WORK/eod" \
@@ -259,48 +299,86 @@ recover() {
     [ -f "$OUT/ENVELOPE.json" ] || { echo "incident-exercise: no envelope under $OUT - there is nothing to reverse" >&2; exit 1; }
     [ -f "$WORK/eod/$D1_COMPACT/ACCTNEW.DAT" ] || { echo "incident-exercise: no day D+1 master under $WORK - run the exercise with --keep first" >&2; exit 1; }
 
-    local account original before_lag before_records drained
+    local account original
     account=$(python3 -c "import json;print(json.load(open('$OUT/ENVELOPE.json'))['accountRef'])")
     original=$(python3 -c "import json;print(json.load(open('$OUT/ENVELOPE.json'))['originalOpenedDate'])")
-    before_lag=$(lag)
-    before_records=$(records "$MOVEMENT_FILE")
 
     step "The reversal"
     echo "  account        $account"
     echo "  opened_date    back to $original"
-    echo "  held before    $before_lag messages behind the consumer, $before_records records in the file"
+    echo "  behind the consumer, before: $(lag) messages"
 
-    docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" >/dev/null 2>&1 <<SQL
+    docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" \
+        >"$WORK/reverse.log" 2>&1 <<SQL
+WHENEVER SQLERROR EXIT FAILURE
 UPDATE account SET opened_date = DATE '$original' WHERE account_ref = '$account';
 COMMIT;
 EXIT
 SQL
     echo "  reversed at    $(date -u +%H:%M:%S)Z"
 
-    step "The drain"
-    drained=no
-    for _ in $(seq 300); do
-        if [ "$(lag)" -eq 0 ]; then drained=yes; break; fi
-        sleep 2
-    done
-    echo "  lag            $before_lag -> $(lag)"
-    echo "  movement file  $before_records -> $(records "$MOVEMENT_FILE") records"
-    [ "$drained" = yes ] || { echo "FAIL  the partition never drained - the reversal did not take" >&2; exit 1; }
+    # -----------------------------------------------------------------------------------------
+    # **The removal is proved by driving another day, not by reading the row back.** The row says
+    # what was written; only a movement that crosses says the estate accepts one again - and
+    # `incident-management.md` is explicit that a recovery stated without re-running the control is
+    # a recovery nobody measured.
+    #
+    # It is deliberately not a drain. The first run of this reversal waited for a backlog that was
+    # not there: the refused messages had already exhausted their backoff and been discarded, so the
+    # consumer sat at zero lag with the money gone. What there is to verify is that the *next*
+    # transfer succeeds, and that is what this drives.
+    # -----------------------------------------------------------------------------------------
+    step "Day D+2: the same estate, with the fault out of it"
+    set +e
+    TB_DB_PORT="$DB_PORT" TB_DB_CONTAINER="$DB_CONTAINER" \
+    TB_KAFKA_PORT="$KAFKA_PORT" TB_KAFKA_CONTAINER="$KAFKA_CONTAINER" \
+    TB_KEEP_DATA=1 TB_KEEP_BROKER=1 TB_MANIFEST="$WORK/manifest-d2.json" TB_SCRAPE_DIR="$WORK/d2" \
+        bash "$ROOT/workload/scripts/estate-up.sh" \
+            --date "$RECOVERY_DATE" --seed "$SEED" --scale "$SCALE" --compress "$COMPRESS" \
+            --window "$WINDOW" --customers "$CUSTOMERS" --require-postings --skip-seeding \
+        >"$WORK/day-d2.log" 2>&1
+    local day_d2=$?
+    set -e
+    [ "$day_d2" -eq 0 ] || { echo "FAIL  day D+2 exited $day_d2 - see $WORK/day-d2.log" >&2; tail -20 "$WORK/day-d2.log" >&2; exit 1; }
+    grep -E "^  (posted|scheduled)" "$WORK/day-d2.log" || true
+    wait_for_the_hop
+
+    local crossed
+    crossed=$(grep -ac "$account" "$MOVEMENT_FILE" 2>/dev/null || true)
+    echo "  movement records for $account since the reversal: ${crossed:-0}"
+    [ "${crossed:-0}" -gt 0 ] || {
+        echo "FAIL  the account still cannot move money - the reversal did not take" >&2; exit 1; }
+    echo "OK    the account the fault refused is posting to the mainframe again"
 
     step "Day D+2: the cycle, and the reconciliation that found the break"
     run_cycle_and_reconcile "$D2_COMPACT" "$WORK/eod/$D1_COMPACT/ACCTNEW.DAT" "recovery"
 
+    # -----------------------------------------------------------------------------------------
+    # **Against the floor, not against zero.** Day D's own report is what this estate looks like
+    # with no fault in it, and it is not clean: F-104 dates a hold capture and a reversal by the
+    # machine's clock while F-107 puts them in the movement file anyway, so a population of accounts
+    # is in VALUE_DRIFT on every reconciliation for reasons that predate this exercise. A recovery
+    # that had to reach zero would be measuring those two findings rather than this one.
+    # -----------------------------------------------------------------------------------------
     step "Recovered?"
-    python3 - "$RECON_DIR/BREAKS-$D2_COMPACT.json" <<'DRIFT'
+    python3 - "$RECON_DIR/BREAKS-$D_COMPACT.json" "$RECON_DIR/BREAKS-$D1_COMPACT.json" \
+             "$RECON_DIR/BREAKS-$D2_COMPACT.json" <<'DRIFT'
 import json, sys
-totals = json.load(open(sys.argv[1]))["totals"]
-print(f"  accounts compared  {totals['accountsCompared']}")
-print(f"  accounts matched   {totals['accountsMatched']}")
-print(f"  accounts broken    {totals['accountsBroken']}")
-print(f"  absolute drift     {totals['totalAbsoluteDriftMinor']} minor units")
-if totals["accountsBroken"] or totals["totalAbsoluteDriftMinor"]:
-    sys.exit("\nFAIL  the reconciliation still disagrees - this is not a recovery")
-print("\nOK    zero drift, from the same control that found the break")
+
+def drift(path):
+    return {b["accountRef"] for b in json.load(open(path))["breaks"]
+            if b["classification"] == "VALUE_DRIFT"}
+
+floor, broken, now = (drift(p) for p in sys.argv[1:4])
+print(f"  the floor, day D            {len(floor)} accounts in drift with no fault in the estate")
+print(f"  the break, day D+1          {len(broken)}")
+print(f"  after the reversal, day D+2 {len(now)}")
+print(f"  cleared by the reversal     {len(broken - now)}")
+print(f"  still in drift and not the floor {len(now - floor)}")
+if now - floor:
+    print("\n  Those did not clear and cannot: their postings were discarded by the adapter after")
+    print("  the backoff ran out, the offsets were committed, and nothing in this estate replays a")
+    print("  message the consumer has already acknowledged. The fault is reversible. Its cost is not.")
 DRIFT
 }
 
@@ -437,18 +515,10 @@ inject_when_the_day_starts() {
         sleep 1
     done
     sleep 1
-    # **Seeding's own movements are rotated out before the day starts, and this is not tidiness.**
-    # The ledger is seeded by real transfers, so the ESB writes a MOVEREC for every one of them - and
-    # the master the cycle starts from already opens each account at its funded balance. Give the
-    # cycle both and it applies the opening balance twice: the first run of this exercise put all
-    # 16 001 accounts in VALUE_DRIFT at exactly 2x the opening figure. two-phase-day.sh never met it
-    # because its movement file comes from generate.py, which writes the day's transfers and no
-    # funding. This is F-107's asymmetry - the two writers of MOVEMENT.DAT do not agree about what
-    # belongs in it - in the one place it changes an answer.
-    if [ -f "$MOVEMENT_FILE" ]; then
-        mv "$MOVEMENT_FILE" "$WORK/MOVEMENT-seeding.DAT"
-        echo "  rotated $(( $(wc -c <"$WORK/MOVEMENT-seeding.DAT") / 120 )) seeding records out of the day's file"
-    fi
+    # Seeding's own movements have to be kept out of the cycle - the master already opens each
+    # account at its funded balance, so giving the cycle the funding too applies it twice. They are
+    # separated **at the cut-off and by value date**, not here and not by moving the file: see
+    # take_the_days_records below for what moving it cost.
 
     # **last_movement_date is cleared in the same statement, and that is not tidying up.**
     # ACCOUNT_MOVEMENT_CK is the constraint this whole fault turns on, and it guards the row as
