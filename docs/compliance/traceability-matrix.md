@@ -1,16 +1,16 @@
 # Requirements traceability matrix
 
-> **Partially filled.** The requirement catalogue below is complete - all 68 ids, each with its
-> owning work package. The per-package sections exist only for packages that have been executed:
-> WP-02 to WP-09, WP-10a, WP-10b, WP-11a, WP-11b, WP-12, WP-13, WP-14, WP-15, WP-16, WP-17, WP-19,
-> WP-20, WP-21, WP-22, WP-23, WP-24a, WP-24b, WP-24c, WP-25a, WP-25b, WP-25c and WP-25d. Every work
-> package adds its own as part of the Definition of Done, and WP-18 verifies that none is missing.
+> **Complete.** The catalogue below holds all 68 ids, each with its owning work package, and every
+> one of them now resolves to a per-package section - WP-01 through WP-25d, in the order they were
+> executed. WP-18b closed the last eight: `REQ-GOV-001` to `REQ-GOV-005`, which WP-01 merged without
+> a section for, and WP-18's own three.
 >
-> This list had gone stale by four packages before WP-25d - WP-24b, WP-25a, WP-25b and WP-25c all had
-> sections and none was listed - which is **F-87** happening again: it is maintained by hand, nothing
-> checks it, and it is therefore wrong exactly when somebody trusts it. Corrected here rather than
-> added to, because adding one section while leaving four unlisted would be knowingly writing a false
-> line into the document the correction belongs in.
+> **The hand-maintained list of which sections exist has been deleted rather than corrected again.**
+> It went stale twice (**F-87**), then by four packages before WP-25d, and an index of the headings
+> in the same file it indexes is a control that is wrong exactly when somebody trusts it. What
+> replaces it is `quality/docs-check.py`, wired into `make lint`: **an id used anywhere in this
+> repository that this catalogue does not define fails the build.** The other direction - an id
+> defined here that no section resolves - is still checked by hand, and is **F-115**.
 
 Requirement to design to code to test, for the whole estate. This is the artefact an auditor samples: every requirement must resolve to an implementation and to a test that would fail without it. Each work package updates it as part of its Definition of Done.
 
@@ -198,6 +198,36 @@ prefix meaning nothing in particular.
 | REQ-UI-001 | Customers can transfer between accounts | [WP-14](../plan/wp/WP-14-web-banking.md) |
 | REQ-UI-002 | Retrying a transfer cannot move money twice | [WP-14](../plan/wp/WP-14-web-banking.md) |
 | REQ-UI-003 | Available balance is never presented as spendable when held | [WP-14](../plan/wp/WP-14-web-banking.md) |
+
+---
+
+## WP-01 - foundation, governance and the plan system
+
+Ticket TB-1001. No stratum: the repository itself. **This section was written by WP-18b**, not by
+WP-01. That package completed on 2026-08-17, before `git init`, and merged with a Traceability
+section in its own file and no section here - so five of the sixty-eight ids resolved to nothing for
+twenty-four packages, in the document whose entire purpose is that every requirement resolves to
+something. Ownership does not move: these are WP-01's requirements, verified against artefacts that
+have existed since the first day.
+
+**What verifies a governance requirement is a fair question.** For most of this matrix the answer is
+a test that fails without the implementation. Here the artefact *is* the implementation, so the
+verification is what fails when the artefact stops being true: `quality/docs-check.py`, wired into
+`make lint` by WP-18b, refuses a broken internal link, a surviving stub marker and an invented
+requirement id anywhere in the repository. That is weaker than a unit test and it is not an
+assertion. Where even that does not reach - whether a document's prose is still *accurate* - the row
+says so, because **F-17** is precisely the record of a document that stayed structurally valid and
+went stale for four merged packages.
+
+### Owned by WP-01
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-GOV-001** The repository states its purpose and boundaries | `README.md` states what this estate is and what it is not; [`../plan/master-plan.md`](../plan/master-plan.md) sections 1, 2 and 7 carry the reasoning; [ADR 0001](../governance/adr/0001-source-only-repository.md) fixes the boundary at source only, and `SECURITY.md` states that parts of this repository are pinned to end-of-life dependencies on purpose and are **not fit for production** | `make lint-docs` holds every link in those documents; the boundary itself is held by the rule in [`../../CLAUDE.md`](../../CLAUDE.md) that no deployment artefact enters this repository. **Accuracy is not mechanically checkable**: the root README's Status section claimed three merged packages were still outstanding until WP-18b refreshed it, which is F-17 | **Met** |
+| **REQ-GOV-002** Deliberate technical debt is registered, not hidden | [`../technical-debt.md`](../technical-debt.md) carries TD-001 to TD-005 - Java 8, Boot 2.7.18, Tomcat 8.5, JAX-WS, the Oracle dialect - each with an owner, a compensating control and a review date, and [ADR 0002](../governance/adr/0002-deliberate-legacy-strata.md) records why they are deliberate. [`../governance/tech-radar.md`](../governance/tech-radar.md)'s Hold ring says the same thing in the form an engineer meets it | The register is cited from the [dependency policy](../ways-of-working/dependency-policy.md), the [DORA control map](dora-control-map.md) and the radar, and `lint-docs` fails if any of those citations stops resolving. **The stronger control is the one that refuses the fix**: no version in strata 0-2 may move without an explicit instruction and an ADR | **Met** |
+| **REQ-GOV-003** Work is planned in the repository and resumable cold | [`../plan/`](../plan/README.md): `STATUS.md` as the single source of truth, `master-plan.md` for why, `PROTOCOL.md` for how, and a file per work package under `wp/` carrying scope, tasks, Definition of Done and Verification | **Demonstrated rather than asserted.** Every package after WP-01 was executed by a session that started with no memory of the previous one, from these documents alone, and `STATUS.md` records the PR and merge SHA of each. `lint-docs` holds every `wp/` link in it | **Met** |
+| **REQ-GOV-004** Execution rules are binding and machine-readable | [`../../CLAUDE.md`](../../CLAUDE.md) states the binding standards; [`../plan/PROTOCOL.md`](../plan/PROTOCOL.md) states the execution phases; `.claude/` carries them as configuration a session actually loads, including a `PreToolUse` hook that refuses a commit to `main` | **The hook fires, and the evidence is a complaint about it**: F-06 records that it also refuses read-only shell commands using a `for` loop, which is over-blocking. A rule nothing enforces produces no such follow-up | **Met** |
+| **REQ-GOV-005** Controls not enforced are registered as exceptions | [`../ways-of-working/control-exceptions.md`](../ways-of-working/control-exceptions.md) registers CE-001 four-eyes review, CE-002 no independent test or release function, and CE-003 no dependency proxy - each with why, compensating controls, owner, residual risk and a review trigger | Every document that describes one of those controls **links to the register at the point it would otherwise claim it** - [`sdlc.md`](../ways-of-working/sdlc.md), [`change-management.md`](../ways-of-working/change-management.md), [`environments.md`](../ways-of-working/environments.md), [`branching-and-review.md`](../ways-of-working/branching-and-review.md), [`dependency-policy.md`](../ways-of-working/dependency-policy.md) and [`dora-control-map.md`](dora-control-map.md). Those are anchor links, so `lint-docs` fails if a CE is renamed or removed and a citation is left behind | **Met** |
 
 ---
 
@@ -775,6 +805,17 @@ produce the same bytes, and a second implementation would agree with the first u
 not. The sign convention is `AccountType.signedEffect`'s. The population still comes from WP-20, over
 a pipe, so neither side draws the day twice.
 
+## WP-23 - SLO catalogue, baseline and the run report
+
+Ticket TB-1023. Two requirements owned, and together they are what the workload strand was built to
+make possible: an objective stated per service, and a normal recorded before anybody needs it.
+
+> **This heading did not exist until WP-18b.** The two subsections below were appended under WP-22's
+> heading when WP-23 landed, so a whole package's content lived inside another package's section -
+> and the banner at the top of this document listed a WP-23 section that was not there. The tables
+> are WP-23's own and are unchanged; only the heading above them is new. It is **F-87**'s failure
+> mode one level down, and it is why the banner no longer indexes this file by hand.
+
 ### Owned by WP-23
 
 | Requirement | Design | Verified by | Status |
@@ -786,7 +827,7 @@ a pipe, so neither side draws the day twice.
 
 | Requirement | Owner | What WP-23 contributes | Status |
 |---|---|---|---|
-| **REQ-OBS-002** Every service exposes a metrics endpoint | WP-09 | The ledger reports on the database that does its work - pool utilisation and acquire wait, per-table size, dead tuples and vacuum activity, and the two lock waits timed **apart** so that the audit chain's service-wide lock is never averaged into per-account contention. A test carrying `@AutoConfigureObservability` reads them out of a real scrape, because without it Boot leaves a `SimpleMeterRegistry` and a metrics test passes while verifying nothing (**F-32**) | **Met** |
+| **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | The ledger reports on the database that does its work - pool utilisation and acquire wait, per-table size, dead tuples and vacuum activity, and the two lock waits timed **apart** so that the audit chain's service-wide lock is never averaged into per-account contention. A test carrying `@AutoConfigureObservability` reads them out of a real scrape, because without it Boot leaves a `SimpleMeterRegistry` and a metrics test passes while verifying nothing (**F-32**) | **Met** |
 
 ### Owned by WP-22
 
@@ -1010,3 +1051,50 @@ environment - the line between extending a fixture and modifying the estate. Not
 | **REQ-INT-005** Undeliverable messages are captured, not lost | WP-11 | Exercised in anger for the first time, and it found a class the control does not cover. The dead-letter path works for what it was built for - a permanent refusal carrying the WSDL's declared `ServiceFault` is recorded and acknowledged, and `TransferBridgeIT` pins it. **F-106**: when the *database* raises the data error rather than the application, the refusal arrives as a generic SOAP server fault, which `CustomerMasterClient` classifies transient by design; the message is then never acknowledged, retried with Spring Kafka's default zero backoff, the partition blocks behind it, and **nothing is ever dead-lettered**. Both components behave exactly as documented and the message is still lost to an operator, because the one signal they would look for stays silent. Recorded rather than fixed here: it is a change to `legacy/` or `integration/` and belongs to their packages | **Not met for this class** - F-106; met for a declared business fault |
 | **REQ-INT-002** Each era's contract is idiomatic to that era | WP-02 | The four-era path exercised end to end at volume for the first time. Every one of 24 023 events crossed `contracts/asyncapi/ledger-events.yaml`, the XSLT and `canonical-v1.xsd`, `contracts/wsdl/customer-master-v1.wsdl` and `contracts/copybook/MOVEREC.CPY` without a transformation failure. It also found where the contracts do *not* meet: a check constraint in the 2011 schema and a date convention in the 2023 driver constrain each other and nothing declares it (**F-105**) | Met at this tier |
 | **REQ-DP-001** All test data is synthetic | WP-03 | Unchanged and re-confirmed with every stratum running at once. The population, the opening balances and every reference come from the WP-20 model; `workload-legacy-seed` fills stratum 1's mandatory identity columns with a marker rather than a manufactured person, so there is nothing to anonymise because there was never an identity (F-99). The instrument this package measures from is the adapter's own log, which carries account and transfer references only | Met at this tier |
+
+---
+
+## WP-18a - the incident, worked
+
+Ticket TB-1018. No stratum: the whole estate at once. The deliberate incident exercise - the
+procedure written cold, a real defect of this estate injected across two business dates, the failure
+worked from the operator's screen through triage, containment and resolution, and
+[INC-001](../incidents/INC-001-transfers-discarded-at-the-era-boundary.md) as the root cause
+analysis. The capture is committed under `workload/baselines/incident/`: the sealed envelope, the
+response as it was written, three mornings of break reports and reconciliations, both days' logs, and
+the first attempt that had to be thrown away.
+
+### Owned by WP-18a
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-OPS-005** The incident process is exercised, not merely documented | `ways-of-working/incident-management.md` was written **before anything was broken** and in its own commit, so the diff shows what existed beforehand and what the exercise changed. Then `workload/scripts/incident-exercise.sh` moved one account's `opened_date` forward by a day in stratum 1, sealed what it planted in `ENVELOPE.json`, and drove D and D+1 - two dates, because a posting that never reaches the movement file is invisible to the reconciliation on the day it happens and only enters the expected set the morning after | **The envelope stayed sealed until the account had been named from the evidence, and then it matched.** Detection came from `BREAKS-20260303.json` and `/backoffice/breaks`, the screen an operator actually reads - not from the adapter's log and not from what the injector wrote. `RESPONSE.md` records the response as it happened, including the steps that went nowhere; a response that reads as a straight line is a response written afterwards | **Met** |
+| **REQ-DORA-001** Operational resilience is tested, not assumed | A fault the estate genuinely has rather than one manufactured for the exercise: F-106, where stratum 1's check constraint refuses a value-dated transfer with `ORA-02290`, the refusal arrives as a *generic* SOAP fault, and `CustomerMasterClient` classifies it transient by design. Reversible without touching the queue, so the exercise could be undone and re-measured | The reversal was verified by **the same control that found the break**, and the finding is the part worth keeping: after the fault was corrected and a further business date driven, **not one affected account cleared**. Removing the fault and recovering from it are two questions, and `incident-management.md` now says so. The estate also behaves *worse* than F-106 predicted - **F-111** - and the exercise had to be run twice, because the first fixture reported 451 lost transfers when the fault had cost two | **Met** |
+
+### Contributed by WP-18a, verified by the owning package
+
+| Requirement | Owner | What WP-18a contributes | Status |
+|---|---|---|---|
+| **REQ-INT-005** Undeliverable messages are captured, not lost | WP-11 | The class WP-25d opened is now measured rather than reasoned about, and it is worse than recorded. `esb-adapter` configures no error handler, so it inherits Spring Kafka's `FixedBackOff(interval=0, maxAttempts=9)`: the refused record was retried **ten times in about 150 milliseconds**, the backoff was exhausted, the record was dropped and the offset committed. `DeadLetterRecorder` never ran. **Two transfers in the ledger's audit chain do not exist for the mainframe**, while consumer lag, the dead-letter topic, `REJECTS.DAT` and the error rate all read healthy. A blocked partition is loud and recoverable; this is silent and is not (**F-111**) | **Not met for this class** - F-106 and F-111; met for a declared business fault |
+| **REQ-REC-001** Old and new cores are reconciled every cycle | WP-16 | The reconciliation used **as a detector rather than as a check**, which is the job it exists for and had never done. It found the break, and it was also the instrument that measured the recovery. Its limit is now on record: it is blind for a full cycle to anything that stops a posting reaching the movement file, which is the class the ESB hop can produce at any time | Met, with a stated one-cycle lag |
+| **REQ-OPS-003** Operators can see and work reconciliation breaks | WP-15 | The screen read in anger for the first time, and it does not survive the load. 224 accounts in `VALUE_DRIFT` on D, 271 on D+1, 476 on D+2, with almost none of the growth related to the incident - **three accounts of real loss arrived inside forty-seven accounts of report**, and nothing in the report, the screen or the runbook separates a new break from yesterday's. By `reconciliation-break.md`'s own escalation thresholds every morning in this estate is already an incident, **which is how a control gets turned off** (**F-113**, **F-114**) | **Partially met** - the breaks are visible, and not workable at this population |
+
+---
+
+## WP-18b - the documentation pass, and the control that keeps it true
+
+Ticket TB-1018. The last package in the plan. Nine stub documents filled, this matrix completed, the
+DORA control map written against artefacts that exist, and - the half that outlives the pass - a
+checker that fails the build when any of it stops being true.
+
+### Owned by WP-18b
+
+| Requirement | Design | Verified by | Status |
+|---|---|---|---|
+| **REQ-GOV-006** Documentation is complete and traceable | Nine documents that carried `> **STUB.**` were written from what this repository genuinely does: the lifecycle, change management and the environment ladder; the handover for the platform repositories; the DORA control map; and four orphaned by packages that had already merged over them - the tech radar, the dependency policy, the test strategy and the PSD2 notes. Each states what this repository does **not** have where that is the honest answer, because [`dora-control-map.md`](dora-control-map.md)'s own outline names invented coverage as the failure mode. This matrix then resolved the last eight ids, five of them WP-01's | `quality/docs-check.py`, standard library Python, wired into `make lint` as `lint-docs`: when this package landed, **129 markdown files, 763 internal links and their anchors, no surviving stub marker, and 68 requirement ids used of which all 68 are in the catalogue**. Its own 12 tests run on fixture trees rather than on this repository, because a checker proved only against a clean tree says nothing about what it does when a link breaks. Run against `main` before this package it fails on nine stubs and one invented id | **Met** |
+
+**What this requirement does not claim.** The checker holds structure, not truth: it cannot tell that
+a document has gone stale, which is what F-17 has been recording since WP-01 and what the root
+README's Status section was doing until this package refreshed it. And its requirement-id assertion
+runs one way - an id *used* must be *defined* - so an id defined in the catalogue that no section
+resolves would still pass. That direction is **F-115**, recorded rather than quietly left.
