@@ -6,7 +6,8 @@
 # **A test fixture, not a component of the bank.** It composes what already exists - legacy-up.sh,
 # estate-up.sh, adapter-up.sh, run-eod.sh and batch/recon - and changes nothing in any of them.
 #
-#   bash workload/scripts/incident-exercise.sh
+#   bash workload/scripts/incident-exercise.sh --keep      # break it, and leave it broken
+#   bash workload/scripts/incident-exercise.sh --recover   # reverse the fault and re-run the control
 #   bash workload/scripts/incident-exercise.sh --customers 8000 --date 2026-03-02
 #
 # # The fault
@@ -42,6 +43,26 @@
 # ENVELOPE.json, and **nothing else in the capture is derived from it**. The exercise is only worth
 # anything if the break is found from the reconciliation report and the back office instead.
 #
+# # Why it holds the estate up
+#
+# **--keep, and the response is the reason.** WP-18a's task 4 says the incident is worked *as
+# documented*: detected from the reconciliation report and legacy/backoffice, triaged, contained,
+# resolved, and the recovery verified by re-running the control that found it. None of that can be
+# done against an estate that was torn down the moment the report was written, so a held run leaves
+# Oracle, Tomcat, Kafka, PostgreSQL and the adapter exactly where the break left them.
+#
+# The operator screen is deployed for the same reason. **A responder who reads BREAKS-CCYYMMDD.json
+# is not using this bank's detection path**; an operator reads /backoffice/breaks, and what that
+# screen does and does not show is itself part of what the exercise measures.
+#
+# # The reversal
+#
+# **--recover is a separate invocation against the held estate**, run after the response, and it is
+# the Constraint's "the fault must be reversible and its removal verified". It restores the
+# opened_date, waits for the partition to drain **without touching an offset or deleting a message**,
+# gives the cycle what drained, and reconciles the next business date. Zero drift from the same
+# control that found the break is the only thing that counts as recovered.
+#
 # Needs: Docker, a JDK 8, a JDK 17, Go, uv and GnuCOBOL.
 
 set -euo pipefail
@@ -60,6 +81,9 @@ SEED=42
 # How far into the driven window the fault should first be tripped, as a fraction. Early enough that
 # most of the day is behind it, late enough that the day is genuinely under way when it happens.
 TRIP_AT=0.10
+KEEP=no
+RECOVER=no
+OPERATOR=operator
 
 DB_CONTAINER=tessera-incident-db
 DB_PORT=5438
@@ -69,7 +93,7 @@ KAFKA_INTERNAL=localhost:9094
 TOMCAT_PORT=18080
 ORACLE_CONTAINER="${TB_ORACLE_CONTAINER:-tessera-legacy-oracle}"
 
-usage() { sed -n '3,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,66p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -80,6 +104,8 @@ while [ $# -gt 0 ]; do
         --seed)      SEED="$2"; shift 2 ;;
         --trip-at)   TRIP_AT="$2"; shift 2 ;;
         --out)       OUT="$2"; shift 2 ;;
+        --keep)      KEEP=yes; shift ;;
+        --recover)   RECOVER=yes; shift ;;
         -h|--help)   usage; exit 0 ;;
         *) echo "incident-exercise: unknown argument $1" >&2; exit 2 ;;
     esac
@@ -104,15 +130,40 @@ fi
 
 NEXT_DATE=$(date -j -v+1d -f "%Y-%m-%d" "$BUSINESS_DATE" "+%Y-%m-%d" 2>/dev/null ||
             date -d "$BUSINESS_DATE + 1 day" "+%Y-%m-%d")
+RECOVERY_DATE=$(date -j -v+2d -f "%Y-%m-%d" "$BUSINESS_DATE" "+%Y-%m-%d" 2>/dev/null ||
+                date -d "$BUSINESS_DATE + 2 days" "+%Y-%m-%d")
 D_COMPACT="${BUSINESS_DATE//-/}"
 D1_COMPACT="${NEXT_DATE//-/}"
+D2_COMPACT="${RECOVERY_DATE//-/}"
 
-rm -rf "$WORK"; mkdir -p "$WORK/files" "$WORK/eod" "$OUT"
+# --recover runs against the estate a held run left standing, so it keeps everything: the master the
+# cycle has to carry forward, the movement file the drain will fill, and the adapter's own pid.
+[ "$RECOVER" = yes ] || rm -rf "$WORK"
+mkdir -p "$WORK/files" "$WORK/eod" "$OUT"
 MOVEMENT_FILE="$WORK/MOVEMENT.DAT"
 ADAPTER_LOG="$WORK/adapter.log"
 ENDPOINT="http://localhost:$TOMCAT_PORT/customer-master/services/CustomerMasterService"
+# One flat directory for both dates, because that is what the operator screen reads: BusinessDates
+# scans it for BREAKS-CCYYMMDD.json and offers what it finds. A directory per date would show the
+# responder one morning at a time, which is not how a morning works.
+RECON_DIR="$WORK/recon"
+BREAKS_URL="http://localhost:$TOMCAT_PORT/backoffice/breaks"
+mkdir -p "$RECON_DIR"
 
+HELD=no
 stop() {
+    if [ "$HELD" = yes ]; then
+        echo; echo "== left running =="
+        echo "  back office   $BREAKS_URL as $OPERATOR"
+        echo "  endpoint      $ENDPOINT"
+        echo "  ledger        localhost:$DB_PORT, broker localhost:$KAFKA_PORT"
+        echo "  adapter log   $ADAPTER_LOG"
+        echo "  breaks        $RECON_DIR"
+        echo "  rejects       $WORK/eod/<CCYYMMDD>/REJECTS.DAT"
+        echo
+        echo "  reverse it with: bash workload/scripts/incident-exercise.sh --recover"
+        return
+    fi
     echo; echo "== stopping =="
     [ -f "$WORK/adapter.pid" ] && kill "$(cat "$WORK/adapter.pid")" 2>/dev/null || true
     LEGACY_WORK="${TMPDIR:-/tmp}/tessera-legacy"
@@ -124,12 +175,118 @@ stop() {
 }
 trap stop EXIT INT TERM
 
+run_cycle_and_reconcile() {
+    local date_compact="$1" master="$2" label="$3"
+
+    # The movement file is rotated at the cut-off, which is what makes it the cut-off: the cycle
+    # consumes what the ESB wrote up to this instant and the adapter starts a fresh one. ADR 0015.
+    local movements="$WORK/MOVEMENT-$date_compact.DAT"
+    if [ -f "$MOVEMENT_FILE" ]; then mv "$MOVEMENT_FILE" "$movements"; else : >"$movements"; fi
+    echo "  the cycle is given $(( $(wc -c <"$movements") / 120 )) movement records"
+
+    bash "$ROOT/mainframe/jcl/run-eod.sh" --business-date "$date_compact" \
+        --master "$master" --movements "$movements" --work "$WORK/eod" \
+        >"$OUT/cycle-$date_compact.txt" 2>&1
+    grep -E "RC=|MOVE-APPLIED|MOVE-REJECTED" "$OUT/cycle-$date_compact.txt" | tail -4 || true
+
+    set +e
+    RECON_LEDGER_DSN="postgresql://recon_reader:recon_reader@localhost:$DB_PORT/tessera" \
+        uv run --project "$ROOT/batch/recon" recon \
+            --business-date "$date_compact" \
+            --master "$WORK/eod/$date_compact/ACCTNEW.DAT" \
+            --movements "$WORK/eod/$date_compact/MOVEMENT.IN" \
+            --output "$RECON_DIR" >"$OUT/recon-$date_compact.txt" 2>&1
+    local status=$?
+    set -e
+    [ "$status" -eq 0 ] || { echo "FAIL  the $label reconciliation did not run" >&2; cat "$OUT/recon-$date_compact.txt" >&2; exit 1; }
+    cp "$RECON_DIR/BREAKS-$date_compact.json" "$OUT/" 2>/dev/null || true
+    grep -E "accounts|breaks|drift|matched" "$OUT/recon-$date_compact.txt" | head -8 || true
+}
+
+# -------------------------------------------------------------------------------------------------
+# The reversal, run against the estate a held run left standing. The Constraint says the fault must
+# be reversible and its removal verified, and `incident-management.md` says a recovery is verified by
+# re-running the control that found the problem rather than by the symptom going away.
+#
+# **Nothing is deleted and no offset moves.** The account's opened_date goes back to what it was, the
+# refusal stops happening, and the retry that was blocking the partition becomes the retry that
+# drains it - which is the whole reason this fault was chosen over one that needs queue surgery.
+# -------------------------------------------------------------------------------------------------
+records() { if [ -f "$1" ]; then echo $(( $(wc -c <"$1") / 120 )); else echo 0; fi; }
+
+# GROUP TOPIC PARTITION CURRENT-OFFSET LOG-END-OFFSET LAG ... - the topic is $2 and the lag is $6.
+#
+# **It prints -1 rather than 0 when it could not read the group at all.** An awk that summed nothing
+# and printed zero would tell the drain loop below that a broker it cannot reach has caught up, which
+# is the same failure adapter-up.sh's readiness probe carries a paragraph about.
+lag() {
+    docker exec "$KAFKA_CONTAINER" kafka-consumer-groups \
+        --bootstrap-server "$KAFKA_INTERNAL" --describe --group esb-adapter 2>/dev/null \
+      | awk '$2 ~ /^tessera/ && $6 ~ /^[0-9]+$/ { total += $6; seen = 1 }
+             END { if (seen) print total; else print -1 }'
+}
+
+recover() {
+    [ -f "$OUT/ENVELOPE.json" ] || { echo "incident-exercise: no envelope under $OUT - there is nothing to reverse" >&2; exit 1; }
+    [ -f "$WORK/eod/$D1_COMPACT/ACCTNEW.DAT" ] || { echo "incident-exercise: no day D+1 master under $WORK - run the exercise with --keep first" >&2; exit 1; }
+
+    local account original before_lag before_records drained
+    account=$(python3 -c "import json;print(json.load(open('$OUT/ENVELOPE.json'))['accountRef'])")
+    original=$(python3 -c "import json;print(json.load(open('$OUT/ENVELOPE.json'))['originalOpenedDate'])")
+    before_lag=$(lag)
+    before_records=$(records "$MOVEMENT_FILE")
+
+    step "The reversal"
+    echo "  account        $account"
+    echo "  opened_date    back to $original"
+    echo "  held before    $before_lag messages behind the consumer, $before_records records in the file"
+
+    docker exec -i "$ORACLE_CONTAINER" sqlplus -S "tessera/tessera@//localhost:1521/FREEPDB1" >/dev/null 2>&1 <<SQL
+UPDATE account SET opened_date = DATE '$original' WHERE account_ref = '$account';
+COMMIT;
+EXIT
+SQL
+    echo "  reversed at    $(date -u +%H:%M:%S)Z"
+
+    step "The drain"
+    drained=no
+    for _ in $(seq 300); do
+        if [ "$(lag)" -eq 0 ]; then drained=yes; break; fi
+        sleep 2
+    done
+    echo "  lag            $before_lag -> $(lag)"
+    echo "  movement file  $before_records -> $(records "$MOVEMENT_FILE") records"
+    [ "$drained" = yes ] || { echo "FAIL  the partition never drained - the reversal did not take" >&2; exit 1; }
+
+    step "Day D+2: the cycle, and the reconciliation that found the break"
+    run_cycle_and_reconcile "$D2_COMPACT" "$WORK/eod/$D1_COMPACT/ACCTNEW.DAT" "recovery"
+
+    step "Recovered?"
+    python3 - "$RECON_DIR/BREAKS-$D2_COMPACT.json" <<'DRIFT'
+import json, sys
+totals = json.load(open(sys.argv[1]))["totals"]
+print(f"  accounts compared  {totals['accountsCompared']}")
+print(f"  accounts matched   {totals['accountsMatched']}")
+print(f"  accounts broken    {totals['accountsBroken']}")
+print(f"  absolute drift     {totals['totalAbsoluteDriftMinor']} minor units")
+if totals["accountsBroken"] or totals["totalAbsoluteDriftMinor"]:
+    sys.exit("\nFAIL  the reconciliation still disagrees - this is not a recovery")
+print("\nOK    zero drift, from the same control that found the break")
+DRIFT
+}
+
+if [ "$RECOVER" = yes ]; then
+    recover
+    exit 0
+fi
+
 step "Plan"
 echo "  business dates   $BUSINESS_DATE (D) and $NEXT_DATE (D+1)"
 echo "  population       $CUSTOMERS customers, $(( CUSTOMERS * 2 + 1 )) accounts"
 echo "  dials            scale $SCALE, ${COMPRESS}x, $WINDOW, seed $SEED"
 echo "  the fault        one account's opened_date moved forward, at ${TRIP_AT} into the window"
 echo "  output           $OUT"
+[ "$KEEP" = yes ] && echo "  afterwards       held up, for the response to be worked against" || true
 
 # -------------------------------------------------------------------------------------------------
 # Stratum 1, and the day's own schedule - which is where the victim comes from. Choosing the account
@@ -139,10 +296,14 @@ echo "  output           $OUT"
 step "Stratum 1: Oracle and Tomcat 8.5"
 bash "$ROOT/workload/scripts/legacy-up.sh" --keep \
     --customers "$CUSTOMERS" --date "$BUSINESS_DATE" --seed "$SEED" \
+    --backoffice --breaks-dir "$RECON_DIR" --rejects-dir "$WORK/eod" \
     >"$WORK/legacy-up.log" 2>&1
 curl -sf -o /dev/null "$ENDPOINT?wsdl" \
     || { echo "incident-exercise: stratum 1 did not come up - see $WORK/legacy-up.log" >&2; exit 1; }
 echo "OK    the WSDL answers on $TOMCAT_PORT"
+curl -sf -o /dev/null -u "$OPERATOR:$OPERATOR" "$BREAKS_URL" \
+    || { echo "incident-exercise: the back office did not deploy - see $WORK/legacy-up.log" >&2; exit 1; }
+echo "OK    the back office answers on $BREAKS_URL"
 
 step "Choosing what to break"
 go -C "$ROOT/workload" run ./cmd/workload-dataset \
@@ -313,33 +474,6 @@ go -C "$ROOT/workload" run ./cmd/workload-dataset \
   | python3 "$ROOT/mainframe/data/generate.py" --from-stream --out "$WORK/files" >"$WORK/generate.txt"
 tail -3 "$WORK/generate.txt"
 
-run_cycle_and_reconcile() {
-    local date_compact="$1" master="$2" label="$3"
-
-    # The movement file is rotated at the cut-off, which is what makes it the cut-off: the cycle
-    # consumes what the ESB wrote up to this instant and the adapter starts a fresh one. ADR 0015.
-    local movements="$WORK/MOVEMENT-$date_compact.DAT"
-    if [ -f "$MOVEMENT_FILE" ]; then mv "$MOVEMENT_FILE" "$movements"; else : >"$movements"; fi
-    echo "  the cycle is given $(( $(wc -c <"$movements") / 120 )) movement records"
-
-    bash "$ROOT/mainframe/jcl/run-eod.sh" --business-date "$date_compact" \
-        --master "$master" --movements "$movements" --work "$WORK/eod" \
-        >"$OUT/cycle-$date_compact.txt" 2>&1
-    grep -E "RC=|MOVE-APPLIED|MOVE-REJECTED" "$OUT/cycle-$date_compact.txt" | tail -4 || true
-
-    set +e
-    RECON_LEDGER_DSN="postgresql://recon_reader:recon_reader@localhost:$DB_PORT/tessera" \
-        uv run --project "$ROOT/batch/recon" recon \
-            --business-date "$date_compact" \
-            --master "$WORK/eod/$date_compact/ACCTNEW.DAT" \
-            --movements "$WORK/eod/$date_compact/MOVEMENT.IN" \
-            --output "$WORK/recon-$date_compact" >"$OUT/recon-$date_compact.txt" 2>&1
-    local status=$?
-    set -e
-    [ "$status" -eq 0 ] || { echo "FAIL  the $label reconciliation did not run" >&2; cat "$OUT/recon-$date_compact.txt" >&2; exit 1; }
-    cp "$WORK/recon-$date_compact/BREAKS-$date_compact.json" "$OUT/" 2>/dev/null || true
-    grep -E "accounts|breaks|drift|matched" "$OUT/recon-$date_compact.txt" | head -8 || true
-}
 
 step "Day D: the overnight cycle and the morning reconciliation"
 run_cycle_and_reconcile "$D_COMPACT" "$WORK/files/ACCTMAST.DAT" "day D"
@@ -374,3 +508,8 @@ cp "$WORK/day-d1.log" "$OUT/day-d1.log" 2>/dev/null || true
 step "Done"
 echo "  captures under $OUT"
 echo "  the adapter's full log, not committed, is $ADAPTER_LOG"
+
+# Only here, and only on the success path. A run that failed on the way to the break has nothing
+# worth holding open, and leaving four containers behind after an error is how the next run finds
+# the machine already full.
+HELD="$KEEP"
