@@ -7,49 +7,38 @@ Updated by the executing session at the start and end of every work package, per
 
 ---
 
-## Next actionable package
+## The plan is complete
 
-> **WP-18b is the only actionable package left, and it is the last one in the plan.** The final
-> documentation pass: five stubs this package owns, four orphaned by packages that are already
-> `Done`, the DORA control map, the traceability matrix completing all 68 requirements, and a checker
-> under `quality/` wired into `make lint` that fails the build on a broken internal link or a
-> surviving `STUB` marker. Its task list is detailed in
-> [WP-18](wp/WP-18-incident-exercise.md#wp-18b---the-documentation-pass-and-the-control-that-keeps-it-true).
+> **Every work package is `Done`.** Thirty-three rows, twenty-five packages, and nothing is left
+> `Not started`. There is no next actionable package - the shortcut `/work-package` has nothing to
+> select, and the next change here will be a follow-up picked off the register below rather than a
+> package taken off a plan.
 >
-> **WP-18a is done and merged** ([#87](https://github.com/k-napiontek/tessera-bank/pull/87),
-> `776a8c0`), **and the incident process has now been used rather than only written.** The procedure
-> was written cold, F-106 was injected into the whole estate across two business dates, the failure
-> was worked from `/backoffice/breaks` through triage, containment, resolution and verification of
-> recovery, and [INC-001](../incidents/INC-001-transfers-discarded-at-the-era-boundary.md) is the RCA.
-> The envelope was opened only after the account had been named from the evidence, and it matched.
+> **WP-18b is done and merged** ([#89](https://github.com/k-napiontek/tessera-bank/pull/89),
+> `c5d469c`), **and no stub document remains in `docs/`.** Nine were filled: the lifecycle, change
+> management and the environment ladder; the handover for the platform repositories; the DORA control
+> map; and four orphaned by packages that had already merged over them - the tech radar, the
+> dependency policy, the test strategy and the PSD2 notes. The traceability matrix resolves **all 68**
+> requirements, including the five `REQ-GOV-*` WP-01 closed without a section for.
 >
-> **F-106 predicted a blocked partition and the estate does something worse.** `esb-adapter`
-> configures no error handler, so it inherits Spring Kafka's `FixedBackOff(interval=0,
-> maxAttempts=9)`: the refused record was retried **ten times in about 150 milliseconds**, the backoff
-> was exhausted, the record was dropped and the offset committed. `DeadLetterRecorder` never ran.
-> **Two transfers that are in the ledger's audit chain do not exist for the mainframe**, and consumer
-> lag, the dead-letter topic, `REJECTS.DAT` and the error rate all read healthy while it happened. A
-> blocked partition is loud and recoverable; this is silent and is not. **F-111.**
+> **The half that outlives the pass is `quality/docs-check.py`.** Wired into `make lint`, it fails the
+> build on a broken internal link - anchors included - a surviving `> **STUB.**` marker, or a `REQ-*`
+> id that is in no catalogue. Two boxes of WP-18's own Definition of Done stopped being assertions.
+> It found something on its first run: **the document that is the authority against invented
+> requirement ids contained one**, under a prefix this repository has never had, in a row whose owner
+> column already named the right package. Nothing had ever checked.
 >
-> **The reconciliation's false-positive population compounds.** 224 accounts in `VALUE_DRIFT` on D,
-> 271 on D+1 and 476 on D+2, with none of the growth after D+1 relating to the incident - F-104 dates
-> a hold capture by the machine clock and F-107 puts it in the movement file anyway. Three accounts of
-> real loss arrived inside forty-seven accounts of report, and nothing in the report, the screen or
-> the runbook separates them. **By `reconciliation-break.md`'s own escalation thresholds every morning
-> in this estate is already an incident**, which is how a control gets turned off. **F-113, F-114.**
+> **And a whole package's traceability section was living under another package's heading.** WP-23's
+> two subsections were appended under `## WP-22` when WP-23 landed, so two requirements resolved
+> inside a section belonging to a different package - while the hand-maintained banner at the top of
+> the same file listed a WP-23 section that did not exist. The heading was added and the banner
+> deleted rather than corrected a fourth time (**F-116**).
 >
-> **The fault reverses; its cost does not.** After the reversal and a further driven business date,
-> **zero** affected accounts cleared. That is now written into `incident-management.md`: removing the
-> fault and recovering from it are two questions, and the first must never stand in for the second.
->
-> **And the exercise had to be run twice, which is the part worth keeping.** The first attempt
-> announced a fault Oracle had refused - the injector's own `UPDATE` violated the same constraint and
-> `sqlplus` exits 0 on a SQL error unless told otherwise - and its harness ate 449 of the day's own
-> transfers by rotating the movement file while the adapter was a minute behind the ledger. So the
-> first report of this incident named 451 lost transfers when the fault had cost **two**. Both defects
-> were in the fixture rather than the bank, and both are recorded in `RESPONSE.md` rather than tidied
-> away. **A fixture that does not read back what it planted will report a fault it never injected**,
-> and every number downstream will look entirely plausible.
+> **What the checker still cannot see is staleness**, which is the half of **F-17** this package did
+> not close. The root `README.md` claimed WP-24b, WP-24c and WP-25 were outstanding after all three
+> had merged; no check would ever have said so, and a human reading the front page found it. It is
+> refreshed in the same change that records this row as `Done`, so the front page and this file
+> become true at the same instant.
 
 > **WP-25d is done and merged** ([#84](https://github.com/k-napiontek/tessera-bank/pull/84), `6e38d58`),
 > and **the whole estate has been driven at once for the first time.** Four containers and four
@@ -988,7 +977,7 @@ Status values: `Not started` | `In progress` | `Blocked` | `Done`
 | [16](wp/WP-16-recon.md) | `recon` - COBOL master against ledger, break reporting | - | 05, 11b | `Done` | [#54](https://github.com/k-napiontek/tessera-bank/pull/54) | `747803d` |
 | [17](wp/WP-17-reporting.md) | `reporting` - Python batch | 4 | 09 | `Done` | [#31](https://github.com/k-napiontek/tessera-bank/pull/31) | `7ea882b` |
 | [18a](wp/WP-18-incident-exercise.md) | Deliberate incident exercise, worked as documented, and the RCA | - | 16, 25d | `Done` | [#87](https://github.com/k-napiontek/tessera-bank/pull/87) | `776a8c0` |
-| [18b](wp/WP-18-incident-exercise.md) | Final documentation pass, the DORA map, and the checker that keeps it true | - | 18a | `In progress` | | |
+| [18b](wp/WP-18-incident-exercise.md) | Final documentation pass, the DORA map, and the checker that keeps it true | - | 18a | `Done` | [#89](https://github.com/k-napiontek/tessera-bank/pull/89) | `c5d469c` |
 | [19](wp/WP-19-web-design-system.md) | `web-banking` design system - tokens, shell, responsive layout | 4 | 14 | `Done` | [#41](https://github.com/k-napiontek/tessera-bank/pull/41) | `a9012ce` |
 | [20](wp/WP-20-workload-model.md) | Workload model - the bank day as a contract | 4 | 02 | `Done` | [#59](https://github.com/k-napiontek/tessera-bank/pull/59) | `b0f4c80` |
 | [21](wp/WP-21-workload-driver.md) | `workload-driver` - the online day at volume | 4 | 20, 09, 12 | `Done` | [#62](https://github.com/k-napiontek/tessera-bank/pull/62) | `29a75c1` |
@@ -1160,6 +1149,7 @@ becomes its own change when picked up.
 | F-117 | WP-18b | **The id rule forbids quoting the mistake, and that is worth knowing before somebody thinks the checker is broken.** Since every `REQ-*` id anywhere in the repository must resolve to the catalogue, an id that resolves to nothing may not be written down at all - not as a cautionary example, not in the checker's own docstring, and not in this entry. The matrix's correction note, the checker's docstring and this line all name that id by family rather than quoting it, and `quality/test-docs-check.py` assembles its fixture prefix from two string literals so that its own fixtures do not fail the check they exist to verify. The rule binding its own tests is the rule working. | Open |
 | F-118 | WP-18b | **`CLAUDE.md` says the edge tier is Go 1.22+ and both Go modules declare 1.25.** `edge/api-gateway/go.mod` and `workload/go.mod` both say `go 1.25.0`, and the workload module's own comment records that it deliberately follows the gateway. Nothing breaks - Go fetches the newer toolchain unless `GOTOOLCHAIN` is pinned - but the stratum table an engineer reads first is wrong, and `docs/consuming-this-repo.md` now says 1.25 beside it. It is F-110's shape a second time: a figure in `CLAUDE.md` that nothing checks. | Open |
 | F-119 | WP-18b | **Stratum 3 commits no Gradle dependency lock.** Maven pins through the corporate parent, Go through `go.sum`, Python through `uv.lock` and npm through `package-lock.json`; the Java 17 tier resolves from the Spring Boot BOM plus explicit versions, which is deterministic today and is not the guarantee a lock file gives. `dependencyLocking` would close it. Found while writing `dependency-policy.md`, which is the document that has to claim the control. | Open |
+| F-120 | WP-18b | **`branching-and-review.md` says never a merge commit, and every pull request in this repository is one.** *"Squash or rebase - never a merge commit. History stays linear"* is the written rule; the history is eighty-nine merge commits, each carrying the branch's own commits underneath. Both shapes are defensible - the merge commit is what preserves a package's 3-to-10 commit structure as a reviewable unit, which is the point of the sizing rule - but the document and the practice cannot both be right, and the document is the one an outsider reads. **Either the rule changes to match what this repository actually does and says why, or the merges do.** Found on WP-18b's own merge, and left as a decision for the repository owner rather than taken unilaterally on the last package. It is also the class of defect `quality/docs-check.py` cannot see: the document is structurally perfect and factually wrong, which is F-17 again. | Open |
 
 ---
 
