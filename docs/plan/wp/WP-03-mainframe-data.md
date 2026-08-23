@@ -17,6 +17,13 @@ interop task tractable, because both sides will encode against these definitions
 
 ## In scope
 
+> **The `ACCTREC` sketch below predates the canonical data model and is superseded by it** - the
+> contract in [`contracts/copybook/`](../../../contracts/copybook/README.md) is what was built, and
+> the Tasks section settles it in full under *Three contradictions settled before task 1*. The
+> original text stands rather than being rewritten, so what was planned and what was built stay
+> separately visible: a work package is the record of a decision, not a description of the current
+> tree. Annotated here by WP-18b's documentation pass, closing **F-14**.
+
 - `ACCTREC.CPY` - account master record: account number `PIC X(10)`, currency `PIC X(3)`, balance
   `PIC S9(13)V99 COMP-3`, status `PIC X(1)`, last movement date `PIC 9(8)`.
 - `MOVEREC.CPY` - movement record: account number, amount, direction, value date, reference,

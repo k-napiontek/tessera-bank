@@ -141,7 +141,7 @@ thing in the world for a reviewer to catch.
 
 After merge, [`STATUS.md`](../plan/STATUS.md) records the status, the PR link, the merge SHA and
 every follow-up the package discovered but deliberately did not fix. That follow-up register is the
-defect backlog: 114 entries at the time of writing, each naming the package that raised it. A finding
+defect backlog, and every entry names the work package that raised it. A finding
 recorded and left open is honest; a finding fixed quietly on someone else's branch is how a
 reviewable change becomes an unreviewable one.
 
