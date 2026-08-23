@@ -786,7 +786,7 @@ a pipe, so neither side draws the day twice.
 
 | Requirement | Owner | What WP-23 contributes | Status |
 |---|---|---|---|
-| **REQ-OBS-002** Every service exposes a metrics endpoint | WP-09 | The ledger reports on the database that does its work - pool utilisation and acquire wait, per-table size, dead tuples and vacuum activity, and the two lock waits timed **apart** so that the audit chain's service-wide lock is never averaged into per-account contention. A test carrying `@AutoConfigureObservability` reads them out of a real scrape, because without it Boot leaves a `SimpleMeterRegistry` and a metrics test passes while verifying nothing (**F-32**) | **Met** |
+| **REQ-OPS-002** The service exposes business-level metrics and structured logs | WP-09 | The ledger reports on the database that does its work - pool utilisation and acquire wait, per-table size, dead tuples and vacuum activity, and the two lock waits timed **apart** so that the audit chain's service-wide lock is never averaged into per-account contention. A test carrying `@AutoConfigureObservability` reads them out of a real scrape, because without it Boot leaves a `SimpleMeterRegistry` and a metrics test passes while verifying nothing (**F-32**) | **Met** |
 
 ### Owned by WP-22
 
